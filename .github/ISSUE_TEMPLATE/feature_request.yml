@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an improvement to VE Mobile.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior
+      description: How would you like VE Mobile to work?
+    validations:
+      required: true
+  - type: input
+    id: presentation
+    attributes:
+      label: Presentation and device affected
+      description: Phone, Tablet Split, Tablet Full, or Desktop; include relevant device details.
+  - type: textarea
+    id: existing
+    attributes:
+      label: Why existing behavior does not cover the need
+      description: Include any current workaround.
+    validations:
+      required: true

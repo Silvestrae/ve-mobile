@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible problem with VE Mobile.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove passwords, authentication tokens, private server credentials, and unnecessary sensitive campaign or player material from reports, screenshots, and logs. Do not post security-sensitive details publicly. Ask the maintainer for a private reporting channel first, without including exploit details or sensitive data.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Versions and device
+      description: Include VE Mobile, Foundry, system, browser, device, and OS versions.
+      value: |
+        VE Mobile version:
+        Foundry version:
+        Game system and version:
+        Browser and version:
+        Device/model:
+        Operating system:
+    validations:
+      required: true
+  - type: dropdown
+    id: presentation
+    attributes:
+      label: Presentation
+      options:
+        - Phone
+        - Tablet Split
+        - Tablet Full
+        - Desktop
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Role
+      options:
+        - Player
+        - GM
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem, expected result, and actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the shortest sequence that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: modules
+    attributes:
+      label: Relevant enabled modules
+      description: Include versions when known and whether the problem occurs with those modules disabled.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, video, or console errors
+      description: Attach useful evidence or a relevant log excerpt after removing sensitive information. Avoid full diagnostic dumps.

@@ -1,0 +1,23 @@
+export const ACTOR_COMMANDS = Object.freeze({
+  ROLL_ABILITY: "actor.roll-ability",
+  ROLL_SAVE: "actor.roll-save",
+  ROLL_SKILL: "actor.roll-skill",
+  ROLL_TOOL: "actor.roll-tool",
+  ROLL_INITIATIVE: "actor.roll-initiative",
+  ROLL_DEATH_SAVE: "actor.roll-death-save",
+  SET_INSPIRATION: "actor.set-inspiration",
+  TOGGLE_CONDITION: "actor.toggle-condition",
+  EDIT_HIT_POINTS: "actor.edit-hit-points",
+  ADD_EXPERIENCE: "actor.add-experience",
+  UPDATE_BIOGRAPHY_SECTION: "actor.update-biography-section",
+  UPDATE_CURRENCY: "actor.update-currency",
+  SET_SPELL_SLOT_VALUE: "actor.set-spell-slot-value",
+  SET_ITEM_EQUIPPED: "actor.set-item-equipped",
+  SET_ITEM_ATTUNED: "actor.set-item-attuned",
+  SET_ITEM_FAVORITE: "actor.set-item-favorite",
+  SET_SPELL_PREPARED: "actor.set-spell-prepared",
+  OPEN_ITEM_SHEET: "actor.open-item-sheet",
+  ADJUST_HIT_DICE: "actor.adjust-hit-dice",
+  TAKE_REST: "actor.take-rest",
+  USE_ITEM: "actor.use-item"
+});

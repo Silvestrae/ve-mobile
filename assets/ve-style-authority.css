@@ -1,0 +1,569 @@
+/*
+ * Only VE-rendered roots opt into this layer. Important declarations in a
+ * named layer outrank ordinary and unlayered-important module rules even when
+ * an unknown module loads later. Native applications and module overlays sit
+ * outside this root and keep their own stylesheets and event handlers.
+ */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority] .ve-collective-card { padding: 14px !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-collective-native-editor,
+  .ve-mobile-app[data-ve-style-authority] .ve-collective-member-open { color: var(--ve-text) !important; background: var(--ve-surface-up) !important; border: 1px solid var(--ve-border) !important; border-radius: 10px !important; padding: 8px 12px !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-collective-member-open { background: transparent !important; border-color: transparent !important; padding: 4px !important; }
+  .ve-mobile-app[data-ve-style-authority] {
+    box-sizing: border-box !important;
+    position: absolute !important;
+    inset: 0 !important;
+    display: grid !important;
+    grid-template-rows: minmax(0, 1fr) auto !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+    color: var(--ve-text) !important;
+    background-color: var(--ve-bg) !important;
+    background-image:
+      linear-gradient(180deg, color-mix(in srgb, var(--ve-red) 12%, var(--ve-bg)), var(--ve-bg) 58%),
+      radial-gradient(circle at 85% -10%, color-mix(in srgb, var(--ve-red-bright) 22%, transparent), transparent 32%) !important;
+    font: 400 16px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-route="chat"]:not([data-split-screen="true"]).ve-chat-visual-viewport {
+    inset: auto !important;
+    top: var(--ve-chat-viewport-top) !important;
+    left: var(--ve-chat-viewport-left) !important;
+    width: var(--ve-chat-viewport-width) !important;
+    height: var(--ve-chat-viewport-height) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-route="chat"][data-split-screen="true"] .ve-viewport > .ve-native-chat-screen.ve-chat-visual-pane {
+    height: var(--ve-chat-pane-height) !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    align-self: start !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-theme="light"] {
+    background-image:
+      linear-gradient(180deg, color-mix(in srgb, var(--ve-red) 22%, var(--ve-bg)), var(--ve-bg) 58%),
+      radial-gradient(circle at 85% -10%, color-mix(in srgb, var(--ve-red-bright) 34%, transparent), transparent 34%) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-character-theme="bestiary"] {
+    background-image: radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--ve-red-bright) 9%, transparent), transparent 37%) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-theme="light"][data-character-theme="bestiary"] {
+    background-image: linear-gradient(180deg, color-mix(in srgb, var(--ve-red) 4%, var(--ve-bg)), var(--ve-bg) 42%) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-character-theme-blend="multiclass"] {
+    background-image:
+      radial-gradient(circle at 10% 6%, color-mix(in srgb, var(--ve-class-accent-secondary) 28%, transparent), transparent 32%),
+      radial-gradient(circle at 88% -8%, color-mix(in srgb, var(--ve-class-accent-primary) 24%, transparent), transparent 34%),
+      radial-gradient(circle at 52% 108%, color-mix(in srgb, var(--ve-class-accent-tertiary) 20%, transparent), transparent 37%),
+      linear-gradient(135deg, color-mix(in srgb, var(--ve-class-deep-primary) 13%, var(--ve-bg)), var(--ve-bg) 46%, color-mix(in srgb, var(--ve-class-deep-secondary) 18%, var(--ve-bg))) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-theme="light"][data-character-theme-blend="multiclass"] {
+    background-image:
+      radial-gradient(circle at 10% 6%, color-mix(in srgb, var(--ve-class-accent-secondary) 40%, transparent), transparent 33%),
+      radial-gradient(circle at 88% -8%, color-mix(in srgb, var(--ve-class-accent-primary) 36%, transparent), transparent 35%),
+      radial-gradient(circle at 52% 108%, color-mix(in srgb, var(--ve-class-accent-tertiary) 31%, transparent), transparent 38%),
+      linear-gradient(135deg, color-mix(in srgb, var(--ve-class-deep-primary) 22%, var(--ve-bg)), var(--ve-bg) 43%, color-mix(in srgb, var(--ve-class-deep-secondary) 27%, var(--ve-bg))) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-route="scene"] {
+    background: transparent !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-viewport {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    overflow: auto !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-route="scene"] .ve-viewport {
+    overflow: hidden !important;
+    background: transparent !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-viewport > section {
+    box-sizing: border-box !important;
+    width: min(100%, 860px) !important;
+    min-height: 100% !important;
+    margin-inline: auto !important;
+    padding: 18px 16px 32px !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-form-factor="phone"] .ve-viewport > .ve-character-screen,
+  .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-split-screen="true"] .ve-viewport > .ve-character-screen {
+    padding-top: 0 !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-route="chat"] .ve-viewport > .ve-native-chat-screen {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-route="scene"] .ve-viewport > section {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] :is(.ve-character-screen, .ve-settings, .ve-journal-screen, .ve-combat-screen) {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-character-screen {
+    display: grid !important;
+    align-content: start !important;
+    gap: 14px !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-character-screen.ve-character-unselected .ve-character-selection-notice {
+    position: relative !important;
+    z-index: auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-character-screen.ve-character-unselected .ve-character-menu.ve-character-menu-inline {
+    position: static !important;
+    inset: auto !important;
+    z-index: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    min-height: calc(66px + var(--ve-safe-bottom)) !important;
+    padding: 8px 8px calc(8px + var(--ve-safe-bottom)) !important;
+    border-top: 1px solid color-mix(in srgb, var(--ve-red-bright) 28%, var(--ve-border)) !important;
+    background: color-mix(in srgb, var(--ve-surface) 90%, var(--ve-red) 10%) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-theme="light"] .ve-bottom-nav {
+    border-top-color: color-mix(in srgb, var(--ve-red-bright) 42%, var(--ve-border)) !important;
+    background: color-mix(in srgb, var(--ve-surface) 80%, var(--ve-red) 20%) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-character-theme-blend="multiclass"] .ve-bottom-nav {
+    background: linear-gradient(100deg,
+      color-mix(in srgb, var(--ve-surface) 88%, var(--ve-class-deep-primary) 12%),
+      var(--ve-surface) 48%,
+      color-mix(in srgb, var(--ve-surface) 80%, var(--ve-class-deep-secondary) 20%)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-theme="light"][data-character-theme-blend="multiclass"] .ve-bottom-nav {
+    background: linear-gradient(100deg,
+      color-mix(in srgb, var(--ve-surface) 78%, var(--ve-class-deep-primary) 22%),
+      var(--ve-surface) 46%,
+      color-mix(in srgb, var(--ve-surface) 70%, var(--ve-class-deep-secondary) 30%)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav > .ve-main-nav-item {
+    box-sizing: border-box !important;
+    position: relative !important;
+    display: grid !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    place-items: center !important;
+    align-content: center !important;
+    gap: 3px !important;
+    border: 1px solid transparent !important;
+    border-radius: 14px 5px 14px 5px !important;
+    color: var(--ve-subtle) !important;
+    background: transparent !important;
+    font: inherit !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav > .ve-main-nav-item:is(.is-active, [aria-current="page"]) {
+    border-color: color-mix(in srgb, var(--ve-red-bright) 84%, #fff 16%) !important;
+    color: #fff !important;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--ve-red-bright) 28%, transparent), transparent 44%),
+      linear-gradient(180deg, color-mix(in srgb, var(--ve-red) 82%, var(--ve-surface-up)), color-mix(in srgb, var(--ve-red) 72%, var(--ve-surface))) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav > .ve-main-nav-item:is(:disabled, .is-disabled) {
+    opacity: 0.42 !important;
+    color: var(--ve-subtle) !important;
+    background: transparent !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs {
+    position: sticky !important;
+    top: -18px !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-auto-flow: row !important;
+    justify-content: stretch !important;
+    gap: 3px !important;
+    min-width: 0 !important;
+    padding: 5px !important;
+    overflow: hidden !important;
+    border: 1px solid var(--ve-border) !important;
+    border-radius: 14px !important;
+    background: color-mix(in srgb, var(--ve-surface) 96%, transparent) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs[data-count="6"] {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs[data-count="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs[data-count="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs button {
+    box-sizing: border-box !important;
+    display: grid !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 64px !important;
+    margin: 0 !important;
+    padding: 5px 2px !important;
+    place-items: center !important;
+    align-content: center !important;
+    gap: 2px !important;
+    border: 1px solid transparent !important;
+    border-radius: 10px !important;
+    color: var(--ve-subtle) !important;
+    background: transparent !important;
+    font: inherit !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs button:is(.is-active, [aria-selected="true"]) {
+    border-color: color-mix(in srgb, var(--ve-character-accent) 72%, var(--ve-border)) !important;
+    color: var(--ve-character-accent) !important;
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--ve-character-accent) 18%, var(--ve-surface-up)),
+      color-mix(in srgb, var(--ve-character-accent) 8%, var(--ve-surface))) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs button span {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    color: inherit !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-card {
+    overflow: hidden !important;
+    border: 1px solid var(--ve-border) !important;
+    border-radius: 17px 7px 17px 7px !important;
+    background: var(--ve-surface) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-card-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 9px !important;
+    min-height: 43px !important;
+    padding: 9px 13px !important;
+    border-bottom: 1px solid var(--ve-border) !important;
+    background: color-mix(in srgb, var(--ve-character-accent) 6%, var(--ve-surface)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-sheet-card-heading h3 {
+    color: var(--ve-text) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-native-chat-screen {
+    display: flex !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    background-color: var(--ve-chat-workspace) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-settings-primary-section,
+  .ve-mobile-app[data-ve-style-authority] .ve-combat-heading {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-settings {
+    display: grid !important;
+    align-content: start !important;
+    gap: 20px !important;
+    width: 100% !important;
+    max-width: 960px !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-settings-primary-section {
+    display: grid !important;
+    gap: 10px !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-foundry-settings {
+    border: 1px solid var(--ve-border) !important;
+    background: color-mix(in srgb, var(--ve-red) 5%, var(--ve-surface)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-settings-group {
+    border: 1px solid var(--ve-border) !important;
+    background: var(--ve-surface) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-settings-group-toggle {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    width: 100% !important;
+    min-height: 52px !important;
+    margin: 0 !important;
+    padding: 12px 16px !important;
+    border: 0 !important;
+    color: var(--ve-text) !important;
+    background: color-mix(in srgb, var(--ve-red) 7%, var(--ve-surface)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-settings-group-toggle[aria-expanded="true"] {
+    border-bottom: 1px solid var(--ve-border) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-entry {
+    display: grid !important;
+    grid-template-columns: 42px minmax(0, 1fr) 18px !important;
+    align-items: center !important;
+    gap: 10px !important;
+    min-height: 50px !important;
+    padding: 7px 10px !important;
+    border: 1px solid var(--ve-border) !important;
+    color: var(--ve-text) !important;
+    background: var(--ve-surface) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-reader {
+    display: grid !important;
+    grid-template-rows: auto auto minmax(0, 1fr) !important;
+    gap: 10px !important;
+    width: min(100%, 820px) !important;
+    min-width: 0 !important;
+    min-height: 100% !important;
+    padding: 14px 14px 32px !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-page {
+    min-width: 0 !important;
+    padding: 15px !important;
+    border: 1px solid var(--ve-border) !important;
+    color: var(--ve-text) !important;
+    background: var(--ve-surface) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-combat-screen {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    width: min(100%, 740px) !important;
+    min-height: 100% !important;
+    margin: 0 auto !important;
+    padding: 14px 14px calc(86px + var(--ve-safe-bottom)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-combat-heading,
+  .ve-mobile-app[data-ve-style-authority] .ve-combat-list > li {
+    border: 1px solid var(--ve-border) !important;
+    background: var(--ve-surface) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-combat-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 14px !important;
+    min-height: 74px !important;
+    padding: 10px 14px !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-combat-list {
+    display: grid !important;
+    gap: 7px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    list-style: none !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-combat-list > li.is-current {
+    border-color: var(--ve-gold) !important;
+    background: color-mix(in srgb, var(--ve-gold) 8%, var(--ve-surface)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-quickbar-wrap {
+    position: absolute !important;
+    display: grid !important;
+    bottom: calc(12px + var(--ve-safe-bottom)) !important;
+    left: 50% !important;
+    width: fit-content !important;
+    max-width: calc(100% - 20px) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-quickbar-wrap.is-collapsed {
+    width: 56px !important;
+    transform: translateX(-50%) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-quickbar-wrap.is-collapsed :is(.ve-quickbar, .ve-quickbar-status, .ve-action-bar-edit-controls, .ve-action-bar-picker) {
+    display: none !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-quickbar {
+    display: grid !important;
+    grid-template-columns: max-content 40px !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: max-content !important;
+    max-width: 100% !important;
+    padding: 6px !important;
+    border: 1px solid color-mix(in srgb, var(--ve-class-accent-primary) 34%, var(--ve-border)) !important;
+    background: color-mix(in srgb, var(--ve-surface) 83%, transparent) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-quickbar-wrap[data-columns="10"] .ve-quickbar {
+    grid-template-columns: max-content 120px !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-quickbar-wrap.is-idle .ve-quickbar {
+    grid-template-columns: max-content !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-scene-combat-carousel {
+    position: absolute !important;
+    display: grid !important;
+    top: max(8px, var(--ve-safe-top)) !important;
+    left: calc(50% + (var(--ve-safe-left) - var(--ve-safe-right)) / 2) !important;
+    max-width: var(--ve-scene-carousel-safe-width) !important;
+    padding: 4px 5px !important;
+    border: 1px solid color-mix(in srgb, var(--ve-gold) 31%, var(--ve-border)) !important;
+    background: linear-gradient(105deg,
+      color-mix(in srgb, var(--ve-surface-up) 84%, transparent),
+      color-mix(in srgb, var(--ve-surface) 76%, transparent)) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-scene-combat-carousel.is-collapsed {
+    left: max(8px, var(--ve-safe-left)) !important;
+    transform: none !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority] .ve-item-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: var(--ve-layer-modal) !important;
+    overflow: auto !important;
+    color: var(--ve-text) !important;
+    background: radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--ve-character-accent) 16%, transparent), transparent 38%), var(--ve-bg) !important;
+  }
+
+  @media (max-width: 520px) {
+    .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs { gap: 1px !important; padding: 4px 2px !important; }
+    .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs button { min-height: 58px !important; padding-inline: 0 !important; }
+  }
+
+  /* Forced Tablet mode can be narrower than a conventional tablet viewport. */
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"] {
+      grid-template-columns: minmax(0, 1fr) var(--ve-tablet-nav-width) !important;
+      grid-template-rows: minmax(0, 1fr) !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-nav-side="left"] {
+      grid-template-columns: var(--ve-tablet-nav-width) minmax(0, 1fr) !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-orientation="landscape"][data-split-screen="true"] {
+      grid-template-columns: minmax(0, 1fr) var(--ve-split-panel-width) var(--ve-tablet-nav-width) !important;
+      background: transparent !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-orientation="landscape"][data-split-screen="true"][data-nav-side="left"] {
+      grid-template-columns: var(--ve-tablet-nav-width) var(--ve-split-panel-width) minmax(0, 1fr) !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-orientation="landscape"][data-split-screen="true"][data-scene-focus="true"] {
+      grid-template-columns: minmax(0, 1fr) 0 var(--ve-tablet-nav-width) !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-orientation="landscape"][data-split-screen="true"][data-nav-side="left"][data-scene-focus="true"] {
+      grid-template-columns: var(--ve-tablet-nav-width) 0 minmax(0, 1fr) !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"] .ve-bottom-nav {
+      grid-column: 2 !important;
+      grid-row: 1 / -1 !important;
+      grid-template-columns: 1fr !important;
+      grid-template-rows: repeat(6, 60px) auto !important;
+      gap: 5px !important;
+      height: 100% !important;
+      padding: 7px 0 !important;
+      overflow: hidden !important;
+      border-top: 0 !important;
+      border-left: 1px solid var(--ve-border) !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-nav-side="left"] .ve-bottom-nav {
+      grid-column: 1 !important;
+      border-right: 1px solid var(--ve-border) !important;
+      border-left: 0 !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-split-screen="true"] .ve-bottom-nav {
+      grid-column: 3 !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-split-screen="true"][data-nav-side="left"] .ve-bottom-nav {
+      grid-column: 1 !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-split-screen="true"] .ve-sheet-tabs {
+      grid-template-columns: none !important;
+      grid-auto-flow: column !important;
+      grid-auto-columns: minmax(64px, max-content) !important;
+      justify-content: start !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+    }
+    .ve-mobile-app[data-ve-style-authority][data-form-factor="tablet"][data-split-screen="true"] .ve-sheet-tabs button {
+      min-width: 64px !important;
+      min-height: 58px !important;
+      padding-inline: 4px !important;
+    }
+}
+
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority] .ve-collective-card { padding: 14px !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-collective-native-editor,
+  .ve-mobile-app[data-ve-style-authority] .ve-collective-member-open { color: var(--ve-text) !important; background: var(--ve-surface-up) !important; border: 1px solid var(--ve-border) !important; border-radius: 10px !important; padding: 8px 12px !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-collective-member-open { background: transparent !important; border-color: transparent !important; padding: 4px !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-character-heading[data-collapse] > .ve-sheet-tabs {
+    position: relative !important;
+    top: 0 !important;
+  }
+}
+
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-route="characters"] .ve-viewport:has(.ve-character-shared-shell) { overflow: hidden !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-viewport > .ve-character-shared-shell {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    gap: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .ve-mobile-app[data-ve-style-authority] .ve-character-shared-shell > .ve-character-heading > .ve-sheet-tabs { position: relative !important; top: 0 !important; }
+}
