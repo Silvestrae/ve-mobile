@@ -1,4 +1,4 @@
-# VE Mobile
+# <img src="Icon.png" alt="VE Foundry Client logo" height="40">  VE Mobile
 
 ![Foundry VTT 13](https://img.shields.io/badge/Foundry_VTT-13-orange)
 ![D&D5e 5.3.x](https://img.shields.io/badge/D%26D5e-5.3.x-red)
