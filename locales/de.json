@@ -818,7 +818,14 @@
         "ResourceDescription": "Zauberplätze, Trefferwürfel, Charakterressourcen und Gegenstände mit begrenzter Nutzung.",
         "NoLimitedResources": "Für diesen Charakter sind keine begrenzten Ressourcen sichtbar.",
         "DieResult": "{label} würfelte {value}",
-        "EvaluatedRoll": "Ausgewerteter Wurf: {result}"
+        "EvaluatedRoll": "Ausgewerteter Wurf: {result}",
+        "SavingThrow": "Rettungswurf",
+        "BiographyIdeals": "Ideale",
+        "BiographyBonds": "Bindungen",
+        "BiographyFlaws": "Makel",
+        "BiographyPersonalityTraits": "Persönlichkeitsmerkmale",
+        "BiographyAppearance": "Aussehen",
+        "SavingThrowShort": "RW"
       },
       "ActorView": {
         "Senses": "Sinne",
@@ -844,7 +851,16 @@
         "UnknownActor": "Unbekannter Akteur",
         "UnknownItem": "Unbekannter Gegenstand",
         "UnnamedFolder": "Unbenannter Ordner",
-        "AlwaysPrepared": "Immer vorbereitet"
+        "AlwaysPrepared": "Immer vorbereitet",
+        "Alignment": "Gesinnung",
+        "Faith": "Glaube",
+        "Gender": "Geschlecht",
+        "Age": "Alter",
+        "Height": "Größe",
+        "Weight": "Gewicht",
+        "Eyes": "Augen",
+        "Hair": "Haare",
+        "Skin": "Haut"
       },
       "BiographyGateway": {
         "FoundryRichTextEnrichmentIsUnavailable": "Die Rich-Text-Aufbereitung von Foundry ist nicht verfügbar.",
@@ -1081,7 +1097,8 @@
         "passive": "Keine passiven Effekte.",
         "inactive": "Keine inaktiven Effekte.",
         "unavailable": "Keine nicht verfügbaren Effekte."
-      }
+      },
+      "PortraitOf": "Porträt von {name}"
     },
     "Chat": {
       "ComposerCollapse": "Nachrichtenfeld ausblenden",
@@ -1116,7 +1133,8 @@
       "ChoosePageOrHeading": "Journal-Seite oder -Überschrift auswählen",
       "ChoosePage": "Seite auswählen",
       "OpenAttachment": "Anhang öffnen",
-      "UntitledPage": "Unbenannte Seite"
+      "UntitledPage": "Unbenannte Seite",
+      "Edit": "Bearbeiten"
     },
     "RestorationRecovery": {
       "title": "Desktop-Einstellungen müssen wiederhergestellt werden",

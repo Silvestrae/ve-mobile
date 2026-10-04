@@ -106,6 +106,7 @@ export function createActorDirectoryRecord(actor) {
     type: String(actor?.type ?? ""),
     sort: number(actor?.sort),
     folderPath: actorFolderPath(actor),
+    header: Object.freeze({ labels: Object.freeze({ level: localizeFoundry("VEMOBILE.Character.Header.level", "Level") }) }),
     level,
     classes: Object.freeze(classes.map((item) => Object.freeze({ id: String(item.id ?? ""), name: String(item.name ?? ""), levels: number(item.system?.levels) }))),
     npc: actor?.type === "npc" ? Object.freeze(npcIdentityRecord(system)) : null
@@ -614,16 +615,20 @@ function actorFolderPath(actor) {
 function biographyRecord(details = {}, actorType = "character") {
   const isNpc = actorType === "npc";
   const characteristics = [
-    ["alignment", "Alignment"],
-    ["faith", "Faith"],
-    ["gender", "Gender"],
-    ["age", "Age"],
-    ["height", "Height"],
-    ["weight", "Weight"],
-    ["eyes", "Eyes"],
-    ["hair", "Hair"],
-    ["skin", "Skin"]
-  ].map(([key, label]) => ({ key, label, value: String(details?.[key] ?? "").trim() }));
+    ["alignment", "VEMOBILE.Character.ActorView.Alignment", "Alignment"],
+    ["faith", "VEMOBILE.Character.ActorView.Faith", "Faith"],
+    ["gender", "VEMOBILE.Character.ActorView.Gender", "Gender"],
+    ["age", "VEMOBILE.Character.ActorView.Age", "Age"],
+    ["height", "VEMOBILE.Character.ActorView.Height", "Height"],
+    ["weight", "VEMOBILE.Character.ActorView.Weight", "Weight"],
+    ["eyes", "VEMOBILE.Character.ActorView.Eyes", "Eyes"],
+    ["hair", "VEMOBILE.Character.ActorView.Hair", "Hair"],
+    ["skin", "VEMOBILE.Character.ActorView.Skin", "Skin"]
+  ].map(([key, labelKey, fallback]) => ({
+    key,
+    label: localizeFoundry(labelKey, fallback),
+    value: String(details?.[key] ?? "").trim()
+  }));
   return {
     characteristics: isNpc ? [] : characteristics,
     ideal: biographyPlainText(details?.ideal),

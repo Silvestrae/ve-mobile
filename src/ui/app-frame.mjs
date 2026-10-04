@@ -185,7 +185,8 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       node("span", { attrs: { title: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.EstimatedDisplayFrameRate", "Estimated display frame rate") }, children: [fpsValue] })
     ]
   });
-  nav.append(splitToggle, rotateSuggestion, ...navButtons.values(), metricsInfo, navSideToggle);
+  const navRoutes = node("div", { className: "ve-nav-routes", children: [...navButtons.values(), metricsInfo] });
+  nav.append(splitToggle, rotateSuggestion, navRoutes, navSideToggle);
 
   const backDispatcher = createVeBackDispatcher({
     getState: () => store.state,

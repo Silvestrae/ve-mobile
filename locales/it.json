@@ -818,7 +818,14 @@
         "ResourceDescription": "Slot incantesimo, dadi vita, risorse del personaggio e oggetti a uso limitato.",
         "NoLimitedResources": "Nessuna risorsa limitata visibile per questo personaggio.",
         "DieResult": "{label} ha ottenuto {value}",
-        "EvaluatedRoll": "Tiro calcolato: {result}"
+        "EvaluatedRoll": "Tiro calcolato: {result}",
+        "SavingThrow": "Tiro salvezza",
+        "BiographyIdeals": "Ideali",
+        "BiographyBonds": "Legami",
+        "BiographyFlaws": "Difetti",
+        "BiographyPersonalityTraits": "Tratti della personalità",
+        "BiographyAppearance": "Aspetto",
+        "SavingThrowShort": "TS"
       },
       "ActorView": {
         "Senses": "Sensi",
@@ -844,7 +851,16 @@
         "UnknownActor": "Actor sconosciuto",
         "UnknownItem": "Oggetto sconosciuto",
         "UnnamedFolder": "Cartella senza nome",
-        "AlwaysPrepared": "Sempre preparato"
+        "AlwaysPrepared": "Sempre preparato",
+        "Alignment": "Allineamento",
+        "Faith": "Fede",
+        "Gender": "Genere",
+        "Age": "Età",
+        "Height": "Altezza",
+        "Weight": "Peso",
+        "Eyes": "Occhi",
+        "Hair": "Capelli",
+        "Skin": "Pelle"
       },
       "BiographyGateway": {
         "FoundryRichTextEnrichmentIsUnavailable": "Arricchimento del testo formattato di Foundry non disponibile.",
@@ -1081,7 +1097,8 @@
         "passive": "Nessun effetto passivo.",
         "inactive": "Nessun effetto inattivo.",
         "unavailable": "Nessun effetto non disponibile."
-      }
+      },
+      "PortraitOf": "Ritratto di {name}"
     },
     "Chat": {
       "ComposerCollapse": "Nascondi la casella del messaggio",
@@ -1116,7 +1133,8 @@
       "ChoosePageOrHeading": "Scegli una pagina o un’intestazione del diario",
       "ChoosePage": "Scegli pagina",
       "OpenAttachment": "Apri allegato",
-      "UntitledPage": "Pagina senza titolo"
+      "UntitledPage": "Pagina senza titolo",
+      "Edit": "Modifica"
     },
     "RestorationRecovery": {
       "title": "È necessario ripristinare le impostazioni desktop",

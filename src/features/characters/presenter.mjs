@@ -193,7 +193,8 @@ function characterSelector(actors, actor, state, commands, status, scope, settin
   }, scope);
   const characterName = node("h2", { text: actor.name, attrs: { title: actor.name } });
   if (!actor.collective) bindCharacterNameLines(characterName, actor.name, scope);
-  const portraitButton = node("button", { className: "ve-character-portrait-button", attrs: { type: "button", "aria-label": commands.localize?.("VEMOBILE.Character.ViewPortrait", `View ${actor.name} portrait`, { name: actor.name }) ?? localizedText(commands.localize, "VEMOBILE.Character.ViewPortrait", "View {name} portrait", { name: (actor.name) }) }, on: { click: () => commands.openCharacterPortrait({ src: actor.img, name: `${actor.name} portrait` }) }, children: [node("img", { attrs: { src: actor.img, alt: `${actor.name} portrait` } })] }, scope);
+  const portraitTitle = localizedText(commands.localize, "VEMOBILE.Character.PortraitOf", "{name}'s portrait", { name: (actor.name) });
+  const portraitButton = node("button", { className: "ve-character-portrait-button", attrs: { type: "button", "aria-label": localizedText(commands.localize, "VEMOBILE.Character.ViewPortrait", "View {name} portrait", { name: (actor.name) }) }, on: { click: () => commands.openCharacterPortrait({ src: actor.img, name: portraitTitle }) }, children: [node("img", { attrs: { src: actor.img, alt: portraitTitle } })] }, scope);
   const deathSave = actor.collective ? null : deathSaveControl(actor, commands, status, scope);
   const header = node("article", {
     className: actor.collective ? "ve-sheet-identity ve-collective-header" : "ve-sheet-identity ve-compact-header",
@@ -566,7 +567,7 @@ export function characterIdentityLine(actor, commands = null) {
     return actor.npc?.creatureType || "NPC";
   }
   const classNames = actor.classes?.length ? actor.classes.map((entry) => entry.name).join(" / ") : "Character";
-  return `${headerLabel(actor, "level", "Level")} ${actor.level || "—"} ${classNames}`;
+  return `${headerLabel(actor, "level", localizedText(commands?.localize, "VEMOBILE.Character.Header.level", "Level"))} ${actor.level || "—"} ${classNames}`;
 }
 
 function characterClassLine(actor) {
@@ -1480,7 +1481,7 @@ function abilitiesPanel(actor, commands, status, scope) {
     return node("article", { className: "ve-ability-card", children: [
       node("div", { className: "ve-ability-heading", children: [node("span", { text: ability.short }), node("small", { text: ability.label })] }),
       node("div", { className: "ve-ability-numbers", children: [node("strong", { text: ability.score }), node("b", { text: formatModifier(ability.modifier) })] }),
-      node("div", { className: "ve-ability-actions", children: [compactAction(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Check", "Check"), formatModifier(ability.modifier), canCheck, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_ABILITY, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilityCheck", "Rolling {label} check…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilityCheck", "{label} check", { label: ability.label })), scope, false, commands.localize), compactAction(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Save", "Save"), formatModifier(ability.saveModifier), canSave, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SAVE, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilitySave", "Rolling {label} save…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitySave", "{label} save", { label: ability.label })), scope, Number(ability.proficiency) > 0, commands.localize)] })
+      node("div", { className: "ve-ability-actions", children: [compactAction(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Check", "Check"), formatModifier(ability.modifier), canCheck, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_ABILITY, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilityCheck", "Rolling {label} check…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilityCheck", "{label} check", { label: ability.label })), scope, false, commands.localize), compactAction(localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrowShort", "Save"), formatModifier(ability.saveModifier), canSave, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SAVE, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilitySave", "Rolling {label} save…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitySave", "{label} save", { label: ability.label })), scope, Number(ability.proficiency) > 0, commands.localize, localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrow", "Saving throw"))] })
     ] });
   }) })] });
 }
@@ -1743,7 +1744,7 @@ function biographyPanel(actor, commands, status, scope) {
   const sourceUuid = characterRecordSourceUuid(actor);
   const canEdit = Boolean(actor.capabilities?.editBiography);
   let storyEditor = null;
-  const storyEdit = biographyEditAction("Biography", false, (anchor) => {
+  const storyEdit = biographyEditAction(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Biography", "Biography"), false, (anchor) => {
     if (!storyEditor) return;
     openBiographyEditor(anchor, {
       actor,
@@ -1811,18 +1812,19 @@ function biographyPanel(actor, commands, status, scope) {
     ] });
   }
   const textBlocks = [
-    ["ideal", "Ideals", "fa-seedling", biography.ideal],
-    ["bond", "Bonds", "fa-link", biography.bond],
-    ["flaw", "Flaws", "fa-heart-crack", biography.flaw],
-    ["trait", "Personality Traits", "fa-puzzle-piece", biography.trait],
-    ["appearance", "Appearance", "fa-image-portrait", biography.appearance]
+    ["ideal", "VEMOBILE.Character.Presenter.BiographyIdeals", "Ideals", "fa-seedling", biography.ideal],
+    ["bond", "VEMOBILE.Character.Presenter.BiographyBonds", "Bonds", "fa-link", biography.bond],
+    ["flaw", "VEMOBILE.Character.Presenter.BiographyFlaws", "Flaws", "fa-heart-crack", biography.flaw],
+    ["trait", "VEMOBILE.Character.Presenter.BiographyPersonalityTraits", "Personality traits", "fa-puzzle-piece", biography.trait],
+    ["appearance", "VEMOBILE.Character.Presenter.BiographyAppearance", "Appearance", "fa-image-portrait", biography.appearance]
   ];
   const characteristics = biography.characteristics ?? [];
   const characteristicValues = Object.fromEntries(characteristics.map((entry) => [entry.key, entry.value ?? ""]));
-  const characteristicsEdit = biographyEditAction("Characteristics", canEdit, (anchor) => openBiographyEditor(anchor, {
+  const characteristicsLabel = localizedText(commands.localize, "VEMOBILE.Character.Presenter.Characteristics", "Characteristics");
+  const characteristicsEdit = biographyEditAction(characteristicsLabel, canEdit, (anchor) => openBiographyEditor(anchor, {
     actor,
     section: "characteristics",
-    label: localizedText(commands.localize, "VEMOBILE.Character.Presenter.Characteristics", "Characteristics"),
+    label: characteristicsLabel,
     iconName: "fa-address-card",
     fields: characteristics,
     values: characteristicValues,
@@ -1830,12 +1832,14 @@ function biographyPanel(actor, commands, status, scope) {
   }, commands, status, scope), scope, commands.localize);
   return node("div", { className: "ve-sheet-stack ve-character-biography", children: [
     node("section", { className: "ve-sheet-card", children: [
-      sectionHeading(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Characteristics", "Characteristics"), "fa-address-card", characteristicsEdit),
+      sectionHeading(characteristicsLabel, "fa-address-card", characteristicsEdit),
       node("dl", { className: "ve-character-biography-characteristics", children: characteristics.flatMap((entry) => [
         node("div", { children: [node("dt", { text: entry.label }), node("dd", { text: entry.value || "—" })] })
       ]) })
     ] }),
-    node("div", { className: "ve-character-biography-blocks", children: textBlocks.map(([section, label, iconName, value]) => node("section", {
+    node("div", { className: "ve-character-biography-blocks", children: textBlocks.map(([section, key, fallback, iconName, value]) => {
+      const label = localizedText(commands.localize, key, fallback);
+      return node("section", {
       className: `ve-sheet-card ve-character-biography-block${section === "appearance" ? " is-appearance" : ""}`,
       children: [sectionHeading(label, iconName, biographyEditAction(label, canEdit, (anchor) => openBiographyEditor(anchor, {
         actor,
@@ -1845,7 +1849,7 @@ function biographyPanel(actor, commands, status, scope) {
         value: value ?? "",
         originalValue: value ?? ""
       }, commands, status, scope), scope, commands.localize)), node("p", { text: value || localizedText(commands.localize, "VEMOBILE.Character.Presenter.NotRecorded", "Not recorded.") })]
-    })) }),
+    }); }) }),
     node("section", { className: "ve-sheet-card ve-character-biography-story", children: [sectionHeading(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Biography", "Biography"), "fa-feather-pointed", storyEdit), description] })
   ] });
 }
@@ -2796,7 +2800,7 @@ function abilityScoresPreview(actor, commands, status, scope) {
       node("div", { className: "ve-ability-preview-score", children: [node("strong", { text: ability.short }), node("span", { text: ability.score })] }),
       node("div", { className: "ve-ability-preview-actions", children: [
         abilityPreviewRoll(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Check", "Check"), ability.modifier, canCheck, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_ABILITY, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilityCheck", "Rolling {label} check…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilityCheck", "{label} check", { label: ability.label })), scope, false, commands.localize),
-        abilityPreviewRoll(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Save", "Save"), ability.saveModifier, canSave, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SAVE, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilitySave", "Rolling {label} save…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitySave", "{label} save", { label: ability.label })), scope, Number(ability.proficiency) > 0, commands.localize)
+        abilityPreviewRoll(localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrowShort", "Save"), ability.saveModifier, canSave, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SAVE, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilitySave", "Rolling {label} save…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitySave", "{label} save", { label: ability.label })), scope, Number(ability.proficiency) > 0, commands.localize, localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrow", "Saving throw"))
       ] })
     ] });
   }) });
@@ -2821,10 +2825,10 @@ function skillProficiencyLabel(value, localize = null) {
   return { key: "none", label: localizedText(localize, "VEMOBILE.Character.Labels.Notproficient", "Not proficient") };
 }
 
-function abilityPreviewRoll(label, modifier, enabled, onClick, scope, proficientSave = false, localize = null) {
+function abilityPreviewRoll(label, modifier, enabled, onClick, scope, proficientSave = false, localize = null, accessibleLabel = label) {
   return node("button", {
     className: proficientSave ? "is-save-proficient" : "",
-    attrs: { type: "button", disabled: !enabled, title: proficientSave ? localizedText(localize, "VEMOBILE.Character.Labels.Proficientsavingthrow", "Proficient saving throw") : undefined, "aria-label": localizedText(localize, proficientSave ? "VEMOBILE.Character.Labels.ProficientRoll" : "VEMOBILE.Character.Labels.Roll", proficientSave ? "{label} {value}; proficient" : "{label} {value}", { label, value: formatModifier(modifier) }) },
+    attrs: { type: "button", disabled: !enabled, title: proficientSave ? localizedText(localize, "VEMOBILE.Character.Labels.Proficientsavingthrow", "Proficient saving throw") : undefined, "aria-label": localizedText(localize, proficientSave ? "VEMOBILE.Character.Labels.ProficientRoll" : "VEMOBILE.Character.Labels.Roll", proficientSave ? "{label} {value}; proficient" : "{label} {value}", { label: accessibleLabel, value: formatModifier(modifier) }) },
     on: { click: (event) => onClick(event.currentTarget) },
     children: [abilityActionLabel(label, proficientSave), node("b", { text: formatModifier(modifier) }), icon("fa-dice-d20")]
   }, scope);
@@ -2967,10 +2971,10 @@ function rollButton({ label, meta, value, enabled, onClick, scope }) {
   return node("button", { className: "ve-quick-roll", attrs: { type: "button", disabled: !enabled }, on: { click: (event) => onClick(event.currentTarget) }, children: [icon("fa-dice-d20"), node("span", { children: [node("strong", { text: label }), node("small", { text: meta })] }), node("b", { text: value })] }, scope);
 }
 
-function compactAction(label, value, enabled, onClick, scope, proficientSave = false, localize = null) {
+function compactAction(label, value, enabled, onClick, scope, proficientSave = false, localize = null, accessibleLabel = label) {
   return node("button", {
     className: proficientSave ? "is-save-proficient" : "",
-    attrs: { type: "button", disabled: !enabled, title: proficientSave ? localizedText(localize, "VEMOBILE.Character.Labels.Proficientsavingthrow", "Proficient saving throw") : undefined, "aria-label": localizedText(localize, proficientSave ? "VEMOBILE.Character.Labels.ProficientRoll" : "VEMOBILE.Character.Labels.Roll", proficientSave ? "{label} {value}; proficient" : "{label} {value}", { label, value }) },
+    attrs: { type: "button", disabled: !enabled, title: proficientSave ? localizedText(localize, "VEMOBILE.Character.Labels.Proficientsavingthrow", "Proficient saving throw") : undefined, "aria-label": localizedText(localize, proficientSave ? "VEMOBILE.Character.Labels.ProficientRoll" : "VEMOBILE.Character.Labels.Roll", proficientSave ? "{label} {value}; proficient" : "{label} {value}", { label: accessibleLabel, value }) },
     on: { click: (event) => onClick(event.currentTarget) },
     children: [abilityActionLabel(label, proficientSave), node("b", { text: value })]
   }, scope);

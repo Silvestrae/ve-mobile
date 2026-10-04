@@ -818,7 +818,14 @@
         "ResourceDescription": "Espacios de conjuro, dados de golpe, recursos del personaje y objetos de uso limitado.",
         "NoLimitedResources": "No hay recursos limitados visibles para este personaje.",
         "DieResult": "{label} obtuvo {value}",
-        "EvaluatedRoll": "Tirada calculada: {result}"
+        "EvaluatedRoll": "Tirada calculada: {result}",
+        "SavingThrow": "Tirada de salvación",
+        "BiographyIdeals": "Ideales",
+        "BiographyBonds": "Vínculos",
+        "BiographyFlaws": "Defectos",
+        "BiographyPersonalityTraits": "Rasgos de personalidad",
+        "BiographyAppearance": "Apariencia",
+        "SavingThrowShort": "Salv."
       },
       "ActorView": {
         "Senses": "Sentidos",
@@ -844,7 +851,16 @@
         "UnknownActor": "Actor desconocido",
         "UnknownItem": "Objeto desconocido",
         "UnnamedFolder": "Carpeta sin nombre",
-        "AlwaysPrepared": "Siempre preparado"
+        "AlwaysPrepared": "Siempre preparado",
+        "Alignment": "Alineamiento",
+        "Faith": "Fe",
+        "Gender": "Género",
+        "Age": "Edad",
+        "Height": "Altura",
+        "Weight": "Peso",
+        "Eyes": "Ojos",
+        "Hair": "Cabello",
+        "Skin": "Piel"
       },
       "BiographyGateway": {
         "FoundryRichTextEnrichmentIsUnavailable": "El enriquecimiento de texto enriquecido de Foundry no está disponible.",
@@ -1081,7 +1097,8 @@
         "passive": "No hay efectos pasivos.",
         "inactive": "No hay efectos inactivos.",
         "unavailable": "No hay efectos no disponibles."
-      }
+      },
+      "PortraitOf": "Retrato de {name}"
     },
     "Chat": {
       "ComposerCollapse": "Ocultar cuadro de mensaje",
@@ -1116,7 +1133,8 @@
       "ChoosePageOrHeading": "Elegir página o encabezado del diario",
       "ChoosePage": "Elegir página",
       "OpenAttachment": "Abrir adjunto",
-      "UntitledPage": "Página sin título"
+      "UntitledPage": "Página sin título",
+      "Edit": "Editar"
     },
     "RestorationRecovery": {
       "title": "Se requiere recuperar los ajustes de escritorio",

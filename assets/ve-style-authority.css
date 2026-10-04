@@ -177,7 +177,7 @@
       color-mix(in srgb, var(--ve-surface) 70%, var(--ve-class-deep-secondary) 30%)) !important;
   }
 
-  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav > .ve-main-nav-item {
+  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav .ve-main-nav-item {
     box-sizing: border-box !important;
     position: relative !important;
     display: grid !important;
@@ -195,7 +195,7 @@
     font: inherit !important;
   }
 
-  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav > .ve-main-nav-item:is(.is-active, [aria-current="page"]) {
+  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav .ve-main-nav-item:is(.is-active, [aria-current="page"]) {
     border-color: color-mix(in srgb, var(--ve-red-bright) 84%, #fff 16%) !important;
     color: #fff !important;
     background:
@@ -203,7 +203,7 @@
       linear-gradient(180deg, color-mix(in srgb, var(--ve-red) 82%, var(--ve-surface-up)), color-mix(in srgb, var(--ve-red) 72%, var(--ve-surface))) !important;
   }
 
-  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav > .ve-main-nav-item:is(:disabled, .is-disabled) {
+  .ve-mobile-app[data-ve-style-authority] .ve-bottom-nav .ve-main-nav-item:is(:disabled, .is-disabled) {
     opacity: 0.42 !important;
     color: var(--ve-subtle) !important;
     background: transparent !important;
@@ -336,6 +336,7 @@
     gap: 12px !important;
     width: 100% !important;
     min-height: 52px !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 12px 16px !important;
     border: 0 !important;
@@ -509,7 +510,7 @@
       grid-column: 2 !important;
       grid-row: 1 / -1 !important;
       grid-template-columns: 1fr !important;
-      grid-template-rows: repeat(6, 60px) auto !important;
+      grid-template-rows: auto minmax(0, 1fr) auto !important;
       gap: 5px !important;
       height: 100% !important;
       padding: 7px 0 !important;

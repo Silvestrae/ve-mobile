@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 1.0.1 — 2026-10-04
+
+- Fixed Tablet Split navigation overlap that could block or mis-trigger Character.
+- Improved narrow-screen wrapping in Settings, Combat, Spells, Journals and Scene selection.
+- Corrected translated labels and missing VE-owned strings across all six supported languages.
+- Separated saving-throw terminology from Save actions and improved Character metadata,
+  Biography labels, portrait titles and Journal controls.
+- Refined long labels in German, Spanish, French and Italian while preserving Character
+  performance, navigation and gameplay behaviour.
+
+## 1.0.0 — 2026-10-04
+
 Initial v1.0.0 of VE Mobile, a browser-native phone and tablet interface for
 authenticated Foundry Virtual Tabletop sessions.
 

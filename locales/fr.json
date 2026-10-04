@@ -818,7 +818,14 @@
         "ResourceDescription": "Emplacements de sort, dés de vie, ressources du personnage et objets à usage limité.",
         "NoLimitedResources": "Aucune ressource limitée visible pour ce personnage.",
         "DieResult": "{label} a obtenu {value}",
-        "EvaluatedRoll": "Jet calculé : {result}"
+        "EvaluatedRoll": "Jet calculé : {result}",
+        "SavingThrow": "Jet de sauvegarde",
+        "BiographyIdeals": "Idéaux",
+        "BiographyBonds": "Liens",
+        "BiographyFlaws": "Défauts",
+        "BiographyPersonalityTraits": "Traits de personnalité",
+        "BiographyAppearance": "Apparence",
+        "SavingThrowShort": "JS"
       },
       "ActorView": {
         "Senses": "Sens",
@@ -844,7 +851,16 @@
         "UnknownActor": "Personnage inconnu",
         "UnknownItem": "Objet inconnu",
         "UnnamedFolder": "Dossier sans nom",
-        "AlwaysPrepared": "Toujours préparé"
+        "AlwaysPrepared": "Toujours préparé",
+        "Alignment": "Alignement",
+        "Faith": "Foi",
+        "Gender": "Genre",
+        "Age": "Âge",
+        "Height": "Taille",
+        "Weight": "Poids",
+        "Eyes": "Yeux",
+        "Hair": "Cheveux",
+        "Skin": "Peau"
       },
       "BiographyGateway": {
         "FoundryRichTextEnrichmentIsUnavailable": "L’enrichissement de texte enrichi Foundry est indisponible.",
@@ -1081,7 +1097,8 @@
         "passive": "Aucun effet passif.",
         "inactive": "Aucun effet inactif.",
         "unavailable": "Aucun effet indisponible."
-      }
+      },
+      "PortraitOf": "Portrait de {name}"
     },
     "Chat": {
       "ComposerCollapse": "Masquer la zone de message",
@@ -1116,7 +1133,8 @@
       "ChoosePageOrHeading": "Choisir une page ou un titre du journal",
       "ChoosePage": "Choisir une page",
       "OpenAttachment": "Ouvrir la pièce jointe",
-      "UntitledPage": "Page sans titre"
+      "UntitledPage": "Page sans titre",
+      "Edit": "Modifier"
     },
     "RestorationRecovery": {
       "title": "Restauration des paramètres du bureau requise",

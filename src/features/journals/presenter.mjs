@@ -56,7 +56,7 @@ function journalReader(state, commands, scope) {
     node("header", { children: [
       node("button", { attrs: { type: "button", "aria-label": localize("VEMOBILE.Journals.Back", "Back to journals") }, on: { click: commands.closeJournal }, children: [icon("fa-arrow-left")] }, scope),
       node("div", { children: [node("small", { text: localize("VEMOBILE.Journals.Journal", "Journal").toLocaleUpperCase() }), node("h2", { text: journal.name })] }),
-      journal.canEdit && (!page || page.canEdit) ? node("button", { className: "ve-journal-native-edit", attrs: { type: "button" }, on: { click: () => void editCurrentPage() }, text: "Edit" }, scope) : null
+      journal.canEdit && (!page || page.canEdit) ? node("button", { className: "ve-journal-native-edit", attrs: { type: "button" }, on: { click: () => void editCurrentPage() }, text: localizedText(commands.localize, "VEMOBILE.Journals.Edit", "Edit") }, scope) : null
     ].filter(Boolean) }),
     editStatus,
     pages.length ? node("nav", { className: "ve-journal-page-nav", attrs: { "aria-label": localizedText(commands.localize, "VEMOBILE.Journals.PagesAndHeadings", "Journal pages and headings") }, children: [

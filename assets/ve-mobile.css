@@ -575,11 +575,11 @@ body.ve-mobile-booting {
 .ve-death-save-pips i.is-filled { background: currentColor; box-shadow: 0 0 5px currentColor; }
 
 .ve-combat-screen { width: min(100%, 740px); min-height: 100%; margin: 0 auto; padding: 14px 14px calc(86px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
-.ve-combat-heading { min-height: 74px; display: flex; align-items: center; gap: 14px; padding: 10px 14px; border: 1px solid var(--ve-border); border-radius: 14px; background: var(--ve-surface); box-shadow: var(--ve-shadow); }
+.ve-combat-heading { min-height: 74px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 14px; border: 1px solid var(--ve-border); border-radius: 14px; background: var(--ve-surface); box-shadow: var(--ve-shadow); }
 .ve-combat-heading h2, .ve-combat-heading p { margin: 0; }
 .ve-combat-heading h2 { font: 700 1.45rem/1.1 Georgia, serif; }
 .ve-combat-heading p { margin-top: 4px; color: var(--ve-subtle); font-size: 0.78rem; }
-.ve-combat-heading-copy { min-width: 0; flex: 1; }
+.ve-combat-heading-copy { min-width: 0; flex: 1 1 min-content; overflow-wrap: break-word; }
 .ve-combat-round { width: 52px; display: grid; place-items: center; line-height: 1; }
 .ve-combat-round small { color: var(--ve-subtle); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
 .ve-combat-round strong { color: var(--ve-gold); font: 700 2rem/1 Georgia, serif; }
@@ -598,12 +598,12 @@ body.ve-mobile-booting {
 .ve-combat-row-controls { display: flex; gap: 4px; }
 .ve-combat-row-controls button { width: 36px; height: 36px; margin: 0; padding: 0; border: 1px solid var(--ve-border); border-radius: 50%; color: var(--ve-text); background: var(--ve-surface-up); }
 .ve-combat-row-controls .ve-combat-roll-initiative { color: var(--ve-gold); }
-.ve-combat-heading > .ve-combat-end-turn { flex: 0 0 70px; margin-left: auto; }
+.ve-combat-heading > .ve-combat-end-turn { flex: 0 0 auto; margin-left: auto; }
 .ve-combat-empty { min-height: 220px; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--ve-subtle); text-align: center; }
 .ve-combat-empty > i { color: var(--ve-gold); font-size: 2rem; }
 .ve-combat-empty h2, .ve-combat-empty p { margin: 0; }
 
-.ve-scene-combat-carousel { --ve-scene-carousel-controls: 140px; --ve-scene-carousel-safe-width: calc(var(--ve-scene-width, 100vw) - max(16px, calc(var(--ve-safe-left) + var(--ve-safe-right) + 16px))); position: absolute; z-index: var(--ve-layer-scene-hud); top: max(8px, var(--ve-safe-top)); left: calc(50% + (var(--ve-safe-left) - var(--ve-safe-right)) / 2); box-sizing: border-box; width: max-content; max-width: var(--ve-scene-carousel-safe-width); height: 58px; padding: 4px 5px; display: grid; grid-template-columns: 46px minmax(0, max-content) 70px; align-items: center; gap: 6px; overflow: visible; border: 1px solid color-mix(in srgb, var(--ve-gold) 31%, var(--ve-border)); border-radius: 18px; background: linear-gradient(105deg, color-mix(in srgb, var(--ve-surface-up) 84%, transparent), color-mix(in srgb, var(--ve-surface) 76%, transparent)); box-shadow: 0 8px 22px rgb(0 0 0 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.1); backdrop-filter: blur(10px) saturate(0.88); -webkit-backdrop-filter: blur(10px) saturate(0.88); transform: translateX(-50%); pointer-events: auto; }
+.ve-scene-combat-carousel { --ve-scene-carousel-controls: 164px; --ve-scene-carousel-safe-width: calc(var(--ve-scene-width, 100vw) - max(16px, calc(var(--ve-safe-left) + var(--ve-safe-right) + 16px))); position: absolute; z-index: var(--ve-layer-scene-hud); top: max(8px, var(--ve-safe-top)); left: calc(50% + (var(--ve-safe-left) - var(--ve-safe-right)) / 2); box-sizing: border-box; width: max-content; max-width: var(--ve-scene-carousel-safe-width); height: 58px; padding: 4px 5px; display: grid; grid-template-columns: 46px minmax(0, max-content) max-content; align-items: center; gap: 6px; overflow: visible; border: 1px solid color-mix(in srgb, var(--ve-gold) 31%, var(--ve-border)); border-radius: 18px; background: linear-gradient(105deg, color-mix(in srgb, var(--ve-surface-up) 84%, transparent), color-mix(in srgb, var(--ve-surface) 76%, transparent)); box-shadow: 0 8px 22px rgb(0 0 0 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.1); backdrop-filter: blur(10px) saturate(0.88); -webkit-backdrop-filter: blur(10px) saturate(0.88); transform: translateX(-50%); pointer-events: auto; }
 .ve-scene-combat-round { position: relative; width: 46px; height: 46px; margin: 0; padding: 5px 3px 4px; display: grid; grid-template-rows: auto 1fr; place-items: center; border: 1px solid color-mix(in srgb, var(--ve-scene-carousel-round) 64%, var(--ve-border)); border-radius: 14px; color: var(--ve-scene-carousel-round); background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--ve-scene-carousel-round) 23%, transparent), transparent 58%), color-mix(in srgb, var(--ve-scene-carousel-round) 8%, var(--ve-surface-up)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 2px 6px rgb(0 0 0 / 0.18); text-align: center; font-variant-numeric: tabular-nums; }
 .ve-scene-combat-round-label { color: color-mix(in srgb, var(--ve-scene-carousel-round) 72%, var(--ve-subtle)); font: 800 0.43rem/1 system-ui, sans-serif; letter-spacing: 0.12em; text-transform: uppercase; }
 .ve-scene-combat-round-value { align-self: start; color: var(--ve-scene-carousel-round); font: 800 1.24rem/0.96 Georgia, "Times New Roman", serif; text-shadow: 0 1px 0 rgb(255 255 255 / 0.16); }
@@ -621,7 +621,7 @@ body.ve-mobile-booting {
 .ve-scene-combatant img, .ve-scene-combatant > .fa-user { position: relative; z-index: 1; width: 100%; height: 100%; display: grid; place-items: center; border-radius: 50%; object-fit: cover; }
 .ve-scene-combatant > strong { position: absolute; z-index: 2; right: -3px; bottom: -3px; min-width: 17px; height: 15px; padding: 0 3px; display: grid; place-items: center; border-radius: 8px; color: var(--ve-paper); background: rgb(16 13 15 / 0.96); font: 750 0.5rem/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 .ve-scene-combatant-defeated { position: absolute; z-index: 2; inset: 50% auto auto 50%; color: #fff; font-size: 0.72rem; text-shadow: 0 1px 3px #000; transform: translate(-50%, -50%); }
-.ve-scene-combat-end-turn { position: relative; z-index: 2; isolation: isolate; min-width: 70px; height: 48px; margin: 0; padding: 3px 3px 3px 6px; display: grid; grid-template-columns: minmax(0, 1fr) 17px; align-items: stretch; gap: 1px; border: 1px solid color-mix(in srgb, var(--ve-good) 78%, #fff); border-radius: 14px; color: #fff; background: linear-gradient(135deg, color-mix(in srgb, var(--ve-good) 77%, #17320f), color-mix(in srgb, var(--ve-good) 57%, #17320f)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 3px 9px rgb(0 0 0 / 0.3); }
+.ve-scene-combat-end-turn { position: relative; z-index: 2; isolation: isolate; min-width: 94px; width: max-content; min-height: 48px; height: auto; margin: 0; padding: 3px 3px 3px 6px; display: grid; grid-template-columns: max-content 17px; align-items: stretch; gap: 1px; border: 1px solid color-mix(in srgb, var(--ve-good) 78%, #fff); border-radius: 14px; color: #fff; background: linear-gradient(135deg, color-mix(in srgb, var(--ve-good) 77%, #17320f), color-mix(in srgb, var(--ve-good) 57%, #17320f)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 3px 9px rgb(0 0 0 / 0.3); }
 .ve-scene-combat-end-turn-copy { min-width: 0; display: grid; align-content: center; gap: 2px; text-align: left; }
 .ve-scene-combat-end-turn-line { display: block; color: #fff; opacity: 1; font-family: system-ui, sans-serif; font-size: 0.62rem; font-weight: 850; font-style: normal; font-synthesis: none; line-height: 1; letter-spacing: 0.08em; text-transform: uppercase; white-space: normal; text-shadow: none; filter: none; mix-blend-mode: normal; }
 .ve-scene-combat-end-turn-chevron { display: grid; place-items: center; align-self: stretch; border-left: 1px solid rgb(255 255 255 / 0.25); color: #fff; font-size: 0.72rem; }
@@ -2243,6 +2243,8 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
   padding: 18px 16px 32px;
 }
 
+.ve-nav-routes { display: contents; }
+
 .ve-bottom-nav {
   position: relative;
   z-index: var(--ve-layer-navigation);
@@ -2449,6 +2451,7 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 }
 
 .ve-scene-choice-list {
+  grid-auto-rows: max-content;
   min-height: 0;
   padding: 8px;
   display: grid;
@@ -2461,6 +2464,8 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 }
 
 .ve-scene-choice {
+  height: auto;
+  flex-shrink: 0;
   width: 100%;
   min-height: 68px;
   display: grid;
@@ -2543,8 +2548,8 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 .ve-scene-choice-copy > strong {
   overflow: hidden;
   font-size: 0.9rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .ve-scene-choice-state {
@@ -5748,6 +5753,7 @@ details.ve-action-session-compact-result {
 }
 
 .ve-sheet-card-heading {
+  flex-wrap: wrap;
   min-height: 43px;
   padding: 9px 13px;
   display: flex;
@@ -5769,7 +5775,9 @@ details.ve-action-session-compact-result {
 }
 
 .ve-sheet-card-heading h3 {
-  flex: 1;
+  min-width: 0;
+  flex: 1 1 min-content;
+  overflow-wrap: break-word;
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 0.96rem;
@@ -5796,6 +5804,8 @@ details.ve-action-session-compact-result {
 }
 
 .ve-collection-controls {
+  flex: 0 0 auto;
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -8409,6 +8419,7 @@ details.ve-action-session-compact-result {
 .ve-journal-tree, .ve-journal-folder-contents { display: grid; gap: 7px; }
 .ve-journal-folder { min-width: 0; }
 .ve-journal-folder > summary { min-height: 46px; padding: 7px 10px; display: grid; grid-template-columns: 18px 22px minmax(0, 1fr) auto; align-items: center; gap: 7px; border: 1px solid var(--ve-border); border-radius: 10px; color: var(--ve-text); background: color-mix(in srgb, var(--ve-surface-up) 88%, var(--ve-red) 12%); cursor: pointer; list-style: none; }
+.ve-journal-folder > summary > strong { min-width: 0; overflow-wrap: anywhere; }
 .ve-journal-folder > summary::-webkit-details-marker { display: none; }
 .ve-journal-folder > summary > i { color: var(--ve-gold); transition: transform 140ms ease; }
 .ve-journal-folder[open] > summary > .fa-chevron-right { transform: rotate(90deg); }
@@ -8826,6 +8837,9 @@ details.ve-action-session-compact-result {
 }
 
 .ve-settings-reload-card {
+  box-sizing: border-box;
+  min-width: 0;
+  container-type: inline-size;
   width: min(100%, 420px);
   max-height: calc(100dvh - max(18px, var(--ve-safe-top)) - max(18px, var(--ve-safe-bottom)));
   overflow-y: auto;
@@ -8855,6 +8869,9 @@ details.ve-action-session-compact-result {
 
 .ve-settings-reload-card h2,
 .ve-settings-reload-card p {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   margin: 0;
 }
 
@@ -8883,15 +8900,24 @@ details.ve-action-session-compact-result {
   background: var(--ve-surface);
   margin-top: 5px;
   display: grid;
-  grid-template-columns: 1fr 1.25fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
   gap: 9px;
 }
 
 .ve-settings-reload-actions > button {
+  min-width: 0;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 10px;
   min-height: 48px;
   border: 1px solid var(--ve-border);
   border-radius: 10px 4px 10px 4px;
   font-weight: 750;
+}
+
+@container (max-width: 290px) {
+  .ve-settings-reload-actions { grid-template-columns: minmax(0, 1fr); }
 }
 
 .ve-settings-reload-later {
@@ -8945,6 +8971,8 @@ details.ve-action-session-compact-result {
 }
 
 .ve-settings-group-toggle {
+  height: auto;
+  white-space: normal;
   width: 100%;
   min-height: 52px;
   margin: 0;
@@ -9386,13 +9414,17 @@ details.ve-action-session-compact-result {
 
 }
 
-/* Settings actions share their associated row at every form factor. */
+/* Let the action wrap based on the heading's available pane width. */
+.ve-settings-mobile-heading { flex-wrap: wrap; }
+.ve-settings-mobile-heading h2 { flex-basis: 140px; }
 .ve-settings-defaults {
-  flex: 0 0 auto;
+  flex: 1 0 max-content;
   margin: 0 0 0 auto;
   padding: 8px 10px;
   min-height: 44px;
-  max-width: 115px;
+  height: auto;
+  width: auto;
+  max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
   border: 1px solid color-mix(in srgb, var(--ve-red-bright) 78%, var(--ve-border));
@@ -9481,7 +9513,7 @@ details.ve-action-session-compact-result {
     grid-column: 2;
     grid-row: 1 / -1;
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(6, 60px) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     align-content: center;
     align-self: stretch;
     height: 100%;
@@ -9496,6 +9528,22 @@ details.ve-action-session-compact-result {
     border-top: 0;
     border-left: 1px solid var(--ve-border);
   }
+
+  .ve-mobile-app[data-form-factor="tablet"] .ve-nav-routes {
+    grid-row: 2;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: max-content;
+    align-content: safe center;
+    gap: 5px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    scrollbar-width: thin;
+  }
+
+  .ve-mobile-app[data-form-factor="tablet"] .ve-nav-routes > .ve-main-nav-item { min-height: 60px; }
 
   .ve-mobile-app[data-form-factor="tablet"] .ve-tablet-metrics {
     min-width: 0;
@@ -9525,7 +9573,7 @@ details.ve-action-session-compact-result {
     white-space: nowrap;
   }
 
-  .ve-mobile-app[data-form-factor="tablet"] .ve-bottom-nav > button:not(.ve-split-screen-toggle):not(.ve-tablet-nav-side-toggle) {
+  .ve-mobile-app[data-form-factor="tablet"] .ve-nav-routes > button:not(.ve-split-screen-toggle):not(.ve-tablet-nav-side-toggle) {
     width: auto;
     min-height: 54px;
     min-width: 0;
@@ -9553,10 +9601,9 @@ details.ve-action-session-compact-result {
   }
 
   .ve-mobile-app[data-form-factor="tablet"] .ve-tablet-nav-side-toggle {
-    position: absolute;
-    z-index: 2;
-    bottom: max(8px, var(--ve-safe-bottom));
-    inset-inline: var(--ve-tablet-nav-inset);
+    grid-row: 3;
+    position: relative;
+    margin: 0 var(--ve-tablet-nav-inset);
     width: auto;
     min-height: 48px;
     display: grid !important;
@@ -9578,10 +9625,9 @@ details.ve-action-session-compact-result {
   }
 
   .ve-mobile-app[data-form-factor="tablet"][data-orientation="portrait"] .ve-tablet-rotate-suggestion {
-    position: absolute;
-    z-index: 2;
-    top: max(8px, var(--ve-safe-top));
-    inset-inline: var(--ve-tablet-nav-inset);
+    grid-row: 1;
+    position: relative;
+    margin: 0 var(--ve-tablet-nav-inset);
     width: auto;
     min-height: 64px;
     display: grid !important;
@@ -9615,10 +9661,9 @@ details.ve-action-session-compact-result {
   }
 
   .ve-mobile-app[data-form-factor="tablet"][data-orientation="landscape"] .ve-split-screen-toggle {
-    position: absolute;
-    z-index: 2;
-    top: max(8px, var(--ve-safe-top));
-    inset-inline: var(--ve-tablet-nav-inset);
+    grid-row: 1;
+    position: relative;
+    margin: 0 var(--ve-tablet-nav-inset);
     width: auto;
     min-height: 64px;
     padding: 7px 3px;
@@ -11211,7 +11256,7 @@ body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-character-inspiration.
 .ve-biography-editor.is-pending { cursor: wait; }
 .ve-biography-editor.is-pending :disabled { opacity: 0.58; }
 
-.ve-bottom-nav > .ve-main-nav-item {
+.ve-bottom-nav .ve-main-nav-item {
   position: relative;
   min-width: 0;
   overflow: visible;
@@ -11220,7 +11265,7 @@ body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-character-inspiration.
   isolation: isolate;
 }
 
-.ve-bottom-nav > .ve-main-nav-item > span {
+.ve-bottom-nav .ve-main-nav-item > span {
   max-width: 100%;
   font-size: clamp(0.55rem, 2.2vw, 0.66rem);
   line-height: 1.05;
@@ -11228,8 +11273,8 @@ body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-character-inspiration.
   overflow-wrap: anywhere;
 }
 
-.ve-bottom-nav > .ve-main-nav-item.is-active,
-.ve-bottom-nav > .ve-main-nav-item[aria-current="page"] {
+.ve-bottom-nav .ve-main-nav-item.is-active,
+.ve-bottom-nav .ve-main-nav-item[aria-current="page"] {
   border-color: color-mix(in srgb, var(--ve-red-bright) 84%, #fff 16%);
   color: #fff;
   background:
@@ -11241,8 +11286,8 @@ body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-character-inspiration.
     0 0 13px color-mix(in srgb, var(--ve-red-bright) 38%, transparent);
 }
 
-.ve-bottom-nav > .ve-main-nav-item.is-active :is(i, .ve-sheet-tab-icon),
-.ve-bottom-nav > .ve-main-nav-item[aria-current="page"] :is(i, .ve-sheet-tab-icon) {
+.ve-bottom-nav .ve-main-nav-item.is-active :is(i, .ve-sheet-tab-icon),
+.ve-bottom-nav .ve-main-nav-item[aria-current="page"] :is(i, .ve-sheet-tab-icon) {
   color: color-mix(in srgb, #fff 78%, var(--ve-gold));
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--ve-red-bright) 52%, transparent));
 }
@@ -11261,7 +11306,7 @@ body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-character-inspiration.
     text-overflow: clip;
   }
 
-  .ve-mobile-app[data-form-factor="tablet"] .ve-bottom-nav > .ve-main-nav-item:not([data-route="settings"])::after {
+  .ve-mobile-app[data-form-factor="tablet"] .ve-bottom-nav .ve-main-nav-item:not([data-route="settings"])::after {
     position: absolute;
     right: 7px;
     bottom: -3px;
@@ -11272,7 +11317,7 @@ body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-character-inspiration.
     pointer-events: none;
   }
 
-  .ve-mobile-app[data-form-factor="tablet"] .ve-bottom-nav > .ve-main-nav-item:not([data-route="settings"])::before {
+  .ve-mobile-app[data-form-factor="tablet"] .ve-bottom-nav .ve-main-nav-item:not([data-route="settings"])::before {
     position: absolute;
     bottom: -5px;
     left: 50%;
@@ -11287,8 +11332,8 @@ body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-character-inspiration.
     transform: translateX(-50%) rotate(45deg);
   }
 
-  .ve-mobile-app[data-form-factor="tablet"] .ve-bottom-nav > .ve-main-nav-item.is-active,
-  .ve-mobile-app[data-form-factor="tablet"] .ve-bottom-nav > .ve-main-nav-item[aria-current="page"] {
+  .ve-mobile-app[data-form-factor="tablet"] .ve-bottom-nav .ve-main-nav-item.is-active,
+  .ve-mobile-app[data-form-factor="tablet"] .ve-bottom-nav .ve-main-nav-item[aria-current="page"] {
     border-radius: 15px 5px 15px 5px;
     box-shadow:
       inset 0 0 0 1px color-mix(in srgb, #fff 14%, transparent),
@@ -11305,25 +11350,25 @@ body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-character-inspiration.
 
 @media (max-width: 520px) {
   .ve-mobile-app .ve-sheet-tabs button span { font-size: clamp(0.46rem, 2vw, 0.54rem); }
-  .ve-bottom-nav > .ve-main-nav-item > span { font-size: clamp(0.48rem, 1.9vw, 0.59rem); }
+  .ve-bottom-nav .ve-main-nav-item > span { font-size: clamp(0.48rem, 1.9vw, 0.59rem); }
   .ve-biography-editor-fields { grid-template-columns: minmax(0, 1fr); }
   .ve-biography-edit span { display: none; }
 }
 
-body[data-ve-memory-profile="strong"] .ve-mobile-app .ve-bottom-nav > .ve-main-nav-item.is-active,
-body[data-ve-memory-profile="strong"] .ve-mobile-app .ve-bottom-nav > .ve-main-nav-item[aria-current="page"] {
+body[data-ve-memory-profile="strong"] .ve-mobile-app .ve-bottom-nav .ve-main-nav-item.is-active,
+body[data-ve-memory-profile="strong"] .ve-mobile-app .ve-bottom-nav .ve-main-nav-item[aria-current="page"] {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 12%, transparent);
 }
 
-body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-bottom-nav > .ve-main-nav-item.is-active,
-body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-bottom-nav > .ve-main-nav-item[aria-current="page"] {
+body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-bottom-nav .ve-main-nav-item.is-active,
+body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-bottom-nav .ve-main-nav-item[aria-current="page"] {
   box-shadow: none;
 }
 
-body[data-ve-memory-profile="strong"] .ve-mobile-app .ve-bottom-nav > .ve-main-nav-item.is-active :is(i, .ve-sheet-tab-icon),
-body[data-ve-memory-profile="strong"] .ve-mobile-app .ve-bottom-nav > .ve-main-nav-item[aria-current="page"] :is(i, .ve-sheet-tab-icon),
-body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-bottom-nav > .ve-main-nav-item.is-active :is(i, .ve-sheet-tab-icon),
-body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-bottom-nav > .ve-main-nav-item[aria-current="page"] :is(i, .ve-sheet-tab-icon) {
+body[data-ve-memory-profile="strong"] .ve-mobile-app .ve-bottom-nav .ve-main-nav-item.is-active :is(i, .ve-sheet-tab-icon),
+body[data-ve-memory-profile="strong"] .ve-mobile-app .ve-bottom-nav .ve-main-nav-item[aria-current="page"] :is(i, .ve-sheet-tab-icon),
+body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-bottom-nav .ve-main-nav-item.is-active :is(i, .ve-sheet-tab-icon),
+body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-bottom-nav .ve-main-nav-item[aria-current="page"] :is(i, .ve-sheet-tab-icon) {
   filter: none;
 }
 

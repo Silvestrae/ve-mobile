@@ -818,7 +818,14 @@
         "ResourceDescription": "Spell slots, hit dice, character resources, and limited-use items.",
         "NoLimitedResources": "No limited resources are visible for this character.",
         "DieResult": "{label} rolled {value}",
-        "EvaluatedRoll": "Evaluated roll: {result}"
+        "EvaluatedRoll": "Evaluated roll: {result}",
+        "SavingThrow": "Saving throw",
+        "BiographyIdeals": "Ideals",
+        "BiographyBonds": "Bonds",
+        "BiographyFlaws": "Flaws",
+        "BiographyPersonalityTraits": "Personality traits",
+        "BiographyAppearance": "Appearance",
+        "SavingThrowShort": "Save"
       },
       "ActorView": {
         "Senses": "Senses",
@@ -844,7 +851,16 @@
         "UnknownActor": "Unknown actor",
         "UnknownItem": "Unknown item",
         "UnnamedFolder": "Unnamed folder",
-        "AlwaysPrepared": "Always Prepared"
+        "AlwaysPrepared": "Always Prepared",
+        "Alignment": "Alignment",
+        "Faith": "Faith",
+        "Gender": "Gender",
+        "Age": "Age",
+        "Height": "Height",
+        "Weight": "Weight",
+        "Eyes": "Eyes",
+        "Hair": "Hair",
+        "Skin": "Skin"
       },
       "BiographyGateway": {
         "FoundryRichTextEnrichmentIsUnavailable": "Foundry rich-text enrichment is unavailable.",
@@ -1081,7 +1097,8 @@
         "passive": "No passive effects.",
         "inactive": "No inactive effects.",
         "unavailable": "No unavailable effects."
-      }
+      },
+      "PortraitOf": "{name}'s portrait"
     },
     "Chat": {
       "ComposerCollapse": "Hide message box",
@@ -1116,7 +1133,8 @@
       "ChoosePageOrHeading": "Choose Journal page or heading",
       "ChoosePage": "Choose page",
       "OpenAttachment": "Open attachment",
-      "UntitledPage": "Untitled page"
+      "UntitledPage": "Untitled page",
+      "Edit": "Edit"
     },
     "RestorationRecovery": {
       "title": "Desktop settings recovery required",
