@@ -60,6 +60,17 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     }
     return action(expected);
   });
+  const guardCombatControl = (request, action) => {
+    const lifecycleToken = runtimeScope;
+    return guardConnection((expected) => {
+      const state = store.state;
+      if (!activationCommitted || !lifecycleToken || runtimeScope !== lifecycleToken || lifecycleToken.disposed || !readPolicy().active
+        || state.reconnect || state.modeTransition || state.route !== "combat") {
+        throw new Error(localizedText(localize, "VEMOBILE.Interface.CombatGateway.MobileCombatControlsAreNoLongerActive", "Mobile combat controls are no longer active."));
+      }
+      return action({ ...request, ...expected, lifecycleToken });
+    });
+  };
 
   const cancelActorTokenPlacement = () => {
     tokenPlacementGeneration += 1;
@@ -378,6 +389,10 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     targetSceneToken: (payload) => guardConnection((expected) => movementGateway.target(payload, expected)),
     clearSceneTargets: () => guardConnection((expected) => movementGateway.clearTargets(expected)),
     endCombatTurn: (combatId) => guardConnection((expected) => combatGateway.endTurn({ combatId, ...expected })),
+    startCombat: (request) => guardCombatControl(request, expected => combatGateway.startCombat(expected)),
+    endCombat: (request) => guardCombatControl(request, expected => combatGateway.endCombat(expected)),
+    previousCombatTurn: (request) => guardCombatControl(request, expected => combatGateway.previousTurn(expected)),
+    nextCombatTurn: (request) => guardCombatControl(request, expected => combatGateway.nextTurn(expected)),
     rollCombatInitiative: (combatId, combatantId) => guardConnection((expected) => combatGateway.rollInitiative({ combatId, combatantId }, expected)),
     focusCombatant: (combatId, combatantId) => combatSceneActions.focus(combatId, combatantId),
     centerCombatant: (combatId, combatantId, viewport = null) => guardConnection((expected) => combatGateway.centerCombatant({ combatId, combatantId, viewport }, expected)),
@@ -820,6 +835,9 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
   return Object.freeze({
     get active() {
       return activationCommitted;
+    },
+    combatControlLifecycleToken() {
+      return runtimeScope;
     },
     reconcile() {
       // The bootstrap surface owns startup. Session readers may only run once

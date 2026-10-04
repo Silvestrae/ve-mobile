@@ -502,6 +502,8 @@ if (isGamePage) {
   const sessionStatusGateway = createFoundrySessionStatusGateway({ metrics });
   const themeGateway = createFoundryThemeGateway();
   const combatGateway = createFoundryCombatGateway({
+    isMobileActive: () => Boolean(kernel?.active && readPolicy().active && store.state.route === "combat"),
+    getLifecycleToken: () => kernel?.combatControlLifecycleToken?.() ?? null,
     getConnectionGeneration: () => connectionGeneration.current,
     trace: (entry) => diagnostics.record("debug", `Combat camera ${JSON.stringify(entry)}`)
   });
@@ -513,6 +515,7 @@ if (isGamePage) {
     hotbarForSnapshot: hotbarGateway.snapshot,
     sceneForSnapshot: () => Object.freeze({ ...sceneGateway.snapshot(), movement: movementGateway.snapshot() }),
     combatForSnapshot: combatGateway.snapshot,
+    combatControlsForSnapshot: combatGateway.controlsSnapshot,
     performanceObserver
   });
   let mediaScope = null;

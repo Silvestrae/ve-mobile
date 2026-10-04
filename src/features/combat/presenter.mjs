@@ -47,6 +47,79 @@ export function renderCombat({ state, commands, scope }) {
   ].filter(Boolean) });
 }
 
+export function renderGmCombatControls({ controls, commands, scope }) {
+  if (!controls?.isGM) return null;
+  const combatExists = Boolean(controls.combatId);
+  const request = () => ({
+    combatId: controls.combatId,
+    combatInstanceRevision: controls.combatInstanceRevision,
+    round: controls.round,
+    turn: controls.turn,
+    currentCombatantId: controls.currentCombatantId
+  });
+  const status = node("span", { className: "ve-gm-combat-controls-status", attrs: { role: "status", "aria-live": "polite" } });
+  const run = async (button, action) => {
+    if (button.disabled) return;
+    button.disabled = true;
+    status.textContent = "";
+    status.textContent = "";
+    try { await action(request()); }
+    catch (error) {
+      if (!scope.disposed && status.isConnected) status.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Interface.CombatGateway.FoundryRefusedTheCombatAction", "Foundry refused the combat action.");
+    }
+    finally { if (!scope.disposed && button.isConnected) button.disabled = button.dataset.available !== "true"; }
+  };
+  const button = ({ className, visible, accessible, enabled, iconName, invoke, reason }) => node("button", {
+    className,
+    attrs: {
+      type: "button",
+      "aria-label": accessible,
+      title: enabled ? accessible : reason,
+      "aria-disabled": String(!enabled),
+      disabled: !enabled,
+      "data-available": String(enabled)
+    },
+    on: { click: (event) => { void run(event.currentTarget, invoke); } },
+    children: [icon(iconName), node("span", { text: visible })]
+  }, scope);
+  const noCombat = localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.NoActiveCombatForProgression", "No active combat");
+  const waiting = localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.StartCombatBeforeProgressing", "Start combat before changing turns");
+  const noTurn = localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.NoAppropriateCombatTurn", "No appropriate combat turn");
+  const previous = button({
+    className: "ve-gm-combat-control ve-gm-combat-previous",
+    visible: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.PreviousShort", "Previous"),
+    accessible: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.PreviousTurn", "Previous Turn"),
+    enabled: Boolean(combatExists && controls.canPrevious),
+    iconName: "fa-chevron-left",
+    reason: !combatExists ? noCombat : !controls.started ? waiting : noTurn,
+    invoke: commands.previousCombatTurn
+  });
+  const centerEnabled = Boolean(combatExists && (controls.started ? controls.canEnd : controls.canStart));
+  const center = button({
+    className: "ve-gm-combat-control ve-gm-combat-center",
+    visible: localizedText(commands.localize, controls.started ? "VEMOBILE.Interface.AppFrame.EndCombat" : "VEMOBILE.Interface.AppFrame.StartCombat", controls.started ? "End Combat" : "Start Combat"),
+    accessible: localizedText(commands.localize, controls.started ? "VEMOBILE.Interface.AppFrame.EndCombat" : "VEMOBILE.Interface.AppFrame.StartCombat", controls.started ? "End Combat" : "Start Combat"),
+    enabled: centerEnabled,
+    iconName: controls.started ? "fa-stop" : "fa-play",
+    reason: !combatExists ? noCombat : noTurn,
+    invoke: controls.started ? commands.endCombat : commands.startCombat
+  });
+  const next = button({
+    className: "ve-gm-combat-control ve-gm-combat-next",
+    visible: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.NextShort", "Next"),
+    accessible: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.NextTurn", "Next Turn"),
+    enabled: Boolean(combatExists && controls.canNext),
+    iconName: "fa-chevron-right",
+    reason: !combatExists ? noCombat : !controls.started ? waiting : noTurn,
+    invoke: commands.nextCombatTurn
+  });
+  return node("div", {
+    className: "ve-gm-combat-controls",
+    attrs: { role: "group", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.GMCombatControls", "GM combat controls") },
+    children: [previous, center, next, status]
+  });
+}
+
 export function renderSceneCombatCarousel({ combat, commands, scope, carouselState = createCombatCarouselUiState(), getSceneViewport = () => null }) {
   const collapsed = carouselState.synchronize(combat);
   const status = node("span", { className: "ve-scene-combat-status", attrs: { role: "status", "aria-live": "polite" } });

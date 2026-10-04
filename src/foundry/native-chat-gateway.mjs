@@ -6,6 +6,7 @@ import { localizeFoundry } from "./localization.mjs";
  * modules retain ownership of rendering, listeners, context menus, and input.
  */
 import { mountChatComposerDock } from "./chat-composer-dock.mjs";
+import { bindChatDiceInteraction } from "./chat-dice-interaction.mjs";
 
 export function createFoundryNativeChatGateway({
   readUi = () => globalThis.ui,
@@ -94,6 +95,7 @@ export function createFoundryNativeChatGateway({
         dockContent = chatForm.querySelector?.(".ve-chat-composer-content") ?? null;
         mountChatVisualViewport({ host, input, document: documentRef, scope });
         bindManualChatFocus(host, input, scope);
+        bindChatDiceInteraction({ host, input, scope });
         queueMicrotask(() => {
           if (scope.disposed || restored) return;
           Promise.resolve(chat.scrollBottom?.({ waitImages: true })).catch((error) => {
@@ -369,10 +371,9 @@ export function bindManualChatFocus(host, input, scope, { now = defaultNow, allo
   let directInputTapAt = Number.NEGATIVE_INFINITY;
   scope.listen(host, "pointerdown", (event) => {
     const directInputTap = event.target === input || input.contains?.(event.target);
-    // Dice Tray intentionally selects the native textarea on pointerdown.
-    // Preserve that user gesture while the software keyboard is open.
     const diceButtonTap = Boolean(event.target?.closest?.(".ve-chat-dice-layer .dice-tray button"));
-    directInputTapAt = directInputTap || diceButtonTap ? now() : Number.NEGATIVE_INFINITY;
+    const focusedDiceTap = diceButtonTap && input.ownerDocument?.activeElement === input;
+    directInputTapAt = directInputTap || focusedDiceTap ? now() : Number.NEGATIVE_INFINITY;
     if (!directInputTap && !diceButtonTap && input.ownerDocument?.activeElement === input) input.blur();
   }, { capture: true });
   scope.listen(input, "focus", () => {

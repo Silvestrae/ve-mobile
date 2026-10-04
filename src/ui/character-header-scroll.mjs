@@ -9,8 +9,9 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
   if (!heading || !(root?.dataset.formFactor === "phone" || root?.dataset.splitScreen === "true")) return null;
   const view = heading.ownerDocument.defaultView;
   const reducedMotion = view.matchMedia("(prefers-reduced-motion: reduce)");
-  let expanded = 0, range = 0, offset = 0, baseline = scroller.scrollTop, width = -1;
+  let expanded = 0, collapsedClientHeight = scroller.clientHeight, range = 0, offset = 0, baseline = scroller.scrollTop, width = -1, height = -1, observedHeadingHeight = heading.getBoundingClientRect().height;
   let xp = null;
+  let spacer = null, ownedSpacer = null, contentObserver = null, observedContent = null;
   let expansionAllowed = false, gesture = null, lastWheelAt = -Infinity, touchY = null;
   const update = () => { baseline = scroller.scrollTop; expansionAllowed = false; gesture = null; };
   const beginGesture = kind => { gesture = kind; expansionAllowed = scroller.scrollTop <= 1; };
@@ -28,6 +29,45 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     // Let the shared heading follow this intrinsic geometry without a layout read.
     if (xp) xp.inert = offset > range * 0.05;
   };
+  const ensureFiller = () => {
+    if (scope.disposed || !scroller.isConnected) return;
+    const previousScrollTop = scroller.scrollTop;
+    spacer = scroller.querySelector(".ve-character-scroll-spacer");
+    if (!spacer) {
+      spacer = view.document.createElement("div");
+      spacer.className = "ve-character-scroll-spacer";
+      spacer.setAttribute("aria-hidden", "true");
+      scroller.append(spacer);
+      ownedSpacer = spacer;
+    }
+    if (range <= 0) {
+      spacer.style.height = "0px";
+      const maximum = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      scroller.scrollTop = Math.min(previousScrollTop, maximum);
+      baseline = scroller.scrollTop;
+      return;
+    }
+    // Measure the content range without our old tail, then add only the range
+    // still needed to expose the complete compact state.
+    spacer.style.height = "0px";
+    const requiredContentHeight = collapsedClientHeight + range;
+    const probe = Math.ceil(requiredContentHeight + 1);
+    spacer.style.height = `${probe}px`;
+    const contentExtent = Math.max(0, scroller.scrollHeight - probe);
+    spacer.style.height = "0px";
+    const missing = Math.max(0, requiredContentHeight - contentExtent);
+    spacer.style.height = `${Math.ceil(missing)}px`;
+    const maximum = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    scroller.scrollTop = Math.min(previousScrollTop, maximum);
+    baseline = scroller.scrollTop;
+  };
+  const observeContent = () => {
+    const content = spacer?.previousElementSibling ?? scroller.firstElementChild;
+    if (content === observedContent) return;
+    contentObserver?.disconnect();
+    observedContent = content;
+    if (content) contentObserver?.observe(content);
+  };
   const measure = () => {
     if (scope.disposed || !heading.isConnected) return;
     const band = heading.querySelector(".ve-character-identity-band");
@@ -44,7 +84,11 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     if (reducedMotion.matches) {
       delete heading.dataset.measure;
       offset = range = 0;
+      collapsedClientHeight = scroller.clientHeight;
       if (xp) xp.inert = false;
+      ensureFiller();
+      height = scroller.clientHeight;
+      observedHeadingHeight = heading.getBoundingClientRect().height;
       update();
       return;
     }
@@ -66,15 +110,20 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     header.style.setProperty("--ve-header-compact-metrics", `${metricsHeight}px`);
     header.style.setProperty("--ve-header-compact-band", `${compactBand}px`);
     range = Math.max(0, expanded - heading.getBoundingClientRect().height);
+    collapsedClientHeight = scroller.clientHeight;
     offset = progress * range;
     paint();
+    ensureFiller();
+    observeContent();
+    height = scroller.clientHeight;
+    observedHeadingHeight = heading.getBoundingClientRect().height;
     update();
   };
   scope.listen(scroller, "scroll", () => {
     if (scope.disposed || reducedMotion.matches) return;
     const next = scroller.scrollTop;
     const delta = next - baseline;
-    if (delta >= 0 || expansionAllowed) offset = Math.max(0, Math.min(range, offset + delta));
+    if (delta >= 0 || (expansionAllowed && scroller.scrollTop <= 1)) offset = Math.max(0, Math.min(range, offset + delta));
     baseline = next;
     paint();
   }, { passive: true });
@@ -113,14 +162,49 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     const delta = event.key === "Home" ? -range : event.key === "ArrowUp" ? -40 : event.key === "PageUp" || (event.key === " " && event.shiftKey) ? -scroller.clientHeight : 0;
     if (expandAtBoundary(delta) && event.cancelable) event.preventDefault();
   });
-  const observer = new view.ResizeObserver(entries => {
-    const next = entries[0]?.contentRect.width;
-    if (next === width) return;
-    width = next;
-    measure();
+  const observer = new view.ResizeObserver(() => {
+    const nextWidth = scroller.clientWidth;
+    const nextHeight = scroller.clientHeight;
+    const widthChanged = nextWidth !== width;
+    const heightChanged = nextHeight !== height;
+    if (!widthChanged && !heightChanged) return;
+    width = nextWidth;
+    if (widthChanged) {
+      measure();
+      return;
+    }
+    const nextHeadingHeight = heading.getBoundingClientRect().height;
+    // The rendered heading contracts nonlinearly between its measured ends.
+    // Its current rendered height plus the pane height is the stable available
+    // vertical space; comparing against scroll offset misclassifies that CSS
+    // interpolation as a viewport resize and resets the gesture baseline.
+    const availableBefore = height + observedHeadingHeight;
+    const availableNow = nextHeight + nextHeadingHeight;
+    const externalHeightChange = Math.abs(availableNow - availableBefore) > 2;
+    height = nextHeight;
+    observedHeadingHeight = nextHeadingHeight;
+    if (externalHeightChange) {
+      // A height change beyond the amount explained by header contraction is
+      // a viewport/layout resize. Add the remaining collapse distance to that
+      // pane height without remeasuring the header's internal geometry.
+      collapsedClientHeight = Math.max(0, availableNow - (expanded - range));
+      ensureFiller();
+    }
+  });
+  contentObserver = new view.ResizeObserver(() => {
+    if (scope.disposed) return;
+    ensureFiller();
+  });
+  const mutationObserver = new view.MutationObserver(() => {
+    if (scope.disposed) return;
+    ensureFiller();
+    observeContent();
   });
   scope.own(() => {
     observer.disconnect();
+    contentObserver.disconnect();
+    mutationObserver.disconnect();
+    ownedSpacer?.remove();
     delete heading.dataset.collapse;
     delete heading.dataset.measure;
     heading.removeAttribute("style");
@@ -129,7 +213,9 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     header?.style.removeProperty("--ve-header-compact-metrics");
     if (xp) xp.inert = false;
   });
+  mutationObserver.observe(scroller, { childList: true, characterData: true, subtree: true });
   observer.observe(scroller);
+  observeContent();
   scope.listen(reducedMotion, "change", measure);
   view.document.fonts?.ready.then(() => { if (!scope.disposed) measure(); });
   measure();
@@ -145,7 +231,8 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
       measure();
     },
     get scrollTop() { return scroller.scrollTop; },
-    get collapseDistance() { return 0; },
+    get collapseDistance() { return range; },
+    get compactClientHeight() { return collapsedClientHeight; },
     toNativeScrollTop: value => value
   };
 }

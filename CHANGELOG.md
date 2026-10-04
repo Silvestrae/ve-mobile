@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 1.0.2 — 2026-10-04
+
+- Fixed Chat dice-tray taps so they no longer open the mobile keyboard unless
+  the composer was intentionally focused.
+- Fixed dice-tray touch events activating navigation controls underneath them.
+- Prevented native Foundry Settings from automatically opening the mobile
+  keyboard when opened through VE Mobile.
+- Added GM combat controls for Previous Turn, Start/End Combat and Next Turn.
+- Made Chat and Damage Log tabs share the full Chat panel width evenly.
+- Improved short Character tabs so the header can always reach its fully
+  compact state.
+
 ## 1.0.1 — 2026-10-04
 
 - Fixed Tablet Split navigation overlap that could block or mis-trigger Character.

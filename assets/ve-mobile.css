@@ -8282,7 +8282,7 @@ details.ve-action-session-compact-result {
   flex: 0 0 auto;
   width: 100%;
   margin-top: 5px;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .ve-native-chat-screen .ve-chat-dice-layer:empty {
@@ -8290,7 +8290,26 @@ details.ve-action-session-compact-result {
 }
 
 .ve-native-chat-screen .ve-chat-dice-layer .dice-tray {
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.ve-native-chat-screen nav.damage-log-nav.tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  max-width: none;
+  /* Native interface themes can force tab widths/padding with ID specificity.
+     These three geometry values belong to the VE panel, regardless of theme. */
+  gap: 0 !important;
+  padding-inline: 0 !important;
+}
+
+.ve-native-chat-screen nav.damage-log-nav.tabs > .item {
+  width: 100% !important;
+  min-width: 0;
+  margin-inline: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .ve-native-chat-screen .ve-chat-dice-layer .dice-tray :is(button, input, select) {
@@ -12753,3 +12772,100 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 .ve-mobile-app[data-form-factor] .ve-compact-header .is-speed .ve-header-vital-value strong { font-size: clamp(13px, 3.2cqw, 20px); white-space: nowrap; }
 .ve-mobile-app[data-form-factor] .ve-compact-header .is-speed .ve-header-vital-value > i { flex-basis: 14px; width: 14px; font-size: 14px; }
 .ve-character-shared-shell > .ve-character-heading[data-collapse] { gap: calc(14px - 10px * var(--ve-header-progress)); }
+
+/* GM encounter controls sit in their own row above the primary tabs. */
+.ve-gm-combat-control-host[hidden] { display: none !important; }
+.ve-gm-combat-control-host {
+  position: absolute;
+  z-index: var(--ve-layer-navigation);
+  inset-inline: var(--ve-safe-left) var(--ve-safe-right);
+  bottom: calc(var(--ve-nav-dock-height, 66px) + 8px);
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 2px 8px 4px;
+  pointer-events: none;
+}
+.ve-gm-combat-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  pointer-events: auto;
+}
+.ve-mobile-app .ve-gm-combat-control {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 46px;
+  height: auto;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in srgb, var(--ve-red-bright) 35%, var(--ve-border));
+  border-radius: 11px;
+  color: var(--ve-text);
+  background: color-mix(in srgb, var(--ve-surface-up) 88%, var(--ve-red) 12%);
+  font-size: 0.7rem;
+  line-height: 1.05;
+  font-weight: 750;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.ve-mobile-app .ve-gm-combat-control > i { flex: 0 0 auto; font-size: 0.78rem; }
+.ve-mobile-app .ve-gm-combat-center {
+  min-height: 48px;
+  border-color: color-mix(in srgb, var(--ve-gold) 72%, var(--ve-border));
+  color: var(--ve-paper);
+  background: color-mix(in srgb, var(--ve-red) 62%, var(--ve-surface-up));
+  font-weight: 850;
+}
+.ve-mobile-app[data-theme="light"] .ve-gm-combat-center { color: #fff; }
+.ve-mobile-app .ve-gm-combat-control:disabled { opacity: 0.48; }
+.ve-gm-combat-controls-status:empty { display: none; }
+.ve-gm-combat-controls-status {
+  grid-column: 1 / -1;
+  color: var(--ve-subtle);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 380px) {
+  .ve-gm-combat-controls { grid-template-columns: minmax(42px, 1fr) minmax(104px, auto) minmax(42px, 1fr); gap: 4px; }
+  .ve-mobile-app .ve-gm-combat-previous,
+  .ve-mobile-app .ve-gm-combat-next { gap: 0; padding-inline: 3px; }
+  .ve-mobile-app .ve-gm-combat-previous > span,
+  .ve-mobile-app .ve-gm-combat-next > span { display: none; }
+  .ve-mobile-app .ve-gm-combat-previous > i,
+  .ve-mobile-app .ve-gm-combat-next > i { font-size: 1rem; }
+  .ve-mobile-app .ve-gm-combat-center { padding-inline: 4px; font-size: 0.66rem; }
+}
+
+@media (min-width: 700px) {
+  .ve-mobile-app[data-form-factor="tablet"] .ve-gm-combat-control-host {
+    inset-inline-start: calc(var(--ve-safe-left) + 8px);
+    inset-inline-end: calc(var(--ve-safe-right) + var(--ve-tablet-nav-width) + 8px);
+    bottom: max(8px, var(--ve-safe-bottom));
+    padding: 2px 8px 4px;
+  }
+  .ve-mobile-app[data-form-factor="tablet"][data-nav-side="left"] .ve-gm-combat-control-host {
+    inset-inline-start: calc(var(--ve-safe-left) + var(--ve-tablet-nav-width) + 8px);
+    inset-inline-end: calc(var(--ve-safe-right) + 8px);
+  }
+  .ve-mobile-app[data-form-factor="tablet"][data-split-screen="true"] .ve-gm-combat-control-host {
+    inset-inline-start: calc(var(--ve-safe-left) + 100% - var(--ve-tablet-nav-width) - var(--ve-split-panel-width) + 8px);
+    inset-inline-end: calc(var(--ve-safe-right) + var(--ve-tablet-nav-width) + 8px);
+  }
+  .ve-mobile-app[data-form-factor="tablet"][data-split-screen="true"][data-nav-side="left"] .ve-gm-combat-control-host {
+    inset-inline-start: calc(var(--ve-safe-left) + var(--ve-tablet-nav-width) + 8px);
+    inset-inline-end: calc(var(--ve-safe-right) + 100% - var(--ve-tablet-nav-width) - var(--ve-split-panel-width) + 8px);
+  }
+}
+
+.ve-mobile-app[data-route="combat"][data-gm-combat-controls="true"] .ve-combat-screen {
+  padding-bottom: calc(var(--ve-gm-combat-row-reservation, 72px) + var(--ve-safe-bottom));
+}

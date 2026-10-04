@@ -173,9 +173,17 @@ export function createFoundrySettingsCompatibilityGateway({
     return true;
   };
 
-  const onRender = (app, suppliedElement) => {
+  const onRender = (app, suppliedElement, context, options) => {
     if (!session || !app) return false;
-    if (session.apps.has(app) || session.pendingRoots.has(app)) return admit(app, suppliedElement);
+    if (session.apps.has(app) || session.pendingRoots.has(app)) {
+      const admitted = admit(app, suppliedElement);
+      if (admitted && app === getGame()?.settings?.sheet && options?.isFirstRender) {
+        const record = session.apps.get(app);
+        record.restoreInitialFocus?.();
+        record.restoreInitialFocus = redirectSettingsInitialFocus(record.element);
+      }
+      return admitted;
+    }
     if (registeredSettingsApplication(app, getGame()) || admittedParent(app, session.apps)) {
       return admit(app, suppliedElement);
     }
@@ -491,6 +499,8 @@ function restoreStyleProperty(style, property, value, priority) {
 }
 
 function removeAdmission(record) {
+  record.restoreInitialFocus?.();
+  record.restoreInitialFocus = null;
   record.scrollOwner?.classList?.remove?.(SCROLL_OWNER_CLASS);
   record.scrollOwner = null;
   record.element?.classList?.remove?.(SETTINGS_CLASS);
@@ -498,6 +508,25 @@ function removeAdmission(record) {
   if (!style?.setProperty) return;
   if (record.priorLayer) style.setProperty(SETTINGS_LAYER_PROPERTY, record.priorLayer, record.priorLayerPriority);
   else style.removeProperty?.(SETTINGS_LAYER_PROPERTY);
+}
+
+/** Foundry 13.351 invokes render hooks before ApplicationV2._postRender's
+ * first-render [autofocus]. Redirect that one admission to the window title;
+ * later intentional input focus and Desktop rendering retain native behavior. */
+export function redirectSettingsInitialFocus(element) {
+  const search = element.querySelector?.('input[type="search"][autofocus]');
+  const title = element.querySelector?.(".window-title");
+  if (!search || !title) return () => {};
+  const original = [search.getAttribute("autofocus"), title.getAttribute("autofocus"), title.getAttribute("tabindex")];
+  search.removeAttribute("autofocus");
+  title.setAttribute("tabindex", "-1");
+  title.setAttribute("autofocus", "");
+  return () => {
+    for (const [node, name, value] of [[search, "autofocus", original[0]], [title, "autofocus", original[1]], [title, "tabindex", original[2]]]) {
+      if (value === null) node.removeAttribute(name);
+      else node.setAttribute(name, value);
+    }
+  };
 }
 
 /**

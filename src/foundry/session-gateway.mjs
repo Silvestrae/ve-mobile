@@ -59,6 +59,7 @@ export function createFoundrySessionGateway({
   hotbarForSnapshot = () => null,
   sceneForSnapshot = () => null,
   combatForSnapshot = () => null,
+  combatControlsForSnapshot = () => Object.freeze({ isGM: false }),
   targetCountForSnapshot = () => Number(game?.user?.targets?.size ?? 0) || 0,
   performanceObserver = null
 } = {}) {
@@ -176,6 +177,10 @@ export function createFoundrySessionGateway({
       const actors = readActors();
       if (!selectedActorSourceUuid) selectedActorSourceUuid = controlledSourceUuid() || preferredActorSourceUuid(actors);
       const selectedActor = resolveSelectedActor(actors, user);
+      const combat = readDomain("combat", () => Object.freeze({
+        combat: combatForSnapshot(),
+        controls: combatControlsForSnapshot()
+      }));
       return Object.freeze({
         capturedAt: new Date().toISOString(),
         world: readDomain("world", () => ({
@@ -195,7 +200,8 @@ export function createFoundrySessionGateway({
         selectedActorSourceUuid,
         selectedActor,
         scene: readScene(),
-        combat: readDomain("combat", combatForSnapshot),
+        combat: combat.combat,
+        combatControls: combat.controls,
         journals: readDomain("journals", () => Object.freeze(visibleJournals(user).map(journalRecord))),
         chat: readDomain("chat", () => Object.freeze(visibleMessages().slice(-30).map(chatRecord)))
       });
@@ -232,7 +238,14 @@ export function createFoundrySessionGateway({
       }
       if (domains.has("user")) next.user = readDomain("user", () => ({ id: game.user?.id ?? "", name: game.user?.name ?? "Player", isGM: Boolean(game.user?.isGM) }));
       if (domains.has("scene")) next.scene = readScene();
-      if (domains.has("combat")) next.combat = readDomain("combat", combatForSnapshot);
+      if (domains.has("combat")) {
+        const combat = readDomain("combat", () => Object.freeze({
+          combat: combatForSnapshot(),
+          controls: combatControlsForSnapshot()
+        }));
+        next.combat = combat.combat;
+        next.combatControls = combat.controls;
+      }
       if (domains.has("journals")) next.journals = readDomain("journals", () => Object.freeze(visibleJournals(game.user).map(journalRecord)));
       if (domains.has("chat")) next.chat = readDomain("chat", () => Object.freeze(visibleMessages().slice(-30).map(chatRecord)));
       if (domains.has("targets") && !domains.has("scene")) next.scene = patchSceneTargetCount(latestSnapshot.scene, readDomain("targets", targetCountForSnapshot));

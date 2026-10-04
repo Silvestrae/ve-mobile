@@ -5,7 +5,7 @@ import { renderJournals } from "../features/journals/presenter.mjs";
 import { renderChat } from "../features/chat/presenter.mjs";
 import { renderScene, renderSceneChooser, updateSceneTargetPresentation } from "../features/scene/presenter.mjs";
 import { renderSettings } from "../features/settings/presenter.mjs";
-import { createCombatCarouselUiState, renderCombat } from "../features/combat/presenter.mjs";
+import { createCombatCarouselUiState, renderCombat, renderGmCombatControls } from "../features/combat/presenter.mjs";
 import { sheetTabIcon } from "../features/characters/sheet-icons.mjs";
 import { resolveCharacterThemeProfile } from "../kernel/character-theme.mjs";
 import { renderActionSessionModal } from "./action-session-modal.mjs";
@@ -38,6 +38,8 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   const nav = node("nav", { className: "ve-bottom-nav", attrs: { "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.Primary", "Primary") } });
   const navSideIcon = icon("fa-arrow-left");
   let screenScope = null;
+  let combatControlsScope = null;
+  let combatControlsRenderKey = "";
   let sceneContentOwner = null;
   let renderedSceneStructureKey = "";
   let renderedSceneFocusKey = "";
@@ -143,6 +145,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     on: { click: () => commands.toggleTabletNavSide() },
     children: [navSideIcon]
   }, scope);
+  const combatControlsHost = node("div", { className: "ve-gm-combat-control-host", attrs: { hidden: true } });
 
   const navItems = [
     ["characters", () => sheetTabIcon("overview"), "Character"],
@@ -223,6 +226,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     sceneChooserOverlays,
     nav
   );
+  root.append(combatControlsHost);
   root.append(reconnectBlocker.element);
   root.append(modeTransitionBlocker.element);
   root.append(graphicsRecovery.element);
@@ -345,6 +349,23 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     navSideToggle.setAttribute("title", navSideLabel);
     navSideIcon.classList.toggle("fa-arrow-left", navSideDestination === "left");
     navSideIcon.classList.toggle("fa-arrow-right", navSideDestination === "right");
+
+    const combatControls = state.snapshot?.combatControls;
+    const combatControlsHidden = state.route !== "combat" || !combatControls?.isGM || state.status !== "ready";
+    root.dataset.gmCombatControls = String(!combatControlsHidden);
+    const combatControlsKey = `${combatControlsHidden}:${commands.readLocale?.() ?? "en"}:${JSON.stringify(combatControls ?? null)}`;
+    combatControlsHost.hidden = combatControlsHidden;
+    if (combatControlsKey !== combatControlsRenderKey) {
+      combatControlsRenderKey = combatControlsKey;
+      combatControlsScope?.dispose();
+      combatControlsScope = null;
+      combatControlsHost.replaceChildren();
+      if (!combatControlsHidden) {
+        combatControlsScope = scope.child("gm-combat-controls");
+        combatControlsHost.append(renderGmCombatControls({ controls: combatControls, commands, scope: combatControlsScope }));
+      }
+      queueMicrotask(syncCombatControlGeometry);
+    }
 
     for (const [route, button] of navButtons) {
       const active = state.route === route;
@@ -723,7 +744,16 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   syncCloseWatchers(store.state);
   scope.own(nativeApplications?.admissions?.watch?.(() => closeWatcherBack.sync()) ?? (() => {}));
   scope.own(nativeApplications?.settings?.watch?.(() => closeWatcherBack.sync()) ?? (() => {}));
-  const sceneResizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(syncSceneViewport) : null;
+  function syncCombatControlGeometry() {
+    if (!mounted) return;
+    const navBounds = nav.getBoundingClientRect();
+    // Forced Tablet can still use bottom navigation below the rail breakpoint.
+    if (navBounds.width > navBounds.height && navBounds.height > 0) root.style.setProperty("--ve-nav-dock-height", `${navBounds.height}px`);
+    const controlHeight = combatControlsHost.hidden ? 0 : combatControlsHost.getBoundingClientRect().height;
+    root.style.setProperty("--ve-gm-combat-row-reservation", controlHeight > 0 ? `${controlHeight + 8}px` : "0px");
+  }
+  const syncFrameGeometry = () => { syncSceneViewport(); syncCombatControlGeometry(); };
+  const sceneResizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(syncFrameGeometry) : null;
   let releaseSceneResizeObserver = null;
   scope.own(() => {
     try { sceneResizeObserver?.disconnect?.(); }
@@ -732,9 +762,12 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   releaseSceneResizeObserver = sceneResizeObserver ? performanceObserver?.track?.("lifecycle.resize-observer") : null;
   sceneResizeObserver?.observe?.(viewport);
   sceneResizeObserver?.observe?.(splitSceneViewport);
+  sceneResizeObserver?.observe?.(nav);
+  sceneResizeObserver?.observe?.(combatControlsHost);
+  syncFrameGeometry();
   if (globalThis.window) {
-    scope.listen(globalThis.window, "resize", syncSceneViewport, { passive: true });
-    scope.listen(globalThis.window, "orientationchange", syncSceneViewport, { passive: true });
+    scope.listen(globalThis.window, "resize", syncFrameGeometry, { passive: true });
+    scope.listen(globalThis.window, "orientationchange", syncFrameGeometry, { passive: true });
   }
   const readSceneInteractionState = () => {
     const state = store.state;
@@ -1491,11 +1524,21 @@ export function restoreCharacterScrollPosition(scroller, targetScrollTop, charac
   if (spacer) {
     let filler = 0;
     spacer.style.height = "0px";
-    for (let pass = 0; !clampContent && pass < 3; pass += 1) {
-      const next = nextCharacterScrollFiller(fillerTarget, scroller.scrollHeight, scroller.clientHeight, filler);
-      if (next === filler) break;
-      filler = next;
-      spacer.style.height = `${Math.ceil(filler)}px`;
+    const requiredRange = Math.max(
+      clampContent ? 0 : fillerTarget,
+      characterHeaderScroll?.collapseDistance ?? 0
+    );
+    if (requiredRange > 0) {
+      // scrollHeight is floored at clientHeight when content is shorter than
+      // the pane. A temporary known tail reveals the real content extent so
+      // the permanent filler can cover both that deficit and the target range.
+      const requiredContentHeight = (characterHeaderScroll?.compactClientHeight ?? scroller.clientHeight) + requiredRange;
+      const probe = Math.ceil(requiredContentHeight + 1);
+      spacer.style.height = `${probe}px`;
+      const contentExtent = Math.max(0, scroller.scrollHeight - probe);
+      spacer.style.height = "0px";
+      filler = Math.max(0, requiredContentHeight - contentExtent);
+      if (filler) spacer.style.height = `${Math.ceil(filler)}px`;
     }
   }
   scroller.scrollTop = clampCharacterScrollTop(toNative(targetScrollTop), scroller.scrollHeight, scroller.clientHeight);
