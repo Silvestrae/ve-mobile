@@ -238,16 +238,15 @@ it. Temporary graphics changes have restoration and recovery controls.
 
 | Package | Declared minimum | Verified version |
 | --- | --- | --- |
-| Foundry Virtual Tabletop | 13 | 13.351 |
-| Dungeons & Dragons Fifth Edition (`dnd5e`) | 5.3.2 | 5.3.3 |
+| Foundry Virtual Tabletop | 13 | 14.369 |
+| Dungeons & Dragons Fifth Edition (`dnd5e`) | 5.3.2 | 6.0.6 |
 
 Declared minimums describe compatibility policy; they do not mean every version
-in that range has been tested. Version 1.0.3 also includes D&D5e 6 chat/roll
-format adaptations and mobile composer fixes tested in Foundry 14.369 with
-D&D5e 6.0.6. Phone and tablet acceptance is complete for the corrected Chat
-workflows. This does not establish full Foundry v14 support:
-Scene Levels and multilevel maps remain outside the verified scope. Other
-game systems are not advertised as supported here.
+in that range has been tested. Live checks covered Foundry 13.351 with D&D5e
+5.3.3 and Foundry 14.369 with D&D5e 6.0.6. Phone and tablet acceptance is
+complete for the corrected Chat workflows. Verification covers the recorded
+workflows; Scene Levels and multilevel maps remain outside the verified scope.
+Other game systems are not advertised as supported here.
 
 You need access to a running Foundry world, an authenticated user account, and
 a browser that can run that world. Live Scene use also needs working Canvas

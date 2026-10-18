@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.0.4 — 2026-10-19
+
+- Declare Foundry 14.369 and D&D5e 6.0.6 as verified in the module manifest.
+  Keep the Foundry 13 and D&D5e 5.3.2 minimums and existing v13 support.
+
 ## 1.0.3 — 2026-10-19
 
 - Keep v14's renamed Chat privacy selector horizontal on phones and tablets,
