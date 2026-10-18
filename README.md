@@ -1,8 +1,8 @@
 # <img src="Icon.png" alt="VE Foundry Client logo" height="40">  VE Mobile
 
 [![Latest release](https://img.shields.io/github/v/release/Silvestrae/ve-mobile?label=Release)](https://github.com/Silvestrae/ve-mobile/releases/latest)
-![Foundry VTT 13 verified; 14 Chat tested](https://img.shields.io/badge/Foundry_VTT-13_verified_%7C_14_Chat_tested-orange)
-![D&D5e 5.3 verified; 6.0 chat and rolls tested](https://img.shields.io/badge/D%26D5e-5.3_verified_%7C_6.0_chat%2Frolls_tested-red)
+![Foundry VTT 13 and 14 compatible](https://img.shields.io/badge/Foundry_VTT-13_%26_14_compatible-orange)
+![D&D5e 5.3 and 6.x compatible](https://img.shields.io/badge/D%26D5e-5.3_%26_6.x_compatible-red)
 ![Phone and Tablet](https://img.shields.io/badge/Phone_%26_Tablet-supported-blue)
 [![MIT License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/Silvestrae/ve-mobile/total?label=Downloads&color=blue)](https://github.com/Silvestrae/ve-mobile/releases)
