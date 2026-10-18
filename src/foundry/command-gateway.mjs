@@ -2,6 +2,7 @@ import { localizeFoundry } from "./localization.mjs";
 import { ACTOR_COMMANDS } from "../kernel/command-names.mjs";
 import { biographyPlainText, createItemMenuRecord, resolveItemSourceItem } from "./actor-view.mjs";
 import { actorSourceUuid, resolveActorSource, speakerMatchesActor, validSourceUuid } from "./character-source.mjs";
+import { readDnd5eMessageItem, readDnd5eMessageOriginId as originatingMessageId } from "./dnd5e-message-reference.mjs";
 
 export { ACTOR_COMMANDS };
 
@@ -626,17 +627,6 @@ function messageIdFromReference(reference) {
   return messageIdentifier(reference);
 }
 
-function originatingMessageId(message) {
-  try {
-    return String(message?.getFlag?.("dnd5e", "originatingMessage")
-      ?? message?.flags?.dnd5e?.originatingMessage
-      ?? message?._source?.flags?.dnd5e?.originatingMessage
-      ?? "");
-  } catch {
-    return "";
-  }
-}
-
 function speakerActorId(message) {
   return String(message?.speaker?.actor ?? message?._source?.speaker?.actor ?? "");
 }
@@ -646,7 +636,7 @@ function messageAuthorId(message) {
 }
 
 function messageReferencesItem(message, itemId) {
-  const reference = message?.flags?.dnd5e?.item ?? message?._source?.flags?.dnd5e?.item;
+  const reference = readDnd5eMessageItem(message);
   const id = String(reference?.id ?? "");
   const uuid = String(reference?.uuid ?? "");
   const expected = String(itemId ?? "");

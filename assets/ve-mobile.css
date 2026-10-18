@@ -25,6 +25,7 @@
   --ve-layer-modal: 5000;
   --ve-layer-dice: 5050;
   --ve-layer-settings: 5200;
+  --ve-layer-native-menu: 5300;
   --ve-layer-critical: 5400;
 }
 
@@ -725,9 +726,65 @@ body.ve-mobile-running {
  * owns the presentation surface. Lifecycle-known applications receive the
  * generic admission marker; baseline workspace windows stay hidden.
  */
-body.ve-mobile-running > :not(.ve-mobile-app):not(.ve-mobile-bootstrap):not(.ve-mobile-admitted-app):not(.ve-scene-preflight):not(.ve-gm-mobile-risk):not(.ve-mobile-settings-app):not(.ve-mobile-module-overlay-visible):not(.ve-mobile-module-overlay-host):not(#interface):not(#board):not(#hud):not(#notifications):not(#tooltip):not(#context-menu):not(#pause):not(#dice-box-canvas) {
+body.ve-mobile-running > :not(.ve-mobile-app):not(.ve-mobile-bootstrap):not(.ve-mobile-admitted-app):not(.ve-scene-preflight):not(.ve-gm-mobile-risk):not(.ve-mobile-settings-app):not(.ve-mobile-module-overlay-visible):not(.ve-mobile-module-overlay-host):not(#interface):not(#board):not(#hud):not(#notifications):not(#tooltip):not(#context-menu):not(#prosemirror-dropdown):not(#pause):not(#dice-box-canvas) {
   visibility: hidden !important;
   pointer-events: none !important;
+}
+
+/* Foundry places its editor's user-opened formatting menu directly in body. */
+body.ve-mobile-running > #prosemirror-dropdown {
+  z-index: var(--ve-layer-native-menu);
+}
+
+/* Chat-owned touch menus use expandable rows rather than hover-only columns. */
+body.ve-mobile-running #prosemirror-dropdown.ve-chat-editor-touch-menu {
+  left: var(--ve-chat-menu-left) !important;
+  top: var(--ve-chat-menu-top) !important;
+  width: max-content;
+  max-width: var(--ve-chat-menu-width);
+  user-select: none;
+  touch-action: pan-y;
+}
+
+body.ve-mobile-running #prosemirror-dropdown.ve-chat-editor-touch-menu > ul {
+  position: static;
+  min-width: min(240px, var(--ve-chat-menu-width));
+  max-width: var(--ve-chat-menu-width);
+  max-height: var(--ve-chat-menu-height);
+  box-sizing: border-box;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+}
+
+body.ve-mobile-running #prosemirror-dropdown.ve-chat-editor-touch-menu li:not(.divider) {
+  min-height: 44px;
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+body.ve-mobile-running #prosemirror-dropdown.ve-chat-editor-touch-menu li > span {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+body.ve-mobile-running #prosemirror-dropdown.ve-chat-editor-touch-menu li > ul {
+  display: none;
+  position: static;
+  top: auto !important;
+  left: auto !important;
+  flex: 1 0 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  box-shadow: none;
+}
+
+body.ve-mobile-running #prosemirror-dropdown.ve-chat-editor-touch-menu li.ve-chat-menu-expanded > ul {
+  display: block;
 }
 
 body.ve-mobile-running #interface > :not(.ve-mobile-admitted-app):not(.ve-mobile-settings-app):not(.ve-mobile-module-overlay-visible):not(.ve-mobile-module-overlay-host):not(.ve-mobile-native-hud-host):not(#notifications):not(#board):not(#pause):not(#dice-box-canvas),
@@ -772,6 +829,18 @@ body.ve-mobile-running > #hud {
 /* Only roots selected from the bounded, user-initiated module-overlay catalog
  * are admitted. Ancestors are pass-through hosts; unrelated siblings remain
  * hidden and arbitrary third-party dimensions/positions are not rewritten. */
+body.ve-mobile-running .ve-mobile-module-overlay-hidden {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Remove hidden branches from layout so explicit child visibility cannot
+ * escape. Preserve paths to deliberately admitted native configuration forms. */
+body.ve-mobile-running .ve-mobile-module-overlay-hidden:not(:has(:is(.ve-mobile-admitted-app, .ve-mobile-settings-app))),
+body.ve-mobile-running .ve-mobile-module-overlay-hidden :not(:is(.ve-mobile-admitted-app, .ve-mobile-settings-app)):not(:is(.ve-mobile-admitted-app, .ve-mobile-settings-app) *):not(:has(:is(.ve-mobile-admitted-app, .ve-mobile-settings-app))) {
+  display: none !important;
+}
+
 body.ve-mobile-running .ve-mobile-module-overlay-host {
   visibility: visible !important;
   pointer-events: none !important;
@@ -991,6 +1060,36 @@ body.ve-mobile-running:not([data-ve-mobile-form-factor="tablet"]) .ve-mobile-adm
 
 body.ve-mobile-running .ve-mobile-admitted-app:not(:has(.window-content, .application-content, .dialog-content)) {
   overflow: hidden auto !important;
+  overscroll-behavior: contain;
+}
+
+/* Foundry editor prompts use a full-screen dialog containing a separately
+ * positioned form. Fit that form to the visible viewport, including IME pan,
+ * instead of centring the full-screen shell around its old toolbar position. */
+body.ve-mobile-running dialog.prosemirror.menu-dialog.ve-mobile-admitted-app {
+  top: var(--ve-mobile-viewport-top, 0px) !important;
+  left: var(--ve-mobile-viewport-left, 0px) !important;
+  width: var(--ve-mobile-viewport-width, 100vw) !important;
+  height: var(--ve-mobile-viewport-height, 100dvh) !important;
+  max-width: none !important;
+  max-height: var(--ve-mobile-viewport-height, 100dvh) !important;
+  translate: none !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, var(--ve-safe-top)) max(12px, var(--ve-safe-right)) max(12px, var(--ve-safe-bottom)) max(12px, var(--ve-safe-left));
+}
+
+body.ve-mobile-running dialog.prosemirror.menu-dialog.ve-mobile-admitted-app > form {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  width: min(460px, 100%);
+  max-width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
   overscroll-behavior: contain;
 }
 
@@ -8346,6 +8445,25 @@ details.ve-action-session-compact-result {
   flex: 0 0 auto;
 }
 
+/* v14's editor content is absolutely positioned. The dock's intrinsic sizing
+ * therefore needs an explicit typing area, separate from the formatting bar. */
+.ve-native-chat-screen prose-mirror#chat-message > .editor-container {
+  flex: 0 0 88px;
+  min-height: 88px;
+}
+
+.ve-native-chat-screen prose-mirror#chat-message > .menu-container {
+  flex: 0 0 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.ve-native-chat-screen prose-mirror#chat-message > .menu-container > menu {
+  position: static;
+  width: max-content;
+  min-width: 100%;
+}
+
 .ve-native-chat-screen .ve-chat-composer-content[hidden] {
   display: none !important;
 }
@@ -8389,7 +8507,7 @@ details.ve-action-session-compact-result {
 }
 
 .ve-mobile-app .ve-native-chat-screen > #chat.ve-native-chat #chat-controls,
-.ve-mobile-app .ve-native-chat-screen > #chat.ve-native-chat #chat-controls :is(#roll-privacy, .control-buttons) {
+.ve-mobile-app .ve-native-chat-screen > #chat.ve-native-chat #chat-controls :is(#roll-privacy, #message-modes, .control-buttons) {
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: nowrap !important;
@@ -8402,14 +8520,14 @@ details.ve-action-session-compact-result {
   justify-content: space-between;
 }
 
-.ve-mobile-app .ve-native-chat-screen > #chat.ve-native-chat #chat-controls :is(#roll-privacy, .control-buttons) {
+.ve-mobile-app .ve-native-chat-screen > #chat.ve-native-chat #chat-controls :is(#roll-privacy, #message-modes, .control-buttons) {
   width: auto !important;
   min-width: 0;
   overflow-x: auto;
   writing-mode: horizontal-tb !important;
 }
 
-.ve-mobile-app .ve-native-chat-screen > #chat.ve-native-chat #chat-controls :is(#roll-privacy, .control-buttons) > * {
+.ve-mobile-app .ve-native-chat-screen > #chat.ve-native-chat #chat-controls :is(#roll-privacy, #message-modes, .control-buttons) > * {
   flex: 0 0 auto;
 }
 

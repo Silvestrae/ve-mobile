@@ -1,7 +1,8 @@
 # <img src="Icon.png" alt="VE Foundry Client logo" height="40">  VE Mobile
 
-![Foundry VTT 13](https://img.shields.io/badge/Foundry_VTT-13-orange)
-![D&D5e 5.3.x](https://img.shields.io/badge/D%26D5e-5.3.x-red)
+[![Latest release](https://img.shields.io/github/v/release/Silvestrae/ve-mobile?label=Release)](https://github.com/Silvestrae/ve-mobile/releases/latest)
+![Foundry VTT 13 verified; 14 Chat tested](https://img.shields.io/badge/Foundry_VTT-13_verified_%7C_14_Chat_tested-orange)
+![D&D5e 5.3 verified; 6.0 chat and rolls tested](https://img.shields.io/badge/D%26D5e-5.3_verified_%7C_6.0_chat%2Frolls_tested-red)
 ![Phone and Tablet](https://img.shields.io/badge/Phone_%26_Tablet-supported-blue)
 [![MIT License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/Silvestrae/ve-mobile/total?label=Downloads&color=blue)](https://github.com/Silvestrae/ve-mobile/releases)
@@ -241,8 +242,12 @@ it. Temporary graphics changes have restoration and recovery controls.
 | Dungeons & Dragons Fifth Edition (`dnd5e`) | 5.3.2 | 5.3.3 |
 
 Declared minimums describe compatibility policy; they do not mean every version
-in that range has been tested. Foundry v14 and other game systems are not
-advertised as supported here.
+in that range has been tested. Version 1.0.3 also includes D&D5e 6 chat/roll
+format adaptations and mobile composer fixes tested in Foundry 14.369 with
+D&D5e 6.0.6. Phone and tablet acceptance is complete for the corrected Chat
+workflows. This does not establish full Foundry v14 support:
+Scene Levels and multilevel maps remain outside the verified scope. Other
+game systems are not advertised as supported here.
 
 You need access to a running Foundry world, an authenticated user account, and
 a browser that can run that world. Live Scene use also needs working Canvas

@@ -100,7 +100,7 @@ export function mountChatComposerDock({ form, input, host, document, scope, getS
   });
   scope.listen(input, "focus", () => {
     if (collapsed) { collapsed = false; refresh(); persist(); }
-  });
+  }, { capture: true });
   if (tabBar) scope.listen(tabBar, "click", () => queueMicrotask(() => refresh()));
   refresh();
   return Object.freeze({ get collapsed() { return collapsed; }, refresh });

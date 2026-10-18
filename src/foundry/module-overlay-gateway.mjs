@@ -4,6 +4,7 @@ import { enableModuleOverlayTouch } from "../ui/module-overlay-touch.mjs";
 
 const VISIBLE_CLASS = "ve-mobile-module-overlay-visible";
 const HOST_CLASS = "ve-mobile-module-overlay-host";
+const HIDDEN_CLASS = "ve-mobile-module-overlay-hidden";
 const MAX_SCAN_ELEMENTS = 768;
 const MAX_SCAN_DEPTH = 8;
 const MAX_SCAN_LOG_ENTRIES = 128;
@@ -16,6 +17,11 @@ const CORE_ROOT_IDS = new Set([
 const OVERLAY_WORDS = /(?:^|[-_\s])(overlay|widget|toolbar|bar|dock|docked|panel|calendar|weather|party|token|canvas|hud|video|player)(?:$|[-_\s])/iu;
 const SCAN_ROOT_IDS = Object.freeze(["interface", "ui-left", "ui-right", "ui-left-column-1", "ui-left-column-2", "ui-right-column-1", "ui-right-column-2", "hud"]);
 const MODULE_OVERLAY_ADAPTERS = Object.freeze({
+  "smalltime": Object.freeze([
+    // SmallTime's persistent clock renders as a form after canvasReady. Its
+    // native Application lifecycle must not bypass the overlay visibility flag.
+    Object.freeze({ rootId: "smalltime-app", overlayName: "Clock", evidence: "verified persistent clock ApplicationV2 form root", catalogWhenAbsent: true })
+  ]),
   "foundryvtt-simple-calendar": Object.freeze([
     Object.freeze({ rootId: "fsc-if", overlayName: "Calendar", evidence: "verified persistent FormApplication root", catalogWhenAbsent: true })
   ]),
@@ -32,6 +38,10 @@ const MODULE_OVERLAY_ADAPTERS = Object.freeze({
     // DFreds computes an absolute left coordinate from the desktop sidebar.
     // Its mobile presentation must instead retain its intended right edge.
     Object.freeze({ rootId: "effects-panel", overlayName: "Effects Panel", evidence: "verified selected-token frameless ApplicationV2 root", catalogWhenAbsent: true, sceneEdge: "right" })
+  ]),
+  "fvtt-youtube-player": Object.freeze([
+    // SidebarVideoPlayer keeps this ID when detached from the desktop controls.
+    Object.freeze({ rootId: "sidebar-video-player", overlayName: "Sidebar Video Player", evidence: "verified docked and detached SidebarVideoPlayer root", catalogWhenAbsent: true })
   ])
 });
 
@@ -50,6 +60,10 @@ export function createModuleOverlayGateway({
   const adapters = new Map();
   const markedRoots = new Set();
   const markedHosts = new Set();
+  const hiddenRoots = new Set();
+  let reconcileApplications = null;
+  let knownRootIds = new Set();
+  let knownRootSelector = "";
   const lastSceneRuntime = new Map();
   let lastScanDiagnostics = Object.freeze([]);
   let lastContextKey = "";
@@ -61,8 +75,12 @@ export function createModuleOverlayGateway({
     adapters.clear();
     for (const element of markedRoots) element?.classList?.remove?.(VISIBLE_CLASS);
     for (const element of markedHosts) element?.classList?.remove?.(HOST_CLASS);
+    for (const element of hiddenRoots) element?.classList?.remove?.(HIDDEN_CLASS);
     markedRoots.clear();
     markedHosts.clear();
+    hiddenRoots.clear();
+    knownRootIds.clear();
+    knownRootSelector = "";
     lastContextKey = "";
     lastReconcileKey = "";
     lastVisible = Object.freeze([]);
@@ -90,6 +108,9 @@ export function createModuleOverlayGateway({
       const module = entry ? game.modules.get?.(entry.moduleId) : null;
       if (entry && module?.active && safeKnownRoot(root, module, document, entry)) return true;
     }
+    // Only exact adapter/catalogue identities override a genuine modal role.
+    // Frameless configuration and action dialogs remain native workflows.
+    if (application?.options?.modal === true || root?.matches?.("dialog, [role='dialog'], .dialog, .activity-choice, .activity-usage, .roll-configuration, .midi-targeting, #midi-qol-targetConfirmation")) return false;
     // A just-created persistent Application may render before the catalog has
     // had an opportunity to discover it. Preserve the same structural boundary
     // used by discovery without treating an ordinary framed form as an overlay.
@@ -123,9 +144,22 @@ export function createModuleOverlayGateway({
       return Object.freeze({ visible: lastVisible });
     }
     performanceObserver?.increment?.("overlay.reconcile.applied");
+    // A scan can transfer a previously admitted Application to overlay policy.
+    // Release its admission through the owner, including backdrop/layer state.
+    reconcileApplications?.();
     const desired = new Map();
-    for (const entry of entries) {
-      document?.getElementById?.(entry.rootId)?.classList?.remove?.("ve-mobile-transient-app");
+    const known = new Map();
+    const policyEntries = entries.filter(entry => game?.modules?.get?.(entry.moduleId)?.active);
+    for (const [moduleId, definitions] of Object.entries(MODULE_OVERLAY_ADAPTERS)) {
+      if (!game?.modules?.get?.(moduleId)?.active) continue;
+      for (const definition of definitions) policyEntries.push({ moduleId, rootId: definition.rootId, id: `${moduleId}:${semanticSlug(definition.rootId)}` });
+    }
+    knownRootIds = new Set(policyEntries.map(entry => entry.rootId).filter(id => stableRootId({ id })));
+    knownRootSelector = [...knownRootIds].map(id => `[id="${id}"]`).join(",");
+    for (const entry of policyEntries) {
+      const module = game?.modules?.get?.(entry.moduleId);
+      const root = document?.getElementById?.(entry.rootId);
+      if (module?.active && root?.isConnected !== false && root && safeKnownRoot(root, module, document, entry)) known.set(root, entry);
     }
     if (mayShow) {
       for (const entry of entries) {
@@ -147,10 +181,16 @@ export function createModuleOverlayGateway({
     for (const element of markedHosts) element?.classList?.remove?.(HOST_CLASS);
     markedRoots.clear();
     markedHosts.clear();
+    for (const root of hiddenRoots) if (!known.has(root) || desired.has(root)) root.classList.remove(HIDDEN_CLASS);
+    hiddenRoots.clear();
+    for (const root of known.keys()) {
+      if (desired.has(root)) continue;
+      root.classList.add(HIDDEN_CLASS);
+      hiddenRoots.add(root);
+    }
 
     let overlayOrder = 0;
     for (const [root, entry] of desired) {
-      root.classList.remove("ve-mobile-transient-app");
       root.classList.add(VISIBLE_CLASS);
       markedRoots.add(root);
       for (const host of overlayHosts(root, document)) {
@@ -193,9 +233,10 @@ export function createModuleOverlayGateway({
   };
 
   return Object.freeze({
-    enable(scope) {
+    enable(scope, { reconcileApplications: reconcileNativeApplications = null } = {}) {
       if (owner === scope) return;
       owner = scope;
+      reconcileApplications = reconcileNativeApplications;
       const refreshKnown = () => reconcile(context, { force: true });
       const refreshKnownAfterHook = () => queueMicrotask(() => {
         if (owner === scope && !scope.disposed) refreshKnown();
@@ -208,11 +249,32 @@ export function createModuleOverlayGateway({
       scope.hook?.("createCombat", refreshKnownAfterHook);
       scope.hook?.("updateCombat", refreshKnownAfterHook);
       scope.hook?.("deleteCombat", refreshKnownAfterHook);
+      // Observe only insertion/removal of exact known roots. No discovery or
+      // full DOM scan runs during normal rendering, input, or idle frames.
+      const Observer = getDocument()?.defaultView?.MutationObserver ?? globalThis.MutationObserver;
+      let queued = false;
+      const observer = Observer && getDocument()?.body ? new Observer(mutations => {
+        if (queued || !knownRootSelector) return;
+        const changed = mutations.some(mutation => !mutation.target?.closest?.(".ve-mobile-app, .ve-mobile-bootstrap")
+          && [...mutation.addedNodes, ...mutation.removedNodes].some(node =>
+          node?.nodeType === 1 && !node.matches?.(".ve-mobile-app, .ve-mobile-bootstrap")
+          && (knownRootIds.has(node.id) || node.querySelector?.(knownRootSelector))));
+        if (!changed) return;
+        queued = true;
+        queueMicrotask(() => {
+          queued = false;
+          if (owner === scope && !scope.disposed) refreshKnown();
+        });
+      }) : null;
+      scope.own(() => observer?.disconnect());
+      observer?.observe(getDocument().body, { childList: true, subtree: true });
       scope.own(() => {
         if (owner !== scope) return;
         clearPresentation();
+        reconcileApplications = null;
         owner = null;
       });
+      refreshKnown();
     },
 
     snapshot() {
@@ -629,7 +691,9 @@ function adapterFor(module, rootId) {
 }
 
 function safeKnownRoot(root, module, document, entry) {
-  if (excludedElement(root) || stableRootId(root) === "") return false;
+  // Admission markers describe presentation, not the identity of a root that
+  // has already been discovered. They must not erase catalogue ownership.
+  if (excludedElement(root, { known: true }) || stableRootId(root) === "") return false;
   if (!document?.body?.contains?.(root) && root !== document?.body) return false;
   const exactCatalogIdentity = stableRootId(root) === entry?.rootId
     && entry?.id === `${module.id}:${semanticSlug(entry.rootId)}`;
@@ -637,8 +701,10 @@ function safeKnownRoot(root, module, document, entry) {
   return exactCatalogIdentity && (ownership.status === "owned" || Boolean(entry?.moduleId === module.id));
 }
 
-function excludedElement(element) {
-  return Boolean(element?.closest?.(".ve-mobile-app, .ve-mobile-bootstrap, .ve-mobile-dialog, .ve-mobile-settings-app, #notifications, #tooltip, #context-menu")
+function excludedElement(element, { known = false } = {}) {
+  return element?.id === "dice-box-canvas" || Boolean(element?.closest?.(known
+    ? ".ve-mobile-app, .ve-mobile-bootstrap, .ve-mobile-settings-app, #notifications, #tooltip, #context-menu"
+    : ".ve-mobile-app, .ve-mobile-bootstrap, .ve-mobile-dialog, .ve-mobile-settings-app, #notifications, #tooltip, #context-menu")
     || element?.matches?.("script, style, link, template"));
 }
 
@@ -752,7 +818,9 @@ function isBlockedOverlayModule(module) {
 }
 
 function forbiddenOverlayEntry(entry) {
-  return isBlockedOverlayModule({ id: entry.moduleId, title: entry.moduleTitle })
+  // DSN's temporary roll renderer is governed by the dice presentation owner,
+  // not the optional persistent overlay catalogue (including old catalogues).
+  return entry.rootId === "dice-box-canvas" || isBlockedOverlayModule({ id: entry.moduleId, title: entry.moduleTitle })
     || SCENE_TAB_IDENTITY.test(`${entry.rootId} ${entry.overlayName}`);
 }
 

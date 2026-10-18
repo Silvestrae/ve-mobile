@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 1.0.3 — 2026-10-19
+
+- Keep v14's renamed Chat privacy selector horizontal on phones and tablets,
+  while retaining the earlier selector used by supported Foundry versions.
+- Keep Chat font submenus open for touch selection, preserve native inline
+  formatting focus, and fit editor prompts above the software keyboard.
+- Prevent disabled module overlays from retaining native-window admission or
+  exposing children, including late mounts and detached YouTube players.
+- Remove Dice So Nice's temporary roll canvas from the persistent overlay
+  catalogue while preserving native dice presentation.
+- Make SmallTime's persistent clock obey Module Overlays visibility, including
+  disabled overlays rendered after mobile startup.
+- Keep Foundry v14's Chat typing area visible below the formatting toolbar on
+  phones, with scrollable formatting controls and native editor focus support.
+- Keep native rich-text formatting dropdowns and their action dialogs accessible
+  above the mobile interface.
+- Support D&D5e 6 chat message references, compact roll markup, native attack
+  targets, and sense labels while retaining D&D5e 5.3 / Foundry v13 behavior.
+
 ## 1.0.2 — 2026-10-04
 
 - Fixed Chat dice-tray taps so they no longer open the mobile keyboard unless

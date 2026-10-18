@@ -639,7 +639,7 @@ if (isGamePage) {
       });
       visualIsolationController = isolation;
       scope.own(() => { if (visualIsolationController === isolation) visualIsolationController = null; });
-      moduleOverlayGateway.enable(scope);
+      moduleOverlayGateway.enable(scope, { reconcileApplications: nativeApplications.reconcileApplications });
       settingsCompatibilityGateway.enable(scope);
       enableMobileJournalReader(scope, {
         isActive: () => kernel?.active === true && readPolicy().runtimeMode !== "desktop",

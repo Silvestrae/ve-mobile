@@ -95,6 +95,7 @@ export function createFoundryNativeChatGateway({
         dockContent = chatForm.querySelector?.(".ve-chat-composer-content") ?? null;
         mountChatVisualViewport({ host, input, document: documentRef, scope });
         bindManualChatFocus(host, input, scope);
+        bindChatEditorInteraction({ input, document: documentRef, scope });
         bindChatDiceInteraction({ host, input, scope });
         queueMicrotask(() => {
           if (scope.disposed || restored) return;
@@ -179,7 +180,7 @@ export function mountChatVisualViewport({ host, input, document, scope }) {
       const pane = host.parentElement?.getBoundingClientRect?.();
       if (!pane || !host.style || !host.classList) { restorePane(); return; }
       const bounds = readChatVisualViewport(browser, document);
-      const focused = document.activeElement === input;
+      const focused = document.activeElement === input || Boolean(input.contains?.(document.activeElement));
       if (!splitViewportBaseline || splitViewportBaseline.width !== bounds.width) {
         splitViewportBaseline = { width: bounds.width, height: focused ? pane.height : bounds.height };
       } else if (!focused) {
@@ -220,8 +221,9 @@ export function mountChatVisualViewport({ host, input, document, scope }) {
   scope.listen(visualViewport, "scroll", update, { passive: true });
   scope.listen(browser, "resize", update, { passive: true });
   scope.listen(browser, "orientationchange", update, { passive: true });
-  scope.listen(input, "focus", update);
-  scope.listen(input, "blur", update);
+  // v13 focuses the textarea; v14 focuses an editable child of prose-mirror.
+  scope.listen(input, "focus", update, { capture: true });
+  scope.listen(input, "blur", update, { capture: true });
   scope.own(() => {
     disposed = true;
     if (frame !== null) browser.cancelAnimationFrame?.(frame);
@@ -366,19 +368,150 @@ export function readFoundryTheme(documentRef) {
   return "theme-dark";
 }
 
-/** Permit software-keyboard focus only following a direct tap on the textarea. */
+const EDITOR_PROMPT_ACTIONS = new Set(["font-color", "font-size-custom", "image", "link", "insert-table"]);
+
+/** Deliberate typing/inline formatting may focus Chat; prompt actions must not
+ * reopen its keyboard underneath the form they are about to display. */
 export function bindManualChatFocus(host, input, scope, { now = defaultNow, allowance = 750 } = {}) {
   let directInputTapAt = Number.NEGATIVE_INFINITY;
-  scope.listen(host, "pointerdown", (event) => {
-    const directInputTap = event.target === input || input.contains?.(event.target);
+  const typingTarget = (target) => {
+    const editor = input.querySelector?.('[contenteditable]:not([contenteditable="false"])') ?? input;
+    return target === editor || Boolean(editor.contains?.(target))
+      || Boolean(input.contains?.(target) && target?.closest?.('textarea, [contenteditable]:not([contenteditable="false"])'));
+  };
+  const focusedInput = () => {
+    const active = input.ownerDocument?.activeElement;
+    return active && typingTarget(active) ? active : null;
+  };
+  const ownedMenu = target => target?.closest?.("#prosemirror-dropdown.ve-chat-editor-menu");
+  const noteIntent = (event) => {
+    const directInputTap = typingTarget(event.target);
+    const formattingTap = Boolean(ownedMenu(event.target)
+      || (input.contains?.(event.target) && event.target?.closest?.(".menu-container, .editor-menu")));
+    const promptTap = formattingTap && EDITOR_PROMPT_ACTIONS.has(event.target?.closest?.("[data-action]")?.dataset?.action);
     const diceButtonTap = Boolean(event.target?.closest?.(".ve-chat-dice-layer .dice-tray button"));
-    const focusedDiceTap = diceButtonTap && input.ownerDocument?.activeElement === input;
-    directInputTapAt = directInputTap || focusedDiceTap ? now() : Number.NEGATIVE_INFINITY;
-    if (!directInputTap && !diceButtonTap && input.ownerDocument?.activeElement === input) input.blur();
+    const focused = focusedInput();
+    const focusedDiceTap = diceButtonTap && Boolean(focused);
+    directInputTapAt = directInputTap || focusedDiceTap || (formattingTap && !promptTap) ? now() : Number.NEGATIVE_INFINITY;
+    if (promptTap || (!directInputTap && !diceButtonTap && !formattingTap)) focused?.blur?.();
+  };
+  scope.listen(host, "pointerdown", noteIntent, { capture: true });
+  scope.listen(host, "click", noteIntent, { capture: true });
+  if (input.matches?.("prose-mirror, .prosemirror")) {
+    for (const type of ["pointerdown", "click"]) scope.listen(input.ownerDocument, type, event => {
+      if (ownedMenu(event.target)) noteIntent(event);
+    }, { capture: true });
+  }
+  scope.listen(input, "focus", (event) => {
+    if (event?.target && !typingTarget(event.target)) return;
+    if (now() - directInputTapAt > allowance) (event?.target ?? input).blur();
   }, { capture: true });
-  scope.listen(input, "focus", () => {
-    if (now() - directInputTapAt > allowance) input.blur();
+}
+
+/** Keep native editor commands, but give Chat's hover submenus a tap path.
+ * Menus from other editors are never adopted, even while Chat is mounted. */
+export function bindChatEditorInteraction({ input, document, scope }) {
+  if (!input?.matches?.("prose-mirror, .prosemirror")) return;
+  const browser = document.defaultView;
+  let menu = null;
+  let menuScope = null;
+  let touch = false;
+  let beforeClick = null;
+  const release = () => {
+    menuScope?.dispose();
+    menuScope = null;
+    menu = null;
+  };
+  scope.own(() => { const current = menu; release(); current?.remove(); beforeClick = null; });
+  scope.listen(document, "pointerdown", event => {
+    if (menu?.isConnected === false) release();
+    if (!input.contains(event.target) && !menu?.contains(event.target)) return;
+    touch = event.pointerType === "touch" || event.pointerType === "pen";
+    menu?.classList.toggle("ve-chat-editor-touch-menu", touch);
+  }, { capture: true, passive: true });
+  scope.listen(input, "click", () => {
+    beforeClick = document.getElementById("prosemirror-dropdown");
   }, { capture: true });
+  scope.listen(input, "click", event => {
+    const prior = beforeClick;
+    beforeClick = null;
+    if (!event.target.closest?.(".menu-container, .editor-menu")) return;
+    const current = document.getElementById("prosemirror-dropdown");
+    if (!current || current === menu || current === prior) return;
+    release();
+    menu = current;
+    const owner = scope.child("chat-editor-menu");
+    menuScope = owner;
+    const anchor = event.target.closest("button") ?? event.target;
+    const properties = ["--ve-chat-menu-left", "--ve-chat-menu-top", "--ve-chat-menu-width", "--ve-chat-menu-height"];
+    const previous = properties.map(name => [name, current.style.getPropertyValue(name), current.style.getPropertyPriority(name)]);
+    const expanded = new Map();
+    owner.own(() => {
+      current.classList.remove("ve-chat-editor-menu", "ve-chat-editor-touch-menu");
+      for (const [element, value] of expanded) {
+        element.classList.remove("ve-chat-menu-expanded");
+        if (value === null) element.removeAttribute("aria-expanded");
+        else element.setAttribute("aria-expanded", value);
+      }
+      for (const [name, value, priority] of previous) {
+        if (value) current.style.setProperty(name, value, priority);
+        else current.style.removeProperty(name);
+      }
+    });
+    current.classList.add("ve-chat-editor-menu");
+    current.classList.toggle("ve-chat-editor-touch-menu", touch);
+    const update = () => {
+      if (owner.disposed || menu !== current || current.isConnected === false || !touch) return;
+      const viewport = browser.visualViewport;
+      const left = viewport?.offsetLeft ?? 0;
+      const top = viewport?.offsetTop ?? 0;
+      const width = Math.max(1, (viewport?.width ?? browser.innerWidth) - 16);
+      const height = Math.max(1, (viewport?.height ?? browser.innerHeight) - 16);
+      current.style.setProperty("--ve-chat-menu-width", `${width}px`);
+      current.style.setProperty("--ve-chat-menu-height", `${height}px`);
+      const rect = current.getBoundingClientRect();
+      const origin = anchor.getBoundingClientRect();
+      current.style.setProperty("--ve-chat-menu-left", `${Math.max(left + 8, Math.min(origin.left, left + width + 8 - rect.width))}px`);
+      current.style.setProperty("--ve-chat-menu-top", `${Math.max(top + 8, Math.min(origin.bottom, top + height + 8 - rect.height))}px`);
+    };
+    owner.listen(current, "click", event => {
+      if (!touch) return;
+      const item = event.target.closest?.("li");
+      if (!item || !current.contains(item) || !item.querySelector(":scope > ul")) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!expanded.has(item)) expanded.set(item, item.getAttribute("aria-expanded"));
+      const open = item.classList.toggle("ve-chat-menu-expanded");
+      item.setAttribute("aria-expanded", String(open));
+      update();
+    }, { capture: true });
+    // Native leaf onclick runs first. Stop only its subsequent bubbling into
+    // a branch's native onclick, which would dismiss/refocus a second time.
+    for (const item of current.querySelectorAll("li")) owner.listen(item, "click", event => {
+      if (!touch) return;
+      event.stopPropagation();
+      if (current.isConnected === false) release();
+    });
+    owner.listen(browser.visualViewport, "resize", update, { passive: true });
+    owner.listen(browser.visualViewport, "scroll", update, { passive: true });
+    owner.listen(browser, "resize", update, { passive: true });
+    const Observer = browser.MutationObserver;
+    let removalQueued = false;
+    const observer = Observer ? new Observer(() => {
+      if (current.isConnected !== false || menu !== current || removalQueued) return;
+      removalQueued = true;
+      // Native onclick removes the menu before our leaf listener runs. A
+      // mutation checkpoint can occur between those listeners: retain the
+      // listener until this event finishes, or parent native actions run too.
+      owner.timeout(() => {
+        removalQueued = false;
+        if (menu === current && current.isConnected === false) release();
+      }, 0);
+    }) : null;
+    owner.own(() => observer?.disconnect());
+    observer?.observe(document.body, { childList: true });
+    update();
+  });
 }
 
 function defaultNow() {

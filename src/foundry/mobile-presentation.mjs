@@ -27,7 +27,8 @@ const APPLICATION_ORIGIN_SELECTOR = [
   ".ve-mobile-transient-app",
   ".ve-mobile-module-overlay-visible",
   "#hud.ve-mobile-native-hud-host",
-  "#context-menu"
+  "#context-menu",
+  "#prosemirror-dropdown"
 ].join(", ");
 
 /**
@@ -197,11 +198,12 @@ export function enableMobileApplications(scope, {
   }, { capture: true, passive: true });
 
   const visualViewport = browser?.visualViewport;
-  const previousViewportHeight = document.body.style.getPropertyValue("--ve-mobile-viewport-height");
-  const previousViewportPriority = document.body.style.getPropertyPriority("--ve-mobile-viewport-height");
+  const viewportProperties = ["--ve-mobile-viewport-height", "--ve-mobile-viewport-width", "--ve-mobile-viewport-top", "--ve-mobile-viewport-left"];
+  const previousViewport = viewportProperties.map(name => [name, document.body.style.getPropertyValue(name), document.body.style.getPropertyPriority(name)]);
   const updateViewport = () => {
-    const height = visualViewport?.height ?? browser?.innerHeight ?? 0;
-    document.body.style.setProperty("--ve-mobile-viewport-height", `${Math.round(height)}px`);
+    const values = [visualViewport?.height ?? browser?.innerHeight ?? 0, visualViewport?.width ?? browser?.innerWidth ?? 0,
+      visualViewport?.offsetTop ?? 0, visualViewport?.offsetLeft ?? 0];
+    viewportProperties.forEach((name, index) => document.body.style.setProperty(name, `${Math.round(values[index])}px`));
   };
   updateViewport();
   scope.listen(visualViewport, "resize", updateViewport, { passive: true });
@@ -212,11 +214,15 @@ export function enableMobileApplications(scope, {
     lineage.dispose();
     pendingApplications.clear();
     admissions.clear();
-    if (previousViewportHeight) {
-      document.body.style.setProperty("--ve-mobile-viewport-height", previousViewportHeight, previousViewportPriority);
-    } else document.body.style.removeProperty("--ve-mobile-viewport-height");
+    for (const [name, value, priority] of previousViewport) {
+      if (value) document.body.style.setProperty(name, value, priority);
+      else document.body.style.removeProperty(name);
+    }
   });
-  return Object.freeze({ admissions, lineage });
+  const reconcileApplications = () => admissions.reconcile(record => classifyMobileApplication(record.element, record.application, {
+    retained: true, isPersistentOverlay, isSettingsApplication, isActorEditor
+  }).admitted);
+  return Object.freeze({ admissions, lineage, reconcileApplications });
 }
 
 /** Track admission by Application identity so a rerendered or already-closed
@@ -237,10 +243,10 @@ export function createMobileApplicationAdmissions(body) {
     for (const record of records.values()) record.element?.style?.setProperty?.(NATIVE_APPLICATION_LAYER_PROPERTY, String(NATIVE_APPLICATION_LAYER + index++));
     publish();
   };
-  const reconcileBackdrop = (forceLayers = false) => {
+  const reconcileBackdrop = (forceLayers = false, retain = null) => {
     let removed = false;
     for (const [key, record] of records) {
-      if (record.element?.isConnected !== false) continue;
+      if (record.element?.isConnected !== false && (!retain || retain(record))) continue;
       clearClasses(record.element, record);
       records.delete(key);
       closing.delete(key);
@@ -320,9 +326,9 @@ export function createMobileApplicationAdmissions(body) {
       closing.delete(key);
       reconcileBackdrop(true);
     },
-    reconcile() {
+    reconcile(retain = null) {
       const before = records.size;
-      reconcileBackdrop();
+      reconcileBackdrop(false, retain);
       return before - records.size;
     },
     clear() {
@@ -366,7 +372,7 @@ export function classifyMobileApplication(element, application = null, { preExis
   // A persistent overlay may render a child surface through its own
   // Application lifecycle. Admitting that child as a native window would
   // stretch it across the viewport and make its transparent area eat taps.
-  if (!modal && (isPersistentOverlay(element, application) || hasPersistentOverlayAncestor(element, isPersistentOverlay))) {
+  if (isPersistentOverlay(element, application) || (!modal && hasPersistentOverlayAncestor(element, isPersistentOverlay))) {
     return Object.freeze({ admitted: false, modal: false, reason: localizeFoundry("VEMOBILE.Interface.MobilePresentation.PersistentSceneOverlay", "persistent Scene overlay") });
   }
   if (actorSheetApplication(application) && !isActorEditor(application)) return Object.freeze({ admitted: false, modal: false, reason: localizeFoundry("VEMOBILE.Interface.MobilePresentation.ActorSheetReplacedByCharacter", "Actor sheet replaced by Character") });
@@ -567,7 +573,7 @@ function interactionSource(root) {
   if (root?.matches?.("#hud.ve-mobile-native-hud-host")) return "native HUD";
   if (root?.matches?.(".ve-mobile-module-overlay-visible")) return "admitted Scene overlay";
   if (root?.matches?.(".ve-mobile-transient-app, .ve-mobile-dialog")) return "admitted transient application";
-  if (root?.matches?.("#context-menu")) return "admitted native control";
+  if (root?.matches?.("#context-menu, #prosemirror-dropdown")) return "admitted native control";
   if (root?.matches?.(".ve-mobile-bootstrap")) return "VE bootstrap";
   return "VE Mobile";
 }

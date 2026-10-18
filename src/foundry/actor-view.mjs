@@ -1171,7 +1171,10 @@ function senseRecords(source = {}) {
   const units = stringValue(source?.units) || "ft";
   const entries = Object.entries(ranges)
     .filter(([key, value]) => validKey(key) && number(value) > 0)
-    .map(([key, value]) => ({ label: localized(globalThis.CONFIG?.DND5E?.senses?.[key]) || SENSE_LABELS[key] || titleCase(key), value: `${number(value)} ${units}` }));
+    .map(([key, value]) => {
+      const configured = globalThis.CONFIG?.DND5E?.senses?.[key];
+      return { label: localized(configured?.label ?? configured) || SENSE_LABELS[key] || titleCase(key), value: `${number(value)} ${units}` };
+    });
   appendCustomRecords(entries, source?.special, (label) => ({ label, value: "" }));
   return entries;
 }

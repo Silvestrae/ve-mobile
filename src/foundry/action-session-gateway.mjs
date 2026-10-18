@@ -1,5 +1,6 @@
 import { localizeFoundry } from "./localization.mjs";
 import { resolveActorSource, speakerMatchesActor } from "./character-source.mjs";
+import { readDnd5eMessageActivity, readDnd5eMessageItem, readDnd5eMessageOriginId as originatingMessageId } from "./dnd5e-message-reference.mjs";
 
 const ACTION_UPDATE_SETTLE_MS = 180;
 const EXPECTED_NATIVE_ROLL_MS = 120_000;
@@ -224,14 +225,15 @@ export function markOddCompactRoll(elements) {
 export function compactMessageActivity(message) {
   if (!canRenderMessage(message) || message?.isContentVisible === false) return null;
   let activity;
-  try { activity = message.getAssociatedActivity?.(); } catch { /* Use native flags if the activity was removed. */ }
-  const flags = message.flags?.dnd5e ?? message._source?.flags?.dnd5e ?? {};
-  const uuid = identifier(activity?.uuid ?? flags.activity?.uuid);
-  const id = identifier(activity?.id ?? flags.activity?.id);
-  const itemUuid = identifier(activity?.item?.uuid ?? flags.item?.uuid);
+  try { activity = message.getAssociatedActivity?.(); } catch { /* Use the native snapshot if the activity was removed. */ }
+  const reference = readDnd5eMessageActivity(message);
+  const itemReference = readDnd5eMessageItem(message);
+  const uuid = identifier(activity?.uuid ?? reference.uuid);
+  const id = identifier(activity?.id ?? reference.id);
+  const itemUuid = identifier(activity?.item?.uuid ?? itemReference.uuid);
   const key = uuid || (id && itemUuid ? `${itemUuid}.Activity.${id}` : "");
   if (!key) return null;
-  return { key, label: String(activity?.name ?? "").trim().slice(0, 120), type: identifier(activity?.type ?? flags.activity?.type) };
+  return { key, label: String(activity?.name ?? reference.name).trim().slice(0, 120), type: identifier(activity?.type ?? reference.type) };
 }
 
 function nativeSaveTargetId(message) {
@@ -442,14 +444,20 @@ export function compactActionMessageElement(element, document, chatElement, moda
     // Midi embeds copies of target dice in outcome tooltips. The Targets row
     // already owns these results; native standalone save messages own their dice.
     if (roll.closest?.(".midi-qol-save-class, .midi-qol-hit-class")) continue;
-    const totalNode = roll.querySelector?.(".dice-total");
+    const totalNode = roll.querySelector?.(".dice-total") ?? roll.querySelector?.(":scope > .result > .total");
     if (nativeVisibilityHidden(totalNode)) continue;
     const total = String(totalNode?.textContent ?? "").trim();
     if (!total) continue;
     const kind = rollKind(roll.className) || rollKind(roll.parentElement?.className) || rollKind(element.className);
     const formulaNode = roll.querySelector?.(".dice-formula");
     const formula = !nativeVisibilityHidden(formulaNode) ? String(formulaNode?.textContent ?? "").trim().slice(0, 80) : "";
-    const tooltip = roll.querySelector?.(".dice-tooltip");
+    // 6.x compact rolls put the already-rendered breakdown in an adjacent
+    // popover. A private roll disables its button; never copy its breakdown.
+    const adjacent = roll.nextElementSibling;
+    const nativeCompactTooltip = adjacent?.classList?.contains?.("roll-breakdown")
+      && !roll.disabled && !roll.hasAttribute?.("disabled")
+      ? adjacent.querySelector?.(".dice-tooltip") : null;
+    const tooltip = roll.querySelector?.(".dice-tooltip") ?? nativeCompactTooltip;
     // Native rendering is the permission boundary. Never rebuild hidden dice from Roll data.
     const breakdown = !nativeVisibilityHidden(tooltip) ? tooltip.cloneNode?.(true) : null;
     const row = document.createElement(breakdown ? "details" : "div");
@@ -586,6 +594,21 @@ export function collectRenderedActionTargets(element, targets) {
     }
     targets.set(id, current);
   }
+  // D&D5e 6 attack cards expose exact token UUIDs in light-DOM pills.
+  // Use only the rendered label and explicit result attributes, never raw
+  // system.targets, AC values, or roll totals to reconstruct hidden results.
+  for (const pill of element.querySelectorAll?.(".icon-row > ul.targets.pills > li > target-pill") ?? []) {
+    if (nativeVisibilityHidden(pill)) continue;
+    const label = pill.querySelector?.(":scope > label");
+    const name = !nativeVisibilityHidden(label) ? String(label?.textContent ?? "").trim() : "";
+    const options = Array.from(pill.querySelectorAll?.(":scope > datalist > option[value]") ?? []);
+    if (!name || options.length !== 1) continue;
+    const id = identifier(options[0].getAttribute?.("value"));
+    if (!/^Scene\.[^.]+\.Token\.[^.]+$/u.test(id)) continue;
+    const previous = targets.get(id);
+    targets.set(id, { ...previous, id, name, img: previous?.img ?? "", save: previous?.save ?? null,
+      attack: pill.hasAttribute?.("data-hit") ? "success" : pill.hasAttribute?.("data-miss") ? "failure" : "" });
+  }
   return targets;
 }
 
@@ -612,12 +635,26 @@ function classOutcome(row) {
 /** One disclosure belongs to one activity, including its separate result messages. */
 export function compactActionTargetsElement(document, rootMessageId, targetIds = [], visibleTargets = new Map(), targetPreviews = []) {
   if (!document?.createElement) return null;
-  const ids = [...new Set(Array.from(targetIds ?? [], identifier).filter(Boolean))];
+  // Session capture and Midi use scene-local token IDs. Native 6.x cards use
+  // UUIDs. Merge a unique exact token match without merging two different
+  // Scene tokens that happen to share an ID, or substituting their Actor.
+  const tokenKeys = new Map();
+  for (const id of visibleTargets.keys()) {
+    const tokenId = /^Scene\.[^.]+\.Token\.([^.]+)$/u.exec(id)?.[1];
+    if (tokenId) tokenKeys.set(tokenId, tokenKeys.has(tokenId) ? null : id);
+  }
+  const canonicalId = id => tokenKeys.get(id) || id;
+  const ids = [...new Set(Array.from(targetIds ?? [], identifier).filter(Boolean).map(canonicalId))];
   const allowedIds = new Set(ids);
   const shown = new Map(Array.from(targetPreviews ?? [])
-    .filter((target) => allowedIds.has(identifier(target?.id)))
-    .map((target) => [identifier(target.id), { ...target, attack: null, save: null }]));
-  for (const [id, target] of visibleTargets) shown.set(id, target);
+    .filter((target) => allowedIds.has(canonicalId(identifier(target?.id))))
+    .map((target) => [canonicalId(identifier(target.id)), { ...target, attack: null, save: null }]));
+  for (const [id, target] of visibleTargets) {
+    const key = canonicalId(id);
+    const previous = shown.get(key);
+    shown.set(key, { ...previous, ...target, id: key, img: target.img || previous?.img || "",
+      attack: target.attack ?? previous?.attack ?? null, save: target.save ?? previous?.save ?? null });
+  }
   const available = [...shown.values()];
   const count = new Set([...ids, ...shown.keys()]).size;
   const wrapper = document.createElement("div");
@@ -860,9 +897,9 @@ export function isVisibleItemActivity(message, session, game) {
   const author = message.author ?? message.user;
   if (identifier(author?.id) !== identifier(game?.user?.id) && author?.isGM !== true) return false;
   let item;
-  try { item = message.getAssociatedItem?.(); } catch { return false; }
+  try { item = message.getAssociatedItem?.(); } catch { /* The exact native snapshot can outlive its item. */ }
   if (item) return identifier(item.id) === identifier(session.itemId) && (!item.parent || item.parent === actor || item.parent.uuid === actor.uuid);
-  const reference = message.flags?.dnd5e?.item ?? message._source?.flags?.dnd5e?.item;
+  const reference = readDnd5eMessageItem(message);
   const expectedUuid = `${actorSourceUuidForSession(actor, session)}.Item.${identifier(session.itemId)}`;
   return identifier(reference?.uuid) === expectedUuid;
 }
@@ -881,16 +918,6 @@ function messageDocuments(game) {
 
 function messageIdentifier(message) {
   return identifier(message?.id ?? message?._id ?? message?._source?._id);
-}
-
-function originatingMessageId(message) {
-  try {
-    return identifier(message?.getFlag?.("dnd5e", "originatingMessage")
-      ?? message?.flags?.dnd5e?.originatingMessage
-      ?? message?._source?.flags?.dnd5e?.originatingMessage);
-  } catch {
-    return "";
-  }
 }
 
 function messageTimestamp(message) {

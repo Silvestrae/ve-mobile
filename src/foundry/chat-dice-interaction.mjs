@@ -56,7 +56,9 @@ export function bindChatDiceInteraction({ host, input, scope, getDiceTray = () =
     // updateChatDice calls this even for ordinary dice. Its supported noFocus
     // option prevents the IME before focus occurs, preserving native parsing.
     const mobileInput = !scope.disposed && host.contains(input) && this.textarea === input;
-    return original.call(this, html, mobileInput && input.ownerDocument.activeElement !== input
+    const active = input.ownerDocument.activeElement;
+    const focused = active === input || Boolean(input.contains?.(active));
+    return original.call(this, html, mobileInput && !focused
       ? { ...options, noFocus: true } : options);
   };
   scope.own(() => {
