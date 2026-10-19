@@ -190,9 +190,9 @@ six-direction controls for row-oriented and column-oriented hex grids.
 The joystick also changes shape to match either hex orientation.
 
 <p align="center">
-  <img src="docs/screenshots/scene-dpad-square.jpg" alt="Compact eight-direction D-pad surrounding the selected token portrait on a square-grid Scene" width="240">
-  <img src="docs/screenshots/scene-dpad-hex-rows.jpg" alt="Six-direction D-pad with a point-topped hexagonal outline on a row-oriented hex Scene" width="240">
-  <img src="docs/screenshots/scene-dpad-hex-columns.jpg" alt="Six-direction D-pad with a flat-topped hexagonal outline on a column-oriented hex Scene" width="240">
+  <img src="docs/screenshots/scene-dpad-square.jpg" alt="Compact eight-direction D-pad surrounding the selected token portrait on a square-grid Scene" width="30%">
+  <img src="docs/screenshots/scene-dpad-hex-rows.jpg" alt="Six-direction D-pad with a point-topped hexagonal outline on a row-oriented hex Scene" width="30%">
+  <img src="docs/screenshots/scene-dpad-hex-columns.jpg" alt="Six-direction D-pad with a flat-topped hexagonal outline on a column-oriented hex Scene" width="30%">
 </p>
 
 Eligible Actor portraits and chooser rows offer contextual token placement;
