@@ -39,6 +39,7 @@ provides the touch interface for using them.
 ## Contents
 
 - [Why VE Mobile?](#why-ve-mobile)
+- [Start Here](#start-here)
 - [Features at a Glance](#features-at-a-glance)
 - [Phone and Tablet Layouts](#phone-and-tablet-layouts)
 - [Character and Actor Sheets](#character-and-actor-sheets)
@@ -51,11 +52,29 @@ provides the touch interface for using them.
 - [Controls and Gestures](#controls-and-gestures)
 - [Installation](#installation)
 - [Settings](#settings)
+- [Getting Unstuck](#getting-unstuck)
 - [Reporting Bugs](#reporting-bugs)
 - [Support](#support)
 - [License](#license)
 - [Screenshot Credits](#screenshot-credits)
 - [Disclaimer and Independence](#disclaimer-and-independence)
+
+## Start Here
+
+1. [Install and enable VE Mobile](#installation), then open your usual Foundry
+   world in your phone or tablet browser and sign in. Choose **Auto-detect**,
+   **Phone**, or **Tablet** in Mobile Mode if you need to change the layout.
+2. Tap the character name to choose an Actor. If a character or token is not
+   available, ask your GM to check your access and token ownership.
+3. Tap item, spell and feature rows to read their details. **Hold a row** for
+   more actions, including use and action-bar shortcuts where available.
+4. Open **Scene**, then tap a token you control. In **Settings → Scene &
+   Controls**, choose **Joystick** or **D-pad** under **Movement control**.
+5. For a return to the map after using an item, spell or ability, set
+   **Return to Scene after actions** to **Always** or **During combat only**.
+   It starts **Off**. Enabled action summaries stay above the map after return.
+6. Open **Settings → Support → Controls & Gestures** for the full touch guide.
+   It explains holds, dragging, targeting and placement for each surface.
 
 ## Features at a Glance
 
@@ -152,6 +171,10 @@ token controls. Tap a token you control to select it; quickly double-tap the
 same visible token to toggle targeting. Hold an owned token, then release to
 open its native controls, or drag after the hold activates to move it.
 
+To deselect the controlled token, tap **×** beside its name above the movement
+control. A normal tap on an already selected token keeps it selected. Targeting
+is separate from selection: double-tap a target again to clear that target.
+
 To move with the joystick, touch its centre knob first, then swipe beyond the
 minimum distance. Touching its outer edge does not start movement. Choose
 **D-pad** in Scene & Controls for one-step directional taps with a brief glow
@@ -159,8 +182,18 @@ on the pressed direction. Its centre image stays still. Hex scenes use a
 matching hex-shaped control with six native directions; square and gridless
 scenes have eight directions. The compact D-pad fits around the token portrait
 and takes up the same space as the joystick. Native movement, walls, pause
-rules, visibility, and ownership still apply. Doors and supported interactive scenery retain
-their configured native interactions.
+rules, visibility, and ownership still apply. Doors and supported interactive
+scenery retain their configured native interactions.
+
+From left to right: the eight-direction D-pad on a square grid, then the
+six-direction controls for row-oriented and column-oriented hex grids.
+The joystick also changes shape to match either hex orientation.
+
+<p align="center">
+  <img src="docs/screenshots/scene-dpad-square.jpg" alt="Compact eight-direction D-pad surrounding the selected token portrait on a square-grid Scene" width="240">
+  <img src="docs/screenshots/scene-dpad-hex-rows.jpg" alt="Six-direction D-pad with a point-topped hexagonal outline on a row-oriented hex Scene" width="240">
+  <img src="docs/screenshots/scene-dpad-hex-columns.jpg" alt="Six-direction D-pad with a flat-topped hexagonal outline on a column-oriented hex Scene" width="240">
+</p>
 
 Eligible Actor portraits and chooser rows offer contextual token placement;
 Tablet Split also supports portrait placement onto the Scene. Native measured
@@ -244,6 +277,11 @@ Scene or want less graphics work and battery use. Sheets, chat, and journal
 reading remain available; map-dependent actions require Canvas. Accept
 Foundry's reload flow before assessing a Canvas or graphics change.
 
+Some third-party automation needs the Canvas even for item or spell use.
+In the tested v14 module setup, item use with Canvas disabled could fail in
+Foundry's desktop interface as well as VE Mobile. Keep **Disable game canvas**
+off when using those workflows.
+
 <p align="center">
   <img src="docs/screenshots/settings-performance.png" alt="Scene memory warnings and mobile graphics profile controls in Settings" width="300">
 </p>
@@ -262,10 +300,13 @@ it. Temporary graphics changes have restoration and recovery controls.
 
 Declared minimums describe compatibility policy; they do not mean every version
 in that range has been tested. Live checks covered Foundry 13.351 with D&D5e
-5.3.3 and Foundry 14.369 with D&D5e 6.0.6. Phone and tablet acceptance is
-complete for the corrected Chat workflows. Verification covers the recorded
-workflows; Scene Levels and multilevel maps remain outside the verified scope.
-Other game systems are not advertised as supported here.
+5.3.3 and Foundry 14.369 with D&D5e 6.0.6. Tested workflows include Chat,
+Scene menus, joystick and D-pad movement on square, hex and gridless maps,
+automatic return to Scene with action summaries, and Foundry v14's native
+Scene level selection. The 1.0.5 candidate was also accepted after physical
+device testing and includes the compact D-pad and Scene visibility fix.
+This does not certify every multilevel-map or third-party module
+combination. Other game systems are not advertised as supported here.
 
 You need access to a running Foundry world, an authenticated user account, and
 a browser that can run that world. Live Scene use also needs working Canvas
@@ -317,14 +358,11 @@ Confirm or Cancel control when a placement asks for a decision.
 
 ## Installation
 
-Install VE Mobile with this module manifest URL:
-
-```text
-https://github.com/Silvestrae/ve-mobile/releases/latest/download/module.json
-```
+Install VE Mobile using the [module installation manifest](https://github.com/Silvestrae/ve-mobile/releases/latest/download/module.json).
+Copy that link's address for Foundry's installer.
 
 1. In Foundry's **Setup** screen, open **Add-on Modules → Install Module**.
-2. Paste the public link into **Manifest URL** and select **Install**.
+2. Paste the copied link address into **Manifest URL** and select **Install**.
 3. Launch your D&D5e world and enable **VE Mobile** in **Manage Modules**.
 4. Fully reload Foundry, then open the world in your phone or tablet browser.
 
@@ -351,9 +389,30 @@ repeat speed, automatic return to Scene after actions, action bar choice,
 action summaries, and the combat carousel. Reload prompts identify changes
 that need a full Foundry reload.
 
+**Module Overlays (Experimental)** lets you show supported third-party controls
+above the mobile interface. Open this section in Settings and enable the
+individual overlays you want. Turn an overlay off there to hide it in mobile
+mode. Availability depends on which modules are installed; complex desktop
+controls may still be awkward on a small screen.
+
 The desktop-return control leaves VE for the current page without changing the
 saved Mobile Mode. Select **Desktop** in Mobile Mode when you want it to remain
 off after a reload.
+
+## Getting Unstuck
+
+- If the Scene or session looks out of date, use the reconnect/resync controls
+  and let the loading steps finish. If recovery cannot complete, use
+  **Reload Foundry** when offered.
+- If graphics stop working, follow the **Graphics recovery** prompt. A lighter
+  graphics profile may help on a device struggling with a demanding Scene.
+  Accept any required reload before checking the result.
+- To use a native screen that needs more space, use the desktop-return control.
+  This lasts for the current page. Choose **Desktop** in Mobile Mode to keep
+  VE off after reloading.
+- If a character, token or action is missing, check with your GM about
+  permissions, the viewed Scene and level, and whether the Canvas is enabled.
+  See [Reporting Bugs](#reporting-bugs) if the problem continues.
 
 ## Reporting Bugs
 
