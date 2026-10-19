@@ -59,11 +59,31 @@
         "STALE_SCENE": "Die aktive Szene wurde geändert",
         "TARGET_MISSING": "Dieser Token ist nicht mehr verfügbar",
         "MOVEMENT_BUSY": "Warte, bis der aktuelle Schritt abgeschlossen ist",
-        "Failed": "Tokenbewegung fehlgeschlagen"
+        "Failed": "Tokenbewegung fehlgeschlagen",
+        "Label": "{name} in {count} Richtungen bewegen",
+        "Step": "Nach {direction} bewegen",
+        "North": "Norden",
+        "NorthEast": "Nordosten",
+        "East": "Osten",
+        "SouthEast": "Südosten",
+        "South": "Süden",
+        "SouthWest": "Südwesten",
+        "West": "Westen",
+        "NorthWest": "Nordwesten",
+        "InvalidAngle": "Ungültiger Bewegungswinkel."
       },
       "Unnamed": "Unbenannte Szene",
       "NoActive": "Keine aktive Szene",
-      "UnnamedFolder": "Unbenannter Ordner"
+      "UnnamedFolder": "Unbenannter Ordner",
+      "Levels": {
+        "Show": "Ebenen von {name} anzeigen",
+        "Hide": "Ebenen von {name} ausblenden",
+        "List": "Ebenen in {name}",
+        "Inactive": "Diese Szenenebenenauswahl ist nicht mehr aktiv.",
+        "CanvasUnavailable": "Öffne die Karte und warte, bis sie geladen ist, bevor du eine Ebene auswählst.",
+        "Unavailable": "Diese Szenenebene ist nicht mehr verfügbar.",
+        "NotViewed": "Foundry konnte die ausgewählte Szenenebene nicht öffnen."
+      }
     },
     "Settings": {
       "DesktopMobileNotice": "Steuerungen für Smartphone und Tablet sind in diesen Modi verfügbar. Deine Einstellungen werden gespeichert; eine Änderung des mobilen Modus lädt Foundry neu.",
@@ -597,6 +617,19 @@
       "FcsAutoSoftOverride": {
         "Name": "VE-Grafikprofil hat Vorrang vor Force Client Settings",
         "Hint": "Wenn aktiviert, liefert die seitenlokale Leseüberschreibung von VE Mobile die Grafikwerte, die das aktive Speicherschutzprofil benötigt, selbst wenn Force Client Settings andere Werte vorgibt."
+      },
+      "MovementControl": {
+        "Name": "Bewegungssteuerung",
+        "Hint": "Joystick mit Start in der Mitte oder Richtungstasten. Hex-Szenen verwenden sechs native Richtungen.",
+        "Joystick": "Steuerknüppel",
+        "Dpad": "Steuerkreuz"
+      },
+      "ActionSceneReturn": {
+        "Name": "Nach Aktionen zur Szene zurückkehren",
+        "Hint": "Nur Telefon und Tablet im Vollbild. Rückkehr beim Start einer nativen Aktion. Geteilte Ansicht bleibt unverändert. Die Karte muss verfügbar sein.",
+        "Always": "Immer",
+        "Combat": "Nur im Kampf",
+        "Off": "Aus"
       }
     },
     "Character": {

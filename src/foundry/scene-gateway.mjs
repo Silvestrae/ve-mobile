@@ -29,7 +29,7 @@ export function isSceneViewEligible(scene) {
  * Folder and entry ordering is applied by the presenter from the collection's
  * root sorting mode and each Folder's own sorting mode.
  */
-export function nativeSceneDirectorySnapshot(game, riskForScene = () => null, risksForScenes = null) {
+export function nativeSceneDirectorySnapshot(game, riskForScene = () => null, risksForScenes = null, { levelSelectionAvailable = true, readLevels = nativeSceneLevelSnapshot } = {}) {
   const records = [];
   const scenes = collectionValues(game?.scenes).filter(isSceneViewEligible);
   const risks = typeof risksForScenes === "function" ? risksForScenes(scenes.map((scene) => scene.id)) : null;
@@ -44,6 +44,8 @@ export function nativeSceneDirectorySnapshot(game, riskForScene = () => null, ri
       visible: Boolean(scene.visible),
       eligible: true,
       contextActions: Boolean(game?.user?.isGM),
+      levels: readLevels(scene),
+      levelSelectionAvailable,
       navOrder: Number(scene.navOrder) || 0,
       sort: Number(scene.sort) || 0,
       rootSorting: sortingMode(game?.scenes?.sortingMode),
@@ -67,6 +69,10 @@ export function createFoundrySceneGateway({
   getWindow = () => globalThis.window,
   getConnectionGeneration = () => 0,
   getMode = () => "desktop",
+  getSceneManager = (scene) => {
+    const canvas = getCanvas();
+    return canvas?.scene === scene ? canvas.manager : globalThis.foundry?.canvas?.Canvas?.getSceneManager?.(scene);
+  },
   createPointerEvent = (type, init) => new PointerEvent(type, init),
   longPressMs = LONG_PRESS_MS,
   setTimeoutFn = globalThis.setTimeout,
@@ -82,6 +88,33 @@ export function createFoundrySceneGateway({
   let presentationGeneration = 0;
   let contextMenu = null;
   let contextMenuSequence = 0;
+  let levelViewPending = false;
+  // Native v14 caches token-derived level access on the Scene; Actor ownership
+  // changes do not clear that native cache. Keep a small, gateway-owned read
+  // cache from fresh permissions instead, invalidated by source/policy hooks.
+  // Commands bypass it before/after every async boundary. Never mutate Scene
+  // caches or documents, and preserve the native SceneManager override.
+  const levelAccess = new Map();
+  const readAvailableLevels = (scene, fresh = false) => {
+    const game = getGame();
+    const prior = levelAccess.get(scene);
+    let base;
+    if (!fresh && prior?.world === game?.world && prior.worldId === game?.world?.id && prior.user === game?.user
+      && prior.userId === game?.user?.id && prior.isGM === Boolean(game?.user?.isGM)
+      && prior.generation === getConnectionGeneration()) base = prior.base;
+    else {
+      base = freshNativeBaseLevels(scene, game);
+      if (levelAccess.size >= 256) levelAccess.delete(levelAccess.keys().next().value);
+      levelAccess.set(scene, { world: game?.world, worldId: game?.world?.id, user: game?.user, userId: game?.user?.id,
+        isGM: Boolean(game?.user?.isGM), generation: getConnectionGeneration(), base });
+    }
+    // Like core, only cache the expensive token-derived base. Managers can
+    // change policy through their own runtime state without document hooks.
+    const available = new Set(base);
+    const managed = typeof scene?._getAvailableLevels === "function" ? getSceneManager(scene)?._getAvailableLevels?.(available) : null;
+    return Array.from(managed instanceof Set ? managed : available)
+      .filter(level => level?.id && scene.levels.get(level.id) === level);
+  };
   return Object.freeze({
     snapshot() {
       const canvas = getCanvas();
@@ -90,6 +123,7 @@ export function createFoundrySceneGateway({
       const canvasReady = Boolean(!noCanvas && canvas?.ready && canvas?.stage && scene);
       return Object.freeze({
         id: String(scene?.id ?? ""),
+        levelId: String(canvas?.level?.id ?? ""),
         name: String(scene?.name ?? localizeFoundry("VEMOBILE.Scene.NoActive", "No active scene")),
         canvasReady,
         canvasDisabled: noCanvas,
@@ -100,11 +134,37 @@ export function createFoundrySceneGateway({
     },
 
     navigationSnapshot() {
-      return nativeSceneDirectorySnapshot(getGame(), riskForScene, risksForScenes);
+      const records = nativeSceneDirectorySnapshot(getGame(), riskForScene, risksForScenes, {
+        readLevels: scene => nativeSceneLevelSnapshot(scene, () => readAvailableLevels(scene))
+      });
+      if (!records.some(record => record.levels.length)) return records;
+      const canvas = getCanvas();
+      // Core fires canvasReady before it clears loading after awaited Region
+      // events. Presentation follows ready; execution still rejects loading.
+      const available = Boolean(canvas?.ready && getGame()?.settings?.get?.("core", "noCanvas") !== true);
+      return available ? records : Object.freeze(records.map(record => Object.freeze({ ...record, levelSelectionAvailable: false })));
     },
 
+    notifyError(error) { getUi()?.notifications?.warn?.(String(error?.message ?? error)); },
+
     watchSceneNavigation(scope, onChange) {
-      for (const hook of ["createScene", "updateScene", "deleteScene"]) scope?.hook?.(hook, () => onChange?.());
+      const invalidate = (viewChanged = false) => { levelAccess.clear(); onChange?.({ viewChanged: viewChanged === true }); };
+      scope?.own?.(() => levelAccess.clear());
+      for (const hook of ["createScene", "updateScene", "deleteScene"]) scope?.hook?.(hook, invalidate);
+      for (const hook of ["createLevel", "updateLevel", "deleteLevel", "createToken", "deleteToken", "createActor", "deleteActor"]) {
+        scope?.hook?.(hook, invalidate);
+      }
+      for (const hook of ["canvasReady", "canvasTearDown"]) scope?.hook?.(hook, () => invalidate(true));
+      scope?.hook?.("updateToken", (_token, changes = {}) => {
+        if (["level", "actorId", "actorLink", "ownership"].some(key => key in changes)
+          || changes.delta?.ownership || Object.keys(changes).some(key => key.startsWith("delta.ownership"))) invalidate();
+      });
+      scope?.hook?.("updateActor", (_actor, changes = {}) => {
+        if (Object.keys(changes).some(key => key === "ownership" || key.startsWith("ownership."))) invalidate();
+      });
+      scope?.hook?.("updateUser", (user, changes = {}) => {
+        if (user?.id === getGame()?.user?.id && ["role", "permissions", "character"].some(key => key in changes)) invalidate();
+      });
       for (const hook of ["createFolder", "updateFolder", "deleteFolder"]) {
         scope?.hook?.(hook, (folder) => {
           if (folder?.type === "Scene") onChange?.();
@@ -131,8 +191,8 @@ export function createFoundrySceneGateway({
       const options = descriptors.flatMap((descriptor, index) => nativeSceneContextEligible(descriptor, bridge.anchor)
         ? [Object.freeze({
           id: String(index),
-          label: localizeSceneLabel(game, descriptor.name),
-          icon: String(descriptor.icon ?? "")
+          label: localizeSceneLabel(game, descriptor.label ?? descriptor.name),
+          icon: sceneContextIconClasses(descriptor.icon)
         })]
         : []);
       if (!options.length) {
@@ -140,7 +200,8 @@ export function createFoundrySceneGateway({
         return Object.freeze({ ok: true, action: "unavailable" });
       }
       const menuId = `scene-menu-${++contextMenuSequence}`;
-      contextMenu = { menuId, sceneId: id, bridge };
+      contextMenu = { menuId, sceneId: id, bridge, session: { worldId: game.world?.id, userId: game.user.id, ...expected },
+        options: new Map(options.map(option => [option.id, `${option.label}\n${option.icon}`])), busy: false };
       return Object.freeze({
         ok: true,
         action: "opened",
@@ -159,6 +220,8 @@ export function createFoundrySceneGateway({
       if (!current || String(request?.menuId ?? "") !== current.menuId) return Object.freeze({ ok: true, action: "stale" });
       const game = getGame();
       assertSceneSession(game, expected);
+      assertSceneSession(game, current.session);
+      if (current.busy) return Object.freeze({ ok: true, action: "busy" });
       const scene = resolveScene(game, current.sceneId);
       if (!scene || !isNativeSceneDirectoryEligible(scene)) {
         closeContextMenu();
@@ -169,21 +232,35 @@ export function createFoundrySceneGateway({
         return Object.freeze({ ok: true, action: "unavailable" });
       }
       const descriptors = nativeSceneContextDescriptors(getUi()?.nav, getHooks());
-      const index = Number.parseInt(String(request?.optionId ?? ""), 10);
+      const rawIndex = String(request?.optionId ?? "");
+      const index = /^(?:0|[1-9]\d*)$/u.test(rawIndex) ? Number(rawIndex) : Number.NaN;
       const descriptor = Number.isInteger(index) ? descriptors[index] : null;
-      if (!descriptor || typeof descriptor.callback !== "function" || !nativeSceneContextEligible(descriptor, current.bridge.anchor)) {
+      const identity = descriptor && `${localizeSceneLabel(game, descriptor.label ?? descriptor.name)}\n${sceneContextIconClasses(descriptor.icon)}`;
+      if (!descriptor || current.options.get(String(index)) !== identity || !nativeSceneContextEligible(descriptor, current.bridge.anchor)) {
         closeContextMenu();
         return Object.freeze({ ok: true, action: "unavailable" });
       }
+      current.busy = true;
       try {
-        await Promise.resolve(descriptor.callback(current.bridge.anchor));
+        if (typeof descriptor.onClick === "function") {
+          const EventType = getWindow()?.PointerEvent ?? globalThis.Event;
+          await Promise.resolve(descriptor.onClick.call(descriptor, new EventType("click"), current.bridge.anchor));
+        } else await Promise.resolve(descriptor.callback.call(descriptor, current.bridge.anchor));
         return Object.freeze({ ok: true, action: "selected", sceneId: current.sceneId, optionId: String(index) });
       } finally {
-        closeContextMenu();
+        closeContextMenu({ menuId: current.menuId });
       }
     },
 
     closeSceneContextMenu: closeContextMenu,
+
+    async viewSceneLevel(request, expected = {}) {
+      const levelId = sceneIdentifier(request?.levelId);
+      if (levelViewPending) throw new SceneNavigationError("COMMAND_BUSY", localizeFoundry("VEMOBILE.Scene.Levels.CanvasUnavailable", "Open the map and wait for it to load before choosing a level."));
+      levelViewPending = true;
+      try { return await this.viewScene(request?.sceneId, { ...expected, levelId }); }
+      finally { levelViewPending = false; }
+    },
 
     async viewScene(sceneId, expected = {}) {
       const id = String(sceneId ?? "").trim();
@@ -191,6 +268,25 @@ export function createFoundrySceneGateway({
       const game = getGame();
       if (!game?.user || !game?.scenes) throw new SceneNavigationError("SESSION_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.SceneGateway.TheFoundrySceneCollectionIsUnavailable", "The Foundry Scene collection is unavailable."));
       const session = { worldId: game.world?.id, userId: game.user.id, ...expected };
+      const lifecycle = { generation: getConnectionGeneration(), mode: getMode() };
+      const assertLevel = (target) => {
+        if (!session.levelId) return;
+        if (!target || !isSceneViewEligible(target)) {
+          throw new SceneNavigationError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Scene.Levels.Unavailable", "That Scene level is no longer available."));
+        }
+        if ((typeof session.isCurrent === "function" && !session.isCurrent()) || getMode() === "desktop" || getMode() !== lifecycle.mode || getConnectionGeneration() !== lifecycle.generation
+          || (session.connectionGeneration !== undefined && session.connectionGeneration !== getConnectionGeneration())) {
+          throw new SceneNavigationError("STALE_SESSION", localizeFoundry("VEMOBILE.Scene.Levels.Inactive", "This Scene level control is no longer active."));
+        }
+        const canvas = getCanvas();
+        if (getGame()?.settings?.get?.("core", "noCanvas") === true || !canvas?.ready || canvas.loading) {
+          throw new SceneNavigationError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Scene.Levels.CanvasUnavailable", "Open the map and wait for it to load before choosing a level."));
+        }
+        const level = target?.levels?.get?.(session.levelId);
+        if (!level || !readAvailableLevels(target, true).includes(level)) {
+          throw new SceneNavigationError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Scene.Levels.Unavailable", "That Scene level is no longer available."));
+        }
+      };
       if (expected.worldId && String(game.world?.id ?? "") !== String(expected.worldId)) {
         throw new SceneNavigationError("STALE_SESSION", localizeFoundry("VEMOBILE.Interface.SceneGateway.TheActiveWorldChangedBeforeTheSceneCouldOpen", "The active world changed before the Scene could open."));
       }
@@ -203,6 +299,7 @@ export function createFoundrySceneGateway({
         throw new SceneNavigationError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.SceneGateway.YouNoLongerHaveAccessToThatSceneFrom", "You no longer have access to that Scene from the Scene Directory."));
       }
       if (typeof scene.view !== "function") throw new SceneNavigationError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.SceneGateway.FoundryCannotViewThatScene", "Foundry cannot view that Scene."));
+      assertLevel(scene);
       if (typeof preflightScene === "function") {
         const preflight = await preflightScene(scene, { source: "user", allowCancel: true });
         if (preflight?.action === "cancel") return Object.freeze({ sceneId: id, viewed: false, cancelled: true });
@@ -224,8 +321,17 @@ export function createFoundrySceneGateway({
       if (!current) throw new SceneNavigationError("TARGET_MISSING", localizeFoundry("VEMOBILE.Interface.SceneGateway.ThatSceneIsNoLongerAvailable", "That Scene is no longer available."));
       if (!isSceneViewEligible(current)) throw new SceneNavigationError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.SceneGateway.YouNoLongerHaveAccessToThatScene", "You no longer have access to that Scene."));
       if (typeof current.view !== "function") throw new SceneNavigationError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.SceneGateway.FoundryCannotViewThatScene", "Foundry cannot view that Scene."));
-      await current.view();
-      return Object.freeze({ sceneId: id, viewed: true });
+      assertLevel(current);
+      if (session.levelId) await current.view({ level: session.levelId });
+      else await current.view();
+      assertSceneSession(getGame(), session);
+      if (session.levelId) {
+        assertLevel(resolveScene(getGame(), id));
+        if (String(getCanvas()?.scene?.id ?? "") !== id || String(getCanvas()?.level?.id ?? "") !== session.levelId) {
+          throw new SceneNavigationError("TARGET_MISSING", localizeFoundry("VEMOBILE.Scene.Levels.NotViewed", "Foundry could not open the selected Scene level."));
+        }
+      }
+      return Object.freeze({ sceneId: id, ...(session.levelId ? { levelId: session.levelId } : {}), viewed: true });
     },
 
     interactionState() {
@@ -613,7 +719,8 @@ export function createFoundrySceneGateway({
     }
   });
 
-  function closeContextMenu() {
+  function closeContextMenu(request) {
+    if (request?.menuId && request.menuId !== contextMenu?.menuId) return;
     const current = contextMenu;
     contextMenu = null;
     current?.bridge?.cleanup?.();
@@ -713,11 +820,50 @@ function nativeSceneContextDescriptors(navigation, hooks) {
 
 function nativeSceneContextEligible(descriptor, anchor) {
   try {
-    if (typeof descriptor?.condition === "function") return descriptor.condition(anchor) !== false;
-    return descriptor?.condition !== false;
+    if (!descriptor || !(descriptor.label ?? descriptor.name) || !(typeof descriptor.onClick === "function" || typeof descriptor.callback === "function")) return false;
+    for (const key of ["visible", "condition"]) {
+      const value = descriptor[key];
+      if (typeof value === "function" ? !value.call(descriptor, anchor) : value !== undefined && !value) return false;
+    }
+    return !(typeof descriptor.disabled === "function" ? descriptor.disabled.call(descriptor, anchor) : descriptor.disabled);
   } catch {
     return false;
   }
+}
+
+/** V14 supplies class strings; v13 and module extensions may supply an i tag.
+ * Only Font Awesome class tokens cross into the presenter, never raw markup. */
+export function sceneContextIconClasses(value) {
+  const raw = String(value ?? "").trim();
+  const classes = raw.startsWith("<") ? raw.match(/^<i\b[^>]*\bclass\s*=\s*["']([^"']*)["'][^>]*>/iu)?.[1] ?? "" : raw;
+  return classes.split(/\s+/u).filter(token => /^(?:fa[srlbdt]?|fa-[a-z0-9-]+)$/iu.test(token)).join(" ");
+}
+
+function nativeAvailableLevels(scene) {
+  if (!scene?.levels?.get || !("availableLevels" in scene)) return [];
+  return Array.from(scene.availableLevels ?? []).filter(level => level?.id && scene.levels.get(level.id) === level);
+}
+
+/** Core v14 gives every Scene a baseline level. Like native navigation, omit
+ * the disclosure for baseline-only Scenes; never expose inaccessible names. */
+export function nativeSceneLevelSnapshot(scene, readAvailable = () => nativeAvailableLevels(scene)) {
+  if (!(scene?.levels?.size > 1)) return Object.freeze([]);
+  const available = readAvailable();
+  if (available.length < 2) return Object.freeze([]);
+  return Object.freeze(available.toReversed().map(level => Object.freeze({
+    id: String(level.id), name: String(level.name ?? ""), viewed: Boolean(level.isView)
+  })));
+}
+
+/** Fresh equivalent of the inspected v14.369 Scene._getAvailableLevels base
+ * policy. The native public getter caches it across Actor ownership changes.
+ * Token level is committed identity, hence _source matches core's choice. */
+function freshNativeBaseLevels(scene, game) {
+  if (!scene?.levels?.get) return [];
+  if (!game?.user || !scene.levels.sorted || typeof scene._getAvailableLevels !== "function") return nativeAvailableLevels(scene);
+  return Array.from(new Set(game.user.isGM || !scene.tokenVision ? scene.levels.sorted
+    : collectionValues(scene.tokens).filter(token => token.testUserPermission?.(game.user, "OBSERVER"))
+      .map(token => scene.levels.get(token._source?.level)).filter(Boolean).sort((a, b) => a.index - b.index)));
 }
 
 function localizeSceneLabel(game, key) {

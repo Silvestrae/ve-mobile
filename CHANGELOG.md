@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 1.0.5 — 2026-10-19
+
+- Choose Scene levels on Foundry v14 from an expandable list beneath each
+  Scene. More compact Scene rows and a bordered level button keep the list
+  easier to use on a phone. Scenes without levels hide the button.
+- Fix the jumbled Scene three-dot menu on Foundry v14, with readable labels,
+  icons and scrollable actions. Actions added by other modules remain available.
+- Choose joystick or D-pad movement in Scene & Controls. The joystick now
+  requires a touch on its centre followed by a deliberate swipe, preventing
+  accidental movement when touching its outer edge.
+- Add a compact D-pad around the token portrait, with one step per tap and
+  a brief glow on the pressed direction. It takes up the same space as the
+  joystick and keeps the portrait still.
+- Match both movement controls to the Scene grid: eight directions on square
+  and gridless maps, or six directions and a matching shape on hex maps.
+  Fix hex movement when tokens start between grid positions.
+- Add **Return to Scene after actions** for Phone and full-screen Tablet.
+  Choose **Always**, **During combat only**, or **Off**. After using an item,
+  spell or ability, return to the map to follow the action. Tablet Split
+  keeps both panes visible.
+- Keep enabled action summaries above the map after automatic return,
+  including results that arrive later. Dismissed summaries stay dismissed.
+- Fix the blank Scene after viewing some NPC or multiclass sheets, including
+  in Light mode.
+- Improve handling of Scene and level changes during movement or token
+  placement, and restore clear messages when movement is blocked or paused.
+- Translate the new settings into all six supported languages. Foundry v13
+  and D&D5e 5.3 support continue alongside Foundry v14 and D&D5e 6.x.
+
 ## 1.0.4 — 2026-10-19
 
 - Declare Foundry 14.369 and D&D5e 6.0.6 as verified in the module manifest.

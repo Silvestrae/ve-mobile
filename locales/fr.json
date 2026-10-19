@@ -59,11 +59,31 @@
         "STALE_SCENE": "La scène active a changé",
         "TARGET_MISSING": "Ce jeton n’est plus disponible",
         "MOVEMENT_BUSY": "Attendez la fin du déplacement en cours",
-        "Failed": "Le déplacement du jeton a échoué"
+        "Failed": "Le déplacement du jeton a échoué",
+        "Label": "Déplacer {name} dans {count} directions",
+        "Step": "Déplacer vers {direction}",
+        "North": "Nord",
+        "NorthEast": "Nord-est",
+        "East": "Est",
+        "SouthEast": "Sud-est",
+        "South": "Sud",
+        "SouthWest": "Sud-ouest",
+        "West": "Ouest",
+        "NorthWest": "Nord-ouest",
+        "InvalidAngle": "Angle de déplacement invalide."
       },
       "Unnamed": "Scène sans nom",
       "NoActive": "Aucune scène active",
-      "UnnamedFolder": "Dossier sans nom"
+      "UnnamedFolder": "Dossier sans nom",
+      "Levels": {
+        "Show": "Afficher les niveaux de {name}",
+        "Hide": "Masquer les niveaux de {name}",
+        "List": "Niveaux de {name}",
+        "Inactive": "Ce sélecteur de niveau de scène n’est plus actif.",
+        "CanvasUnavailable": "Ouvrez la carte et attendez son chargement avant de choisir un niveau.",
+        "Unavailable": "Ce niveau de scène n’est plus disponible.",
+        "NotViewed": "Foundry n’a pas pu ouvrir le niveau de scène sélectionné."
+      }
     },
     "Settings": {
       "DesktopMobileNotice": "Les commandes Téléphone et Tablette sont disponibles dans ces modes. Vos préférences sont enregistrées et tout changement du mode mobile recharge Foundry.",
@@ -597,6 +617,19 @@
       "FcsAutoSoftOverride": {
         "Name": "Le profil graphique VE est prioritaire sur Force Client Settings",
         "Hint": "Lorsqu’elle est activée, la surcharge de lecture locale à la page de VE Mobile fournit les valeurs graphiques requises par le profil de protection mémoire actif, même si Force Client Settings spécifie d’autres valeurs."
+      },
+      "MovementControl": {
+        "Name": "Commande de déplacement",
+        "Hint": "Choisissez un joystick à contact initial central ou des touches directionnelles. Les scènes hexagonales utilisent six directions natives.",
+        "Joystick": "Manche",
+        "Dpad": "Croix directionnelle"
+      },
+      "ActionSceneReturn": {
+        "Name": "Revenir à la scène après une action",
+        "Hint": "Téléphone et tablette en plein écran uniquement. Retour au début d’une action native. La vue partagée reste inchangée. La carte doit être disponible.",
+        "Always": "Toujours",
+        "Combat": "Pendant le combat uniquement",
+        "Off": "Désactivé"
       }
     },
     "Character": {

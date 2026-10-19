@@ -87,6 +87,7 @@ export function createFoundryCombatGateway({
     return Object.freeze({
       isGM: Boolean(game?.user?.isGM),
       combatId: combat ? String(combat.id ?? "") : null,
+      sceneId: String(combat?.scene?.id ?? combat?.scene ?? ""),
       combatInstanceRevision: instanceRevision,
       started: Boolean(combat?.started),
       round: combat ? Math.max(0, Number(combat.round) || 0) : null,

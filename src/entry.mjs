@@ -481,7 +481,7 @@ if (isGamePage) {
   });
   const templatePlacementGateway = createFoundryTemplatePlacementGateway();
   const nativeTokenPlacementGateway = createNativeTokenPlacementGateway();
-  const actorTokenPlacementGateway = createActorTokenPlacementGateway();
+  const actorTokenPlacementGateway = createActorTokenPlacementGateway({ getConnectionGeneration: () => connectionGeneration.current });
   const movementGateway = createFoundryTokenMovementGateway({
     getConnectionGeneration: () => connectionGeneration.current,
     readRecenterAfterMove: () => preferencesGateway.snapshot().recenterAfterMove,
@@ -733,6 +733,7 @@ if (isGamePage) {
     advanceBootstrap("init");
     const reconcileApplicationPreference = ({ key, value } = {}) => {
       if (modeReloadPending || startupBlocked) return;
+      store.dispatch({ type: "action-navigation-invalidated" });
       if ((key === KEYS.SHOW_ACTION_SUMMARIES && value === false) || key === KEYS.COMPACT_ACTION_SUMMARIES) store.dispatch({ type: "dismiss-action-session" });
       performanceEnabled = readLoggingLevel() === "debug";
       mobilePerformanceAuthority.refresh();

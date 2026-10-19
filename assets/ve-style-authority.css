@@ -71,7 +71,9 @@
       linear-gradient(135deg, color-mix(in srgb, var(--ve-class-deep-primary) 22%, var(--ve-bg)), var(--ve-bg) 43%, color-mix(in srgb, var(--ve-class-deep-secondary) 27%, var(--ve-bg))) !important;
   }
 
-  .ve-mobile-app[data-ve-style-authority][data-route="scene"] {
+  /* Match the light NPC/multiclass palette specificity so their background
+   * images cannot cover the live canvas after a character publication. */
+  .ve-mobile-app[data-ve-style-authority][data-route="scene"][data-theme] {
     background: transparent !important;
   }
 

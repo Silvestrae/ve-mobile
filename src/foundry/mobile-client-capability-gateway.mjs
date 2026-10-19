@@ -225,23 +225,27 @@ export function createMobileClientCapabilityGateway({
   function wrapSceneActivationEntries(entries) {
     if (!Array.isArray(entries)) return;
     for (const entry of entries) {
-      if (entry?.name !== "SCENE.Activate" || typeof entry.callback !== "function" || wrappedEntries.has(entry)) continue;
-      const nativeActivate = entry.callback;
-      const wrapper = function (element, ...args) {
+      const action = typeof entry?.onClick === "function" ? "onClick" : "callback";
+      if ((entry?.label ?? entry?.name) !== "SCENE.Activate" || typeof entry[action] !== "function" || wrappedEntries.has(entry)) continue;
+      const nativeActivate = entry[action];
+      const wrapper = function (...args) {
+        const element = args[action === "onClick" ? 1 : 0];
         const sceneId = String(element?.dataset?.sceneId ?? element?.dataset?.entryId ?? "");
         const scene = getGame()?.scenes?.get?.(sceneId);
         if (!scene) return Promise.resolve(Object.freeze({ action: "cancel", reason: "scene-missing" }));
         const isEligible = () => {
           if (String(element?.dataset?.sceneId ?? element?.dataset?.entryId ?? "") !== sceneId) return false;
-          try { return typeof entry.condition === "function" ? entry.condition.call(entry, element) !== false : entry.condition !== false; }
+          try {
+            return ["condition", "visible"].every(key => typeof entry[key] === "function" ? Boolean(entry[key].call(entry, element)) : entry[key] === undefined || Boolean(entry[key]));
+          }
           catch { return false; }
         };
-        return api.preflightActivation(scene, () => nativeActivate.call(this, element, ...args), isEligible).catch((error) => {
+        return api.preflightActivation(scene, () => nativeActivate.call(this, ...args), isEligible).catch((error) => {
           diagnostics?.record?.("error", `Desktop mobile-client Scene activation failed for ${sceneId}`, error);
           return Object.freeze({ action: "error", sceneId });
         });
       };
-      entry.callback = wrapper;
+      entry[action] = wrapper;
       wrappedEntries.add(entry);
     }
   }

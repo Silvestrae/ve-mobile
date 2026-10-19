@@ -4,11 +4,23 @@ import { resolveActorSource } from "./character-source.mjs";
 export function createActorTokenPlacementGateway({
   getGame = () => globalThis.game,
   getCanvas = () => globalThis.canvas,
-  getHooks = () => globalThis.Hooks
+  getHooks = () => globalThis.Hooks,
+  getConnectionGeneration = () => 0
 } = {}) {
   let preview = null;
   let creating = false;
   let previewGeneration = 0;
+  let viewGeneration = 0;
+  const captureView = canvas => ({ canvas, scene: canvas.scene, stage: canvas.stage, level: canvas.level, generation: viewGeneration,
+    worldId: getGame()?.world?.id, userId: getGame()?.user?.id, connectionGeneration: getConnectionGeneration() });
+  const viewCurrent = view => {
+    const canvas = getCanvas();
+    return canvas === view.canvas && canvas?.ready && !canvas.loading && canvas.scene === view.scene
+      && canvas.stage === view.stage && canvas.level === view.level && viewGeneration === view.generation
+      && getGame()?.world?.id === view.worldId && getGame()?.user?.id === view.userId
+      && getConnectionGeneration() === view.connectionGeneration;
+  };
+  const cancelPreview = () => { previewGeneration += 1; viewGeneration += 1; preview = null; };
   const error = (key, fallback) => {
     const id = `VEMOBILE.Scene.ActorToken.${key}`;
     const localized = getGame()?.i18n?.localize?.(id);
@@ -19,7 +31,7 @@ export function createActorTokenPlacementGateway({
     const game = getGame();
     const canvas = getCanvas();
     if (!game?.user?.can?.("TOKEN_CREATE") || !canvas?.ready || !canvas?.stage
-      || !canvas?.scene || String(canvas.scene.id) !== String(sceneId)
+      || canvas.loading || !canvas?.scene || String(canvas.scene.id) !== String(sceneId)
       || !canvas?.tokens?.getMaxSort || !canvas?.canvasCoordinatesFromClient
       || !globalThis.CONFIG?.Token?.objectClass?._getDropActorPosition) return null;
     const source = resolveActorSource(sourceUuid, { game });
@@ -46,6 +58,7 @@ export function createActorTokenPlacementGateway({
     if (!validate()) return false;
     const target = resolve(sourceUuid, sceneId);
     if (!target) throw error("Unavailable", "Token creation is no longer available for this Actor and Scene.");
+    const view = captureView(target.canvas);
     const point = pointAt(target.canvas, clientPoint);
     if (!point) throw error("OutsideScene", "Choose a location on the visible Scene.");
     creating = true;
@@ -62,7 +75,7 @@ export function createActorTokenPlacementGateway({
         || !target.canvas.dimensions?.rect?.contains?.(data.x, data.y)) return false;
       // Revalidate after third-party hooks; they may change world state.
       const current = resolve(sourceUuid, sceneId);
-      if (!validate() || !current || current.actor !== target.actor) throw error("Unavailable", "Token creation became unavailable.");
+      if (!validate() || !viewCurrent(view) || !current || current.actor !== target.actor) throw error("Unavailable", "Token creation became unavailable.");
       const sort = Math.max(current.canvas.tokens.getMaxSort() + 1, 0);
       // getTokenDocument is Foundry's prototype-token preparation. Supplying
       // the preview's resolved artwork preserves randomImg while re-reading
@@ -71,7 +84,7 @@ export function createActorTokenPlacementGateway({
       if (appearance?.img) override.texture = { src: appearance.img };
       const token = await current.actor.getTokenDocument(override, { parent: current.canvas.scene });
       const afterPreparation = resolve(sourceUuid, sceneId);
-      if (!validate() || !afterPreparation || afterPreparation.actor !== current.actor || afterPreparation.canvas.scene !== current.canvas.scene) {
+      if (!validate() || !viewCurrent(view) || !afterPreparation || afterPreparation.actor !== current.actor) {
         throw error("Unavailable", "Token creation became unavailable.");
       }
       if (appearance && (String(token.texture?.src ?? "") !== appearance.img
@@ -82,6 +95,9 @@ export function createActorTokenPlacementGateway({
         { x: data.x, y: data.y }, { snap: true });
       token.updateSource(position);
       current.canvas.tokens.activate();
+      if (!validate() || !viewCurrent(view) || resolve(sourceUuid, sceneId)?.actor !== current.actor) {
+        throw error("Unavailable", "Token creation became unavailable.");
+      }
       return await token.constructor.create(token, { parent: current.canvas.scene }) || false;
     } finally {
       creating = false;
@@ -90,6 +106,11 @@ export function createActorTokenPlacementGateway({
 
   return Object.freeze({
     eligibility,
+    watchCanvas(scope) {
+      scope.hook("canvasTearDown", cancelPreview);
+      scope.hook("canvasReady", cancelPreview);
+      scope.own(cancelPreview);
+    },
     drop: (sourceUuid, sceneId, point, validate) => nativeDrop(sourceUuid, sceneId, point, null, validate),
     async prepare(sourceUuid, sceneId, validate = () => true) {
       if (preview) return null;
@@ -97,18 +118,19 @@ export function createActorTokenPlacementGateway({
       if (!validate()) return null;
       const target = resolve(sourceUuid, sceneId);
       if (!target || typeof target.actor.getTokenDocument !== "function") return null;
+      const view = captureView(target.canvas);
       const token = await target.actor.getTokenDocument({}, { parent: target.canvas.scene });
       const afterPreparation = resolve(sourceUuid, sceneId);
-      if (generation !== previewGeneration || !validate() || !afterPreparation
-        || afterPreparation.actor !== target.actor || afterPreparation.canvas.scene !== target.canvas.scene) return null;
-      preview = { sourceUuid, sceneId, token, point: null };
+      if (generation !== previewGeneration || !validate() || !viewCurrent(view) || !afterPreparation
+        || afterPreparation.actor !== target.actor) return null;
+      preview = { sourceUuid, sceneId, token, point: null, view };
       return Object.freeze({ img: String(token.texture?.src ?? target.actor.img ?? ""),
         width: Number(token.width) || 1, height: Number(token.height) || 1 });
     },
     previewAt(clientPoint = null) {
       if (!preview) return null;
       const target = resolve(preview.sourceUuid, preview.sceneId);
-      if (!target) return null;
+      if (!target || !viewCurrent(preview.view)) return null;
       if (clientPoint) {
         const point = pointAt(target.canvas, clientPoint);
         if (!point) return null;
@@ -129,13 +151,13 @@ export function createActorTokenPlacementGateway({
     async commit(sourceUuid, sceneId, validate) {
       if (!preview || preview.sourceUuid !== sourceUuid || preview.sceneId !== sceneId || !preview.point) return false;
       const target = resolve(sourceUuid, sceneId);
-      if (!target) throw error("Unavailable", "Token placement is no longer available.");
+      if (!target || !viewCurrent(preview.view)) throw error("Unavailable", "Token placement is no longer available.");
       const center = target.canvas.clientCoordinatesFromCanvas(preview.point);
       return nativeDrop(sourceUuid, sceneId, center, {
         img: String(preview.token.texture?.src ?? ""),
         width: Number(preview.token.width), height: Number(preview.token.height)
       }, validate);
     },
-    cancel() { previewGeneration += 1; preview = null; }
+    cancel: cancelPreview
   });
 }

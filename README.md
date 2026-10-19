@@ -1,8 +1,8 @@
 # <img src="Icon.png" alt="VE Foundry Client logo" height="40">  VE Mobile
 
 [![Latest release](https://img.shields.io/github/v/release/Silvestrae/ve-mobile?label=Release)](https://github.com/Silvestrae/ve-mobile/releases/latest)
-![Foundry VTT 13 and 14 compatible](https://img.shields.io/badge/Foundry_VTT-13_%26_14_compatible-orange)
-![D&D5e 5.3 and 6.x compatible](https://img.shields.io/badge/D%26D5e-5.3_%26_6.x_compatible-red)
+![Foundry VTT 13 and 14](https://img.shields.io/badge/Foundry_VTT-13_%26_14-orange)
+![D&D5e 5.3 and 6.x](https://img.shields.io/badge/D%26D5e-5.3_%26_6.x-red)
 ![Phone and Tablet](https://img.shields.io/badge/Phone_%26_Tablet-supported-blue)
 [![MIT License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/Silvestrae/ve-mobile/total?label=Downloads&color=blue)](https://github.com/Silvestrae/ve-mobile/releases)
@@ -64,7 +64,7 @@ provides the touch interface for using them.
 | Layouts | Use Phone, Tablet Split, or Tablet Full, with light and dark presentation. |
 | Actor sheets | Browse PCs, NPCs, Groups, and Vehicles through dedicated layouts and a folder-based chooser. |
 | Gameplay | Roll checks and saves, use items and spells, manage supported resources, and open native action dialogs. |
-| Scene | Pan, zoom, select, target, and move permitted tokens with touch controls and a joystick. |
+| Scene | Pan, zoom, select, target, choose available Scene levels, and move permitted tokens with a joystick or D-pad. |
 | Action bar | Choose Character Quickbar or Foundry Hotbar, with ten slots per page and five pages. |
 | Reading and communication | Use native chat, read journals and images, and follow combat turn order. |
 | Mobile operation | Use Keep Screen Awake, graphics profiles, no-Canvas mode, connection status, and recovery tools. |
@@ -152,9 +152,15 @@ token controls. Tap a token you control to select it; quickly double-tap the
 same visible token to toggle targeting. Hold an owned token, then release to
 open its native controls, or drag after the hold activates to move it.
 
-The joystick moves the selected token. Native movement, walls, pause rules,
-visibility, and ownership still apply. Doors and supported interactive scenery
-retain their configured native interactions.
+To move with the joystick, touch its centre knob first, then swipe beyond the
+minimum distance. Touching its outer edge does not start movement. Choose
+**D-pad** in Scene & Controls for one-step directional taps with a brief glow
+on the pressed direction. Its centre image stays still. Hex scenes use a
+matching hex-shaped control with six native directions; square and gridless
+scenes have eight directions. The compact D-pad fits around the token portrait
+and takes up the same space as the joystick. Native movement, walls, pause
+rules, visibility, and ownership still apply. Doors and supported interactive scenery retain
+their configured native interactions.
 
 Eligible Actor portraits and chooser rows offer contextual token placement;
 Tablet Split also supports portrait placement onto the Scene. Native measured
@@ -164,6 +170,19 @@ permissions.
 
 The Scene requires an enabled Canvas and live map access. Tablet Split keeps
 that Scene alongside the sheet or chat shown in the opening screenshot.
+
+On Foundry v14, expand a Scene's level button in the Scene chooser to see and
+select its available levels. Scenes without levels have no level button.
+The three-dot menu provides the Scene actions available to you.
+
+**Return to Scene after actions** can return Phone and full-screen Tablet to
+the map when a native action starts: **Always**, **During combat only**, or
+**Off** (default). It applies to item, spell, feature and activity use, ability
+checks, saves, skills, tools, initiative and death saves started through VE.
+Native prompts and enabled action summaries remain available above Scene.
+Cancelled actions, resource edits and other users' actions do not trigger a
+return. Tablet Split keeps both panes visible; an unavailable or disabled
+Canvas leaves the current sheet visible.
 
 ## Quickbar, Actions, and Gameplay
 
@@ -327,7 +346,8 @@ configuration screens are designed for desktop; Desktop mode remains available
 when a screen needs more space.
 
 Choose light, dark, or system appearance, sheet colors, and header artwork.
-Controls include joystick placement and repeat speed, action bar choice,
+Controls include joystick or D-pad movement, control placement and joystick
+repeat speed, automatic return to Scene after actions, action bar choice,
 action summaries, and the combat carousel. Reload prompts identify changes
 that need a full Foundry reload.
 

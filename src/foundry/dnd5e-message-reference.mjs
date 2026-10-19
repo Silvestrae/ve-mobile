@@ -22,6 +22,27 @@ export function readDnd5eMessageActivity(message) {
   return messageReference(message, "activity");
 }
 
+/** Native 5.x flags and 6.x typed messages describe the same roll differently.
+ * Core initiative cards use a core flag in both Foundry versions.
+ */
+export function readDnd5eMessageRoll(message) {
+  const source = message?._source ?? message;
+  const flags = message?.flags ?? source?.flags ?? {};
+  const legacy = flags.dnd5e?.roll ?? {};
+  const system = message?.system ?? source?.system ?? {};
+  const messageType = text(message?.type ?? source?.type);
+  const type = flags.core?.initiativeRoll ? "initiative"
+    : system.type === "death" ? "death"
+      : messageType === "save" ? "save"
+        : messageType === "check" ? system.skill ? "skill" : system.tool ? "tool" : "ability"
+          : text(legacy.type ?? system.type);
+  const modern = messageType === "check" || messageType === "save";
+  return Object.freeze({ type,
+    ability: text(modern ? system.ability : legacy.ability ?? system.ability),
+    skill: text(modern ? system.skill : legacy.skillId ?? legacy.skill ?? system.skill),
+    tool: text(modern ? system.tool : legacy.toolId ?? legacy.tool ?? system.tool) });
+}
+
 function messageReference(message, kind) {
   const reference = message?.system?.[kind] ?? message?._source?.system?.[kind]
     ?? message?.flags?.dnd5e?.[kind] ?? message?._source?.flags?.dnd5e?.[kind];

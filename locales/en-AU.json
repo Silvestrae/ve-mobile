@@ -59,11 +59,31 @@
         "STALE_SCENE": "The active scene changed",
         "TARGET_MISSING": "That token is no longer available",
         "MOVEMENT_BUSY": "Wait for the current step to finish",
-        "Failed": "Token movement failed"
+        "Failed": "Token movement failed",
+        "Label": "Move {name} in {count} directions",
+        "Step": "Move {direction}",
+        "North": "North",
+        "NorthEast": "North-east",
+        "East": "East",
+        "SouthEast": "South-east",
+        "South": "South",
+        "SouthWest": "South-west",
+        "West": "West",
+        "NorthWest": "North-west",
+        "InvalidAngle": "Invalid movement angle."
       },
       "Unnamed": "Unnamed Scene",
       "NoActive": "No active scene",
-      "UnnamedFolder": "Unnamed folder"
+      "UnnamedFolder": "Unnamed folder",
+      "Levels": {
+        "Show": "Show levels for {name}",
+        "Hide": "Hide levels for {name}",
+        "List": "Levels in {name}",
+        "Inactive": "This Scene level control is no longer active.",
+        "CanvasUnavailable": "Open the map and wait for it to load before choosing a level.",
+        "Unavailable": "That Scene level is no longer available.",
+        "NotViewed": "Foundry could not open the selected Scene level."
+      }
     },
     "Settings": {
       "DesktopMobileNotice": "Phone and Tablet controls are available in those modes. Your preferences are saved, and changing Mobile Mode reloads Foundry.",
@@ -597,6 +617,19 @@
       "FcsAutoSoftOverride": {
         "Name": "VE graphics profile takes precedence over Force Client Settings",
         "Hint": "When enabled, VE Mobile's page-local read override supplies the graphics values required by the active Memory Protection profile, even if Force Client Settings specifies different values."
+      },
+      "MovementControl": {
+        "Name": "Movement control",
+        "Hint": "Choose a centre-first joystick or directional buttons. Hex scenes use six native directions.",
+        "Joystick": "Joystick",
+        "Dpad": "D-pad"
+      },
+      "ActionSceneReturn": {
+        "Name": "Return to Scene after actions",
+        "Hint": "Phone and full-screen Tablet only. Return when a native action starts; Split keeps both panes visible. Canvas must be available.",
+        "Always": "Always",
+        "Combat": "During combat only",
+        "Off": "Off"
       }
     },
     "Character": {

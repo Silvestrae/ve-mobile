@@ -937,7 +937,7 @@ function metricText(value, suffix, locale = "en") {
 export function groupSettings(fields) {
   const groups = [
     { id: "device", title: "Device & Power", keys: ["mode", "keepScreenAwake"] },
-    { id: "scene", title: "Scene & Controls", keys: ["joystickSide", "recenterAfterMove", "movementRepeatDelay", "quickbarEnabled", "quickbarSource", "quickbarRows", "showActionSummaries", "compactActionSummaries", "combatCarousel"] },
+    { id: "scene", title: "Scene & Controls", keys: ["movementControl", "joystickSide", "actionSceneReturn", "recenterAfterMove", "movementRepeatDelay", "quickbarEnabled", "quickbarSource", "quickbarRows", "showActionSummaries", "compactActionSummaries", "combatCarousel"] },
     { id: "appearance", title: "Appearance", keys: ["theme", "colorScheme", "headerArtwork", "headerArtworkOpacity", "protectVeStyling"] },
     { id: "performance", title: "Performance & Memory", keys: ["performanceMode", "noCanvas", "graphicsSafety", "diceRendering", "mobileOptimizedAssets", "afterGraphicsFailure", "sceneMemoryWarnings"] },
     { id: "overlays", title: "Module Overlays (Experimental)", keys: [], always: true },

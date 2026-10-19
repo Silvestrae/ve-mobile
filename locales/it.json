@@ -59,11 +59,31 @@
         "STALE_SCENE": "La scena attiva è cambiata",
         "TARGET_MISSING": "Questo token non è più disponibile",
         "MOVEMENT_BUSY": "Attendi il completamento del movimento in corso",
-        "Failed": "Movimento del token non riuscito"
+        "Failed": "Movimento del token non riuscito",
+        "Label": "Muovi {name} in {count} direzioni",
+        "Step": "Muovi verso {direction}",
+        "North": "Nord",
+        "NorthEast": "Nord-est",
+        "East": "Est",
+        "SouthEast": "Sud-est",
+        "South": "Sud",
+        "SouthWest": "Sud-ovest",
+        "West": "Ovest",
+        "NorthWest": "Nord-ovest",
+        "InvalidAngle": "Angolo di movimento non valido."
       },
       "Unnamed": "Scena senza nome",
       "NoActive": "Nessuna scena attiva",
-      "UnnamedFolder": "Cartella senza nome"
+      "UnnamedFolder": "Cartella senza nome",
+      "Levels": {
+        "Show": "Mostra i livelli di {name}",
+        "Hide": "Nascondi i livelli di {name}",
+        "List": "Livelli di {name}",
+        "Inactive": "Questo controllo dei livelli della scena non è più attivo.",
+        "CanvasUnavailable": "Apri la mappa e attendi che venga caricata prima di scegliere un livello.",
+        "Unavailable": "Quel livello della scena non è più disponibile.",
+        "NotViewed": "Foundry non ha potuto aprire il livello della scena selezionato."
+      }
     },
     "Settings": {
       "DesktopMobileNotice": "I controlli Telefono e Tablet sono disponibili in queste modalità. Le preferenze vengono salvate e modificare la Modalità mobile riavvia Foundry.",
@@ -597,6 +617,19 @@
       "FcsAutoSoftOverride": {
         "Name": "Il profilo grafico VE ha la precedenza su Force Client Settings",
         "Hint": "Quando è attivo, l’override di lettura locale della pagina di VE Mobile fornisce i valori grafici richiesti dal profilo Protezione memoria attivo, anche se Force Client Settings specifica valori diversi."
+      },
+      "MovementControl": {
+        "Name": "Controllo del movimento",
+        "Hint": "Scegli un joystick con tocco iniziale al centro o pulsanti direzionali. Le scene esagonali usano sei direzioni native.",
+        "Joystick": "Levetta",
+        "Dpad": "Croce direzionale"
+      },
+      "ActionSceneReturn": {
+        "Name": "Torna alla Scena dopo le azioni",
+        "Hint": "Solo telefono e tablet a schermo intero. Torna all’avvio di un’azione nativa. La vista divisa resta invariata. La mappa deve essere disponibile.",
+        "Always": "Sempre",
+        "Combat": "Solo durante il combattimento",
+        "Off": "Disattivato"
       }
     },
     "Character": {

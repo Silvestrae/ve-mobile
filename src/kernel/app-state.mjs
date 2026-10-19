@@ -1,7 +1,11 @@
 const ROUTES = new Set(["characters", "chat", "journals", "scene", "combat", "settings"]);
+const NAVIGATION_INTENTS = new Set(["navigate", "navigate-back", "return-to-character", "select-actor", "select-character-tab",
+  "open-scene-chooser", "open-split-scene-chooser", "close-scene-chooser", "toggle-scene-chooser", "toggle-split-screen",
+  "open-full-scene", "return-to-scene-after-action", "mode-transition-started", "reconnect-started", "action-navigation-invalidated"]);
 
 export const initialAppState = Object.freeze({
   route: "characters",
+  navigationRevision: 0,
   routeHistory: Object.freeze([]),
   selectedActorId: "",
   selectedActorSourceUuid: "",
@@ -48,7 +52,18 @@ export const initialAppState = Object.freeze({
 });
 
 export function reduceAppState(state, event) {
+  const next = reduceState(state, event);
+  const layoutChanged = event.type === "layout-policy-changed" && ["formFactor", "orientation", "splitScreen", "canvasAvailable"]
+    .some(key => state[key] !== next[key]);
+  const sceneChanged = event.type === "session-loaded" && ["id", "levelId", "canvasReady", "canvasDisabled"]
+    .some(key => state.snapshot?.scene?.[key] !== next.snapshot?.scene?.[key]);
+  return next !== state && (NAVIGATION_INTENTS.has(event.type) || layoutChanged || sceneChanged)
+    ? { ...next, navigationRevision: (state.navigationRevision ?? 0) + 1 } : next;
+}
+
+function reduceState(state, event) {
   switch (event.type) {
+    case "action-navigation-invalidated": return { ...state };
     case "session-loaded": {
       const legacyActors = event.snapshot?.actors ?? [];
       const legacySelectedId = legacyActors.some((actor) => actor.id === state.selectedActorId)
@@ -108,6 +123,13 @@ export function reduceAppState(state, event) {
       const route = ROUTES.has(event.route) ? event.route : "characters";
       if ((state.templatePlacement || state.nativeTokenPlacement) && route !== "scene") return state;
       return state.route === route ? state : { ...state, route, routeHistory: pushRouteHistory(state.routeHistory, state.route), sceneChooserOpen: false, splitSecondaryRoute: route === "scene" ? state.splitSecondaryRoute : route, rollResult: route === "characters" ? state.rollResult : null, characterItemId: route === "characters" ? state.characterItemId : "", expandedCharacterItemId: route === "characters" ? state.expandedCharacterItemId : "", characterOpenSections: route === "characters" ? disclosureSections(state.characterDisclosureByContext, activeActorSource(state), state.characterTab) : [], hitPointEditor: route === "characters" ? state.hitPointEditor : "", restEditor: route === "characters" ? state.restEditor : false, spellSlotEditor: route === "characters" ? state.spellSlotEditor : null, xpEditor: route === "characters" ? state.xpEditor : false, portraitImage: route === "characters" ? state.portraitImage : null };
+    }
+    case "return-to-scene-after-action": {
+      const next = reduceState(state, { type: "navigate", route: "scene" });
+      if (next === state) return state;
+      const result = state.rollResult;
+      return result && event.preserveRollResultId === result.id
+        ? { ...next, rollResult: Object.freeze({ ...result, sceneReturn: true }) } : next;
     }
     case "return-to-character": {
       if (state.route === "characters") return state;

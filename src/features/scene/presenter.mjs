@@ -1,9 +1,10 @@
 import { localizedText, localizedCount } from "../../ui/localized-text.mjs";
 import { icon, node } from "../../ui/dom.mjs";
-import { bindJoystickReleaseControl, createJoystickController } from "./joystick-controller.mjs";
+import { bindJoystickReleaseControl, createJoystickController, createDpadController } from "./joystick-controller.mjs";
 import { renderActionBar, bindActionBarLayout } from "./action-bar.mjs";
 import { ACTOR_COMMANDS } from "../../kernel/command-names.mjs";
 import { renderActionSessionModal } from "../../ui/action-session-modal.mjs";
+import { renderRollResultOverlay } from "../../ui/roll-result-overlay.mjs";
 import { renderSceneCombatCarousel } from "../combat/presenter.mjs";
 import { sceneCombat } from "../combat/model.mjs";
 import { bindDetailsDisclosure } from "../../ui/disclosure.mjs";
@@ -39,6 +40,9 @@ export function renderScene({
   const targetCount = Number(scene?.movement?.targetCount ?? 0);
   const hasTargets = targetCount > 0;
   const selectedToken = tokens.find((token) => token.controlled) ?? null;
+  const controlGeometry = scene?.movement?.controlGeometry ?? { shape: "round", directions:
+    [[1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1], [0,-1], [1,-1]].map(([dx, dy]) => ({ dx, dy, angle: Math.atan2(dy, dx) })) };
+  const dpad = preferences.movementControl === "dpad";
   const legacyQuickbarActor = selectedToken
     ? state.snapshot?.actors?.find((actor) => actor.id === selectedToken.actorId) ?? null
     : null;
@@ -87,16 +91,36 @@ export function renderScene({
       ]
     } : { text: localizedText(commands.localize, "VEMOBILE.Interface.Presenter.SelectToken", "Select Token") })
   });
+  const directionNames = ["East", "SouthEast", "South", "SouthWest", "West", "NorthWest", "North", "NorthEast"];
+  const directionFallbacks = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];
+  const movementPad = placementLocked ? null : node("div", {
+    className: "ve-movement-pad",
+    children: [node("span", { className: "ve-joystick-ring" }), joystickKnob,
+      ...(dpad ? controlGeometry.directions.map(({ dx, dy, angle }) => {
+        const index = (Math.round(angle / (Math.PI / 4)) + 8) % 8;
+        const directionLabel = localizedText(commands.localize, `VEMOBILE.Scene.Movement.${directionNames[index]}`, directionFallbacks[index]);
+        return node("button", {
+          className: "ve-dpad-direction",
+          attrs: { type: "button", "data-direction": `${dx},${dy}`, "data-angle": angle,
+            "aria-label": localizedText(commands.localize, "VEMOBILE.Scene.Movement.Step", "Move {direction}", { direction: directionLabel }),
+            disabled: !selectedToken,
+            style: dpadSegmentStyle(controlGeometry.shape, controlGeometry.directions.length, angle) },
+          children: [icon("fa-chevron-right")]
+        });
+      }) : [])]
+  });
   const joystickBase = placementLocked ? null : node("div", {
     className: `ve-joystick-base${selectedToken ? "" : " is-idle"}`,
     attrs: {
       role: "application",
-      "aria-label": selectedToken ? localizedText(commands.localize, "VEMOBILE.Interface.Presenter.MoveInEightDirections", "Move {name} in eight directions", { name: (selectedToken.name) }) : localizedText(commands.localize, "VEMOBILE.Interface.Presenter.SelectATokenToUseTheMovementJoystick", "Select a token to use the movement joystick"),
+      "aria-label": selectedToken ? localizedText(commands.localize, "VEMOBILE.Scene.Movement.Label", "Move {name} in {count} directions", { name: selectedToken.name, count: controlGeometry.directions.length }) : localizedText(commands.localize, "VEMOBILE.Interface.Presenter.SelectATokenToUseTheMovementJoystick", "Select a token to use the movement joystick"),
       "aria-disabled": String(!selectedToken),
       "data-side": preferences.joystickResolvedSide === "right" ? "right" : "left",
+      "data-control": dpad ? "dpad" : "joystick",
+      "data-shape": controlGeometry.shape,
       "data-ve-scene-control": true
     },
-    children: [tokenIndicator, node("span", { className: "ve-joystick-ring" }), joystickKnob]
+    children: [tokenIndicator, movementPad]
   });
   const clearTargets = node("button", {
     className: "ve-scene-clear-targets",
@@ -134,6 +158,8 @@ export function renderScene({
   const actionModal = shouldRenderSceneActionSession(state, splitViewport)
     ? renderActionSessionModal(state.actionSession, commands, scope)
     : null;
+  const rollModal = !splitViewport && state.rollResult?.sceneReturn
+    ? renderRollResultOverlay(state.rollResult, commands, scope) : null;
   const templateUi = placement ? renderTemplatePlacement({ placement, commands, scope, liveStatus }) : null;
   const nativeTokenUi = nativePlacement ? renderNativeTokenPlacement({ placement: nativePlacement, commands, scope }) : null;
   const actorTokenUi = actorPlacement ? renderActorTokenPlacement({ placement: actorPlacement, commands, scope, liveStatus }) : null;
@@ -163,7 +189,8 @@ export function renderScene({
       nativeTokenUi,
       actorTokenUi?.overlay,
       actorTokenUi?.hud,
-      actionModal
+      actionModal,
+      rollModal
     ] : [
       scene?.canvasState === "transitional"
         ? node("div", { className: "ve-scene-unavailable ve-scene-loading", children: [icon("fa-arrows-rotate"), node("h2", { text: localizedText(commands.localize, "VEMOBILE.Interface.Presenter.PreparingScene", "Preparing scene…") })] })
@@ -171,7 +198,8 @@ export function renderScene({
           node("button", { attrs: { type: "button" }, text: !scene?.id && !scene?.canvasDisabled ? (commands.localize?.("VEMOBILE.Controls.Status.Chooser", "Choose Scene") ?? localizedText(commands.localize, "VEMOBILE.Interface.Presenter.ChooseScene", "Choose Scene")) : (commands.localize?.("VEMOBILE.Controls.Status.Settings", "Settings") ?? localizedText(commands.localize, "VEMOBILE.Interface.Presenter.Settings", "Settings")), on: { click: () => !scene?.id && !scene?.canvasDisabled ? commands.openSceneChooser() : commands.navigate("settings") } }, scope)] }),
       joystickBase,
       quickbar,
-      actionModal
+      actionModal,
+      rollModal
     ]
   });
 
@@ -186,7 +214,7 @@ export function renderScene({
   scope.listen(surface, "pointerdown", () => { tileTapEpoch += 1; }, { capture: true });
   if (!placementLocked) {
     commands.bindSceneTokenTouch?.(surface, scope, () => {}, (error) => {
-      liveStatus.textContent = movementMessage(error);
+      liveStatus.textContent = movementMessage(error, commands);
     });
   }
   commands.bindSceneGestures(surface, scope, ({ x, y }) => {
@@ -204,7 +232,7 @@ export function renderScene({
     if (commands.nativeSceneTileTap?.({ sceneId: scene.id, clientX: x, clientY: y })) return;
     void commands.tapSceneToken({ sceneId: scene.id, clientX: x, clientY: y }).catch((error) => {
       if (!scope.disposed && surface.isConnected && completedEpoch === tileTapEpoch) {
-        liveStatus.textContent = movementMessage(error);
+        liveStatus.textContent = movementMessage(error, commands);
       }
     });
   }, ({ x, y }) => {
@@ -228,10 +256,11 @@ export function renderScene({
   }, 0);
   if (placementLocked) return surface;
   if (!selectedToken) return surface;
-  joystick = createJoystickController({
-    base: joystickBase,
+  joystick = (dpad ? createDpadController : createJoystickController)({
+    base: movementPad,
     knob: joystickKnob,
     scope,
+    directions: controlGeometry.directions,
     repeatDelayMs: preferences.movementRepeatDelayMs,
     onTouchChange: (active) => {
       try {
@@ -242,10 +271,10 @@ export function renderScene({
           active
         });
       } catch (error) {
-        if (active) liveStatus.textContent = movementMessage(error);
+        if (active) liveStatus.textContent = movementMessage(error, commands);
       }
     },
-    onStep: async (dx, dy) => {
+    onStep: async (dx, dy, movementAngle) => {
       try {
         const result = await commands.stepSceneToken({
           sceneId: scene.id,
@@ -253,12 +282,13 @@ export function renderScene({
           actorId: selectedToken.actorId,
           dx,
           dy,
+          movementAngle,
           viewport: visibleSceneViewport(surface, splitViewport)
         });
         liveStatus.textContent = result.moved ? localizedText(commands.localize, "VEMOBILE.Interface.Presenter.Moved", "{name} moved", { name: (selectedToken.name) }) : localizedText(commands.localize, "VEMOBILE.Interface.Presenter.ThatStepIsBlocked", "That step is blocked");
         return result;
       } catch (error) {
-        liveStatus.textContent = movementMessage(error);
+        liveStatus.textContent = movementMessage(error, commands);
         throw error;
       }
     }
@@ -275,7 +305,7 @@ export function renderScene({
         tokenId: selectedToken.id,
         actorId: selectedToken.actorId
       }).catch((error) => {
-        liveStatus.textContent = movementMessage(error);
+        liveStatus.textContent = movementMessage(error, commands);
       }).finally(() => {
         if (!releaseControl.isConnected) return;
         releaseControl.disabled = false;
@@ -326,7 +356,7 @@ export function sceneFolderCount(branch) {
 }
 
 /** Render the Scene chooser only while it is open; its owner disposes the full subtree on close. */
-export function renderSceneChooser({ scenes = [], commands, scope, expandedFolderIds = new Set(), host = "modal", sceneChoiceTransition = createSceneChoiceTransition() }) {
+export function renderSceneChooser({ scenes = [], commands, scope, expandedFolderIds = new Set(), expandedLevelSceneIds = new Set(), host = "modal", sceneChoiceTransition = createSceneChoiceTransition() }) {
   const pane = host === "pane";
   const close = () => commands.closeSceneChooser();
   const headingId = pane ? "ve-scene-picker-title" : "ve-scene-chooser-title";
@@ -336,23 +366,26 @@ export function renderSceneChooser({ scenes = [], commands, scope, expandedFolde
   const tree = buildSceneNavigationTree(scenes);
   let layer = null;
   let activeMenuCleanup = null;
+  let contextRequest = 0;
+  for (const id of expandedLevelSceneIds) if (!scenes.some(scene => scene.id === id && scene.levels?.length)) expandedLevelSceneIds.delete(id);
   const openContext = (anchor, event, scene, ownerScope = scope) => {
     event?.preventDefault?.();
     event?.stopPropagation?.();
+    const request = ++contextRequest;
     void Promise.resolve(commands.openSceneContextMenu?.({
       sceneId: scene.id,
       clientX: Number(event?.clientX) || anchor.getBoundingClientRect?.().left || 0,
       clientY: Number(event?.clientY) || anchor.getBoundingClientRect?.().bottom || 0
     })).then((result) => {
-      if (result?.action !== "opened" || !result.menu || ownerScope.disposed || anchor.isConnected === false) {
-        if (result?.action === "opened") commands.closeSceneContextMenu?.();
+      if (result?.action !== "opened" || !result.menu || request !== contextRequest || ownerScope.disposed || anchor.isConnected === false) {
+        if (result?.action === "opened") commands.closeSceneContextMenu?.({ menuId: result.menu.id });
         return;
       }
       activeMenuCleanup?.();
       activeMenuCleanup = renderSceneContextMenu(layer, anchor, result.menu, commands, ownerScope);
     }).catch((error) => commands.reportSceneNavigationError?.(error));
   };
-  const context = { commands, close, expandedFolderIds, openContext, keepOpenOnView: pane, sceneChoiceTransition };
+  const context = { commands, close, expandedFolderIds, expandedLevelSceneIds, openContext, keepOpenOnView: pane, sceneChoiceTransition };
   const list = node("div", {
     className: "ve-scene-choice-list",
     attrs: { role: "list", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.Presenter.AvailableScenes", "Available Scenes") },
@@ -489,8 +522,7 @@ function renderSceneChoice(scene, context, scope) {
       type: "button",
       "data-scene-id": scene.id,
       "aria-current": scene.viewed ? "page" : undefined,
-      "aria-label": sceneChoiceLabel(scene, commands),
-      "aria-haspopup": scene.contextActions ? "menu" : undefined
+      "aria-label": sceneChoiceLabel(scene, commands)
     },
     children: [
       node("span", {
@@ -506,8 +538,7 @@ function renderSceneChoice(scene, context, scope) {
           scene.active ? node("small", { className: "is-active", text: localizedText(commands.localize, "VEMOBILE.Interface.Presenter.WorldActive", "World active") }) : null,
           sceneRiskBadge(scene.memoryRisk, commands)
         ] })
-      ] }),
-      scene.viewed ? icon("fa-check") : icon("fa-chevron-right")
+      ] })
     ]
   });
   context.sceneChoiceTransition.bind(view, scene.id, () => {
@@ -517,23 +548,64 @@ function renderSceneChoice(scene, context, scope) {
         throw error;
       });
   }, scope);
+  const actions = node("div", { className: "ve-scene-choice-actions" });
+  const header = node("div", { className: "ve-scene-choice-header", children: [view, actions] });
   const row = node("div", {
     className: `ve-scene-choice${scene.viewed ? " is-viewed" : ""}${scene.active ? " is-active" : ""}`,
     attrs: { role: "listitem" },
-    children: [view]
+    children: [header]
   });
+  if (scene.levels?.length) {
+    const id = `ve-scene-levels-${scene.id}`;
+    const levels = node("div", { className: "ve-scene-level-list", attrs: { id, role: "group",
+      "aria-label": localizedText(commands.localize, "VEMOBILE.Scene.Levels.List", "Levels in {name}", { name: scene.name }) } });
+    let levelsScope = null;
+    const label = expanded => localizedText(commands.localize, expanded ? "VEMOBILE.Scene.Levels.Hide" : "VEMOBILE.Scene.Levels.Show",
+      expanded ? "Hide levels for {name}" : "Show levels for {name}", { name: scene.name });
+    const expander = node("button", { className: "ve-scene-level-toggle", attrs: { type: "button", "aria-controls": id }, children: [icon("fa-chevron-right")] });
+    const show = expanded => {
+      expander.setAttribute("aria-expanded", String(expanded));
+      expander.setAttribute("aria-label", label(expanded));
+      levels.hidden = !expanded;
+      levelsScope?.dispose();
+      levelsScope = null;
+      levels.replaceChildren();
+      if (!expanded) return;
+      levelsScope = scope.child(`scene-levels:${scene.id}`);
+      for (const level of scene.levels) {
+        const button = node("button", { className: `ve-scene-level-option${level.viewed ? " is-viewed" : ""}`,
+          attrs: { type: "button", "data-level-id": level.id, "aria-current": level.viewed ? "true" : undefined,
+            disabled: scene.levelSelectionAvailable === false,
+            title: scene.levelSelectionAvailable === false ? localizedText(commands.localize, "VEMOBILE.Scene.Levels.CanvasUnavailable", "Open the map and wait for it to load before choosing a level.") : undefined },
+          children: [node("span", { text: level.name }), node("span", { className: "ve-scene-level-check", children: level.viewed ? [icon("fa-check")] : [] })] });
+        if (scene.levelSelectionAvailable !== false) context.sceneChoiceTransition.bind(button, `${scene.id}:${level.id}`, () => Promise.resolve(commands.viewSceneLevel?.({ sceneId: scene.id, levelId: level.id }, { keepSceneChooserOpen: context.keepOpenOnView }))
+          .catch(error => { commands.reportSceneNavigationError?.(error); throw error; }), levelsScope);
+        levels.append(button);
+      }
+    };
+    scope.listen(expander, "click", event => {
+      event.stopPropagation();
+      const expanded = !context.expandedLevelSceneIds.has(scene.id);
+      if (expanded) context.expandedLevelSceneIds.add(scene.id);
+      else context.expandedLevelSceneIds.delete(scene.id);
+      show(expanded);
+    });
+    actions.append(expander);
+    row.append(levels);
+    show(context.expandedLevelSceneIds.has(scene.id));
+  }
   if (scene.contextActions) {
     const menuButton = node("button", {
       className: "ve-scene-choice-menu-button",
       attrs: { type: "button", "aria-haspopup": "menu", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.Presenter.MoreActionsFor", "More actions for {name}", { name: (scene.name) }) },
-      on: { click: (event) => context.openContext(row, event, scene, scope) },
+      on: { click: (event) => context.openContext(menuButton, event, scene, scope) },
       children: [icon("fa-ellipsis-vertical")]
     }, scope);
-    row.append(menuButton);
-    bindLongPress(view, scope, (event) => context.openContext(row, event, scene, scope), { invokeOnRelease: true });
+    actions.append(menuButton);
+    bindLongPress(view, scope, (event) => context.openContext(view, event, scene, scope), { invokeOnRelease: true });
     scope.listen(view, "contextmenu", (event) => {
       if (event.pointerType === "touch" || (event.button !== undefined && event.button !== 2)) return;
-      context.openContext(row, event, scene, scope);
+      context.openContext(view, event, scene, scope);
     });
   }
   return row;
@@ -543,42 +615,60 @@ function renderSceneContextMenu(host, anchor, record, commands, scope) {
   if (!host) return () => {};
   const menuScope = scope.child(`scene-context:${record.id}`);
   const menu = node("nav", { className: "ve-scene-context-menu", attrs: { role: "menu", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.Presenter.SceneActions", "Scene actions") } });
+  const previousExpanded = anchor.getAttribute?.("aria-expanded");
+  anchor.setAttribute?.("aria-expanded", "true");
   let closed = false;
-  const close = (closeGateway = true) => {
+  const close = (closeGateway = true, restoreFocus = true) => {
     if (closed) return;
     closed = true;
     menu.remove?.();
     menuScope.dispose();
-    if (closeGateway) void commands.closeSceneContextMenu?.();
+    if (restoreFocus && !scope.disposed && anchor.isConnected) anchor.focus?.({ preventScroll: true });
+    if (closeGateway) void commands.closeSceneContextMenu?.({ menuId: record.id });
   };
   for (const option of record.options ?? []) {
     const button = node("button", {
       className: "ve-scene-context-option",
       attrs: { type: "button", role: "menuitem" },
       on: { click: () => {
-        button.disabled = true;
+        for (const item of menu.querySelectorAll("button")) item.disabled = true;
         void Promise.resolve(commands.selectSceneContextOption?.({ menuId: record.id, optionId: option.id }))
           .catch((error) => commands.reportSceneNavigationError?.(error))
-          .finally(() => close(false));
+          .finally(() => close(false, false));
       } },
-      children: [node("span", { text: option.label })]
+      children: [node("span", { className: "ve-scene-context-icon", attrs: { "aria-hidden": "true" }, children: option.icon ? [node("i", { className: option.icon })] : [] }),
+        node("span", { className: "ve-scene-context-label", text: option.label })]
     }, menuScope);
-    if (option.icon) button.insertAdjacentHTML?.("afterbegin", option.icon);
     menu.append(button);
   }
   host.append(menu);
-  positionSceneContextMenu(menu, host, anchor, record);
+  const position = () => { if (!menuScope.disposed) positionSceneContextMenu(menu, host, anchor, record); };
+  position();
+  menuScope.listen(globalThis.window, "resize", position, { passive: true });
+  menuScope.listen(globalThis.visualViewport, "resize", position, { passive: true });
+  menuScope.listen(globalThis.visualViewport, "scroll", position, { passive: true });
+  menuScope.listen(host, "scroll", event => { if (!menu.contains(event.target)) close(); }, { capture: true, passive: true });
   menuScope.listen(anchor.ownerDocument ?? document, "pointerdown", (event) => {
     if (!menu.contains?.(event.target) && event.target !== anchor && !anchor.contains?.(event.target)) close();
   }, { capture: true, passive: true });
   menuScope.listen(anchor.ownerDocument ?? document, "keydown", (event) => {
-    if (event.key === "Escape") close();
-  });
+    if (event.key === "Escape") {
+      event.preventDefault(); event.stopImmediatePropagation?.(); close();
+    } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+      event.preventDefault(); event.stopImmediatePropagation?.();
+      const items = [...menu.querySelectorAll("button:not(:disabled)")];
+      const index = items.indexOf(anchor.ownerDocument?.activeElement);
+      const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + items.length) % items.length;
+      items[next]?.focus?.();
+    }
+  }, { capture: true });
   menuScope.own(() => {
     menu.remove?.();
+    if (previousExpanded === null) anchor.removeAttribute?.("aria-expanded");
+    else if (previousExpanded !== undefined) anchor.setAttribute?.("aria-expanded", previousExpanded);
     if (!closed) {
       closed = true;
-      void commands.closeSceneContextMenu?.();
+      void commands.closeSceneContextMenu?.({ menuId: record.id });
     }
   });
   menu.querySelector?.("button")?.focus?.({ preventScroll: true });
@@ -586,14 +676,21 @@ function renderSceneContextMenu(host, anchor, record, commands, scope) {
 }
 
 function positionSceneContextMenu(menu, host, anchor, record) {
-  const bounds = host.getBoundingClientRect?.() ?? { left: 0, top: 0, right: globalThis.innerWidth ?? 360, bottom: globalThis.innerHeight ?? 640 };
+  const hostBounds = host.getBoundingClientRect?.() ?? { left: 0, top: 0, right: globalThis.innerWidth ?? 360, bottom: globalThis.innerHeight ?? 640 };
+  const viewport = globalThis.visualViewport;
+  const left = viewport?.offsetLeft ?? 0, top = viewport?.offsetTop ?? 0;
+  const bounds = { left: Math.max(left, hostBounds.left), top: Math.max(top, hostBounds.top),
+    right: Math.min(left + (viewport?.width ?? globalThis.innerWidth ?? 360), hostBounds.right),
+    bottom: Math.min(top + (viewport?.height ?? globalThis.innerHeight ?? 640), hostBounds.bottom) };
+  menu.style.maxWidth = `${Math.max(1, bounds.right - bounds.left - 16)}px`;
+  menu.style.maxHeight = `${Math.max(1, Math.min(420, bounds.bottom - bounds.top - 16))}px`;
   const rect = menu.getBoundingClientRect?.() ?? { width: 240, height: 240 };
   const anchorRect = anchor.getBoundingClientRect?.() ?? { left: bounds.left, bottom: bounds.top };
   const x = Number(record.clientX) || anchorRect.left;
   const y = Number(record.clientY) || anchorRect.bottom;
   const margin = 8;
-  menu.style.left = `${Math.max(bounds.left + margin, Math.min(x, bounds.right - rect.width - margin))}px`;
-  menu.style.top = `${Math.max(bounds.top + margin, Math.min(y, bounds.bottom - rect.height - margin))}px`;
+  menu.style.left = `${Math.max(bounds.left + margin, Math.min(x, bounds.right - rect.width - margin)) - hostBounds.left}px`;
+  menu.style.top = `${Math.max(bounds.top + margin, Math.min(y, bounds.bottom - rect.height - margin)) - hostBounds.top}px`;
 }
 
 function sceneChoiceLabel(scene, commands) {
@@ -938,7 +1035,21 @@ function visibleSceneViewport(surface, enabled) {
   return Object.freeze({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
 }
 
-function movementMessage(error) {
+/** Equal annular sectors: the painted face and browser hit region are identical.
+ * Pixel radii keep a 3px gap around the 52px portrait in either hex footprint.
+ * The hex pad's existing outer clip supplies its native six-sided boundary. */
+function dpadSegmentStyle(shape, count, angle) {
+  const width = shape === "hex-rows" ? 132 * Math.sqrt(3) / 2 : 132;
+  const height = shape === "hex-columns" ? 132 * Math.sqrt(3) / 2 : 132;
+  const half = Math.PI / count - 0.006;
+  const point = (radius, theta) => `${50 + 100 * radius * Math.cos(theta) / width}% ${50 + 100 * radius * Math.sin(theta) / height}%`;
+  const arc = (radius, reverse = false) => Array.from({ length: 13 }, (_, i) =>
+    point(radius, angle + (reverse ? 1 : -1) * half * (1 - i / 6)));
+  const polygon = [...arc(shape === "round" ? 66 : 94), ...arc(29, true)].join(",");
+  return `--ve-direction-angle:${angle}rad;--ve-direction-x:${50 + 100 * 47 * Math.cos(angle) / width}%;--ve-direction-y:${50 + 100 * 47 * Math.sin(angle) / height}%;clip-path:polygon(${polygon})`;
+}
+
+function movementMessage(error, commands) {
   const messages = {
     PAUSED: localizedText(commands.localize, "VEMOBILE.Scene.Movement.PAUSED", "The game is paused"),
     FORBIDDEN: localizedText(commands.localize, "VEMOBILE.Scene.Movement.FORBIDDEN", "You no longer control this token"),

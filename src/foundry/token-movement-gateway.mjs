@@ -38,6 +38,7 @@ export function createFoundryTokenMovementGateway({
   const historyPreviews = new Map();
   let lastTokenTap = null;
   let pendingSelection = null;
+  let viewGeneration = 0;
 
   const cancelPendingSelection = () => {
     const pending = pendingSelection;
@@ -74,12 +75,30 @@ export function createFoundryTokenMovementGateway({
     const tokenId = identifier(request.tokenId, "tokenId");
     const actorId = identifier(request.actorId, "actorId");
     const scene = canvas?.scene ?? game?.scenes?.current ?? null;
-    if (!scene || scene.id !== sceneId) throw new MovementError("STALE_SCENE", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.TheActiveSceneHasChanged", "The active scene has changed."));
+    if (!canvas?.ready || canvas.loading || !scene || scene.id !== sceneId) throw new MovementError("STALE_SCENE", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.TheActiveSceneHasChanged", "The active scene has changed."));
     const token = scene.tokens?.get?.(tokenId) ?? Array.from(scene.tokens ?? []).find((entry) => entry.id === tokenId);
     if (!token || token.actorId !== actorId) throw new MovementError("TARGET_MISSING", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.TheSelectedTokenIsNoLongerAvailable", "The selected token is no longer available."));
     if (!canControlToken(token, game.user)) throw new MovementError("FORBIDDEN", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.YouNoLongerHavePermissionToMoveThisToken", "You no longer have permission to move this token."));
+    const level = canvas.level;
+    if (level?.id
+      && String(token._source?.level ?? token.level?.id ?? token.level ?? "") !== String(level.id)) {
+      throw new MovementError("TARGET_MISSING", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.TheSelectedTokenIsNoLongerAvailable", "The selected token is no longer available."));
+    }
     if (game.paused && !game.user.isGM) throw new MovementError("PAUSED", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.TheGameIsPaused", "The game is paused."));
     return { canvas, game, scene, token, tokenId };
+  };
+
+  const captureCameraGuard = (resolved, request, expectedSession) => {
+    const view = { level: resolved.canvas.level, stage: resolved.canvas.stage, generation: viewGeneration };
+    const session = { ...expectedSession, worldId: resolved.game.world.id, userId: resolved.game.user.id,
+      connectionGeneration: getConnectionGeneration() };
+    return () => {
+      try {
+        const current = resolveRequest(request, session);
+        return current.canvas === resolved.canvas && current.scene === resolved.scene && current.token === resolved.token
+          && current.canvas.level === view.level && current.canvas.stage === view.stage && viewGeneration === view.generation;
+      } catch { return false; }
+    };
   };
 
   const tap = async (request, expectedSession = {}, { deferSelection = false } = {}) => {
@@ -637,9 +656,9 @@ export function createFoundryTokenMovementGateway({
         const replacement = collectionValues(getCanvas()?.scene?.tokens).find(entry => entry.uuid === replacementUuid);
         if (replacement && replacement.parent?.id === token.parent?.id) restoreControl(replacement, token.uuid, previous.source);
       });
-      scope.hook("canvasReady", () => { for (const object of getCanvas()?.tokens?.controlled ?? []) remember(object.document); });
-      scope.hook("canvasTearDown", () => provenance.clear());
-      scope.own(() => { active = false; provenance.clear(); });
+      scope.hook("canvasReady", () => { viewGeneration += 1; for (const object of getCanvas()?.tokens?.controlled ?? []) remember(object.document); });
+      scope.hook("canvasTearDown", () => { viewGeneration += 1; provenance.clear(); });
+      scope.own(() => { viewGeneration += 1; active = false; provenance.clear(); });
     },
     snapshot() {
       const game = getGame();
@@ -650,6 +669,9 @@ export function createFoundryTokenMovementGateway({
         .sort((left, right) => left.name.localeCompare(right.name));
       return Object.freeze({
         tokens: Object.freeze(tokens),
+        // Grid presentation is independent of token position and parity. A
+        // native movement publication must not replace a held input owner.
+        controlGeometry: movementControlGeometry(null, scene?.grid),
         targetCount: targetCount(game?.user),
         releaseLabel: localize(game, "VEMOBILE.Scene.ReleaseToken", "Release token")
       });
@@ -689,7 +711,9 @@ export function createFoundryTokenMovementGateway({
         trace({ action: "camera-suppressed", caller: "token-movement-gateway.focus", reason: "explicit-camera-intent", ...cameraDetails });
         return Object.freeze({ ok: true, action: "suppressed", reason: "explicit-camera-intent" });
       }
-      const { canvas, token } = resolveRequest(request, expectedSession);
+      const resolved = resolveRequest(request, expectedSession);
+      const { canvas, token } = resolved;
+      const cameraCurrent = captureCameraGuard(resolved, request, expectedSession);
       const object = token.object;
       if (object && !object.controlled && typeof object.control === "function") {
         trace({
@@ -701,9 +725,11 @@ export function createFoundryTokenMovementGateway({
         });
         await Promise.resolve(object.control({ releaseOthers: true }));
       }
-      if (!canApplyAutomaticCamera(cameraDetails)) {
-        trace({ action: "camera-suppressed", caller: "token-movement-gateway.focus", reason: "explicit-camera-intent", ...cameraDetails });
-        return Object.freeze({ ok: true, action: "suppressed", reason: "explicit-camera-intent" });
+      const currentView = cameraCurrent();
+      if (!currentView || !canApplyAutomaticCamera(cameraDetails)) {
+        const reason = currentView ? "explicit-camera-intent" : "view-replaced";
+        trace({ action: "camera-suppressed", caller: "token-movement-gateway.focus", reason, ...cameraDetails });
+        return Object.freeze({ ok: true, action: "suppressed", reason });
       }
       const target = cameraTargetForToken(canvas, token, viewportBounds(request.viewport));
       trace({
@@ -810,12 +836,30 @@ export function createFoundryTokenMovementGateway({
       if (!dx && !dy) throw new MovementError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.AMovementDirectionIsRequired", "A movement direction is required."));
       const viewport = viewportBounds(request.viewport);
       const resolved = resolveRequest(request, expectedSession);
+      // Native movement can finish after another level (or the same level
+      // again) was drawn. Its result remains valid; its old camera intent does not.
+      const cameraCurrent = captureCameraGuard(resolved, request, expectedSession);
       if (moving.has(resolved.tokenId)) throw new MovementError("MOVEMENT_BUSY", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.TheTokenIsAlreadyMoving", "The token is already moving."));
 
       moving.add(resolved.tokenId);
       try {
         const directions = getConst()?.MOVEMENT_DIRECTIONS;
-        const target = resolveStepTarget(resolved.token, dx, dy, directions, resolved.scene.grid);
+        // A held direction survives parity boundaries. Resolve its screen angle
+        // afresh against this exact token, rather than reusing yesterday's mask.
+        let stepX = dx, stepY = dy, hexTarget = null;
+        if (request.movementAngle !== undefined) {
+          const angle = Number(request.movementAngle);
+          if (!Number.isFinite(angle)) throw new MovementError("INVALID_INPUT", localizeFoundry("VEMOBILE.Scene.Movement.InvalidAngle", "Invalid movement angle."));
+          const candidates = resolved.scene.grid?.isHexagonal
+            ? nativeHexSteps(resolved.token, resolved.scene.grid, directions)
+            : SQUARE_CONTROL_DIRECTIONS;
+          const closest = candidates.reduce((best, candidate) =>
+            !best || angleDistance(angle, candidate.angle) < angleDistance(angle, best.angle) ? candidate : best, null);
+          if (!closest) return Object.freeze({ ok: true, moved: false, reason: "blocked" });
+          stepX = closest.dx; stepY = closest.dy;
+          hexTarget = closest.target ?? null;
+        }
+        const target = hexTarget ?? resolveStepTarget(resolved.token, stepX, stepY, directions, resolved.scene.grid);
         if (!target) return Object.freeze({ ok: true, moved: false, reason: "blocked" });
         if (typeof resolved.token.move !== "function") {
           throw new MovementError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.ThisFoundryVersionCannotPerformNativeTokenMovement", "This Foundry version cannot perform native token movement."));
@@ -832,7 +876,7 @@ export function createFoundryTokenMovementGateway({
 
         const after = tokenPosition(resolved.token);
         const moved = before.x !== after.x || before.y !== after.y;
-        if (moved) {
+        if (moved && cameraCurrent()) {
           const recenterAfterMove = readRecenterAfterMove();
           const cameraAllowed = canApplyAutomaticCamera({
             kind: recenterAfterMove ? "recenter-after-move" : "keep-moved-token-visible",
@@ -844,16 +888,19 @@ export function createFoundryTokenMovementGateway({
             trace({ action: "camera-suppressed", reason: "explicit-camera-intent", tokenId: resolved.tokenId });
           } else if (recenterAfterMove) {
             await settleMovementAnimation(resolved.token.object);
-            if (!canApplyAutomaticCamera({
+            const currentView = cameraCurrent();
+            if (!currentView || !canApplyAutomaticCamera({
               kind: "recenter-after-move",
               sceneId: String(resolved.scene.id ?? ""),
               tokenId: resolved.tokenId,
               connectionGeneration: expectedSession.connectionGeneration
             })) {
-              trace({ action: "camera-suppressed", reason: "explicit-camera-intent", tokenId: resolved.tokenId });
+              trace({ action: "camera-suppressed", reason: currentView ? "explicit-camera-intent" : "view-replaced", tokenId: resolved.tokenId });
               return Object.freeze({ ok: true, moved, reason: "moved", x: after.x, y: after.y });
             }
-            await smoothlyRecenterToken(resolved.canvas, resolved.token, viewport);
+            await smoothlyRecenterToken(resolved.canvas, resolved.token, viewport, 220, () => cameraCurrent()
+              && canApplyAutomaticCamera({ kind: "recenter-after-move", sceneId: String(resolved.scene.id ?? ""),
+                tokenId: resolved.tokenId, connectionGeneration: expectedSession.connectionGeneration }));
           }
           else keepTokenVisible(resolved.canvas, resolved.token, viewport);
         }
@@ -906,18 +953,9 @@ async function closeTokenHud(canvas) {
 export function resolveStepTarget(token, dx, dy, directions, suppliedGrid = null) {
   const grid = suppliedGrid ?? token?.parent?.grid;
   if (!token || !directions || !grid || typeof grid.getShiftedPoint !== "function") return null;
-  const source = token._source ?? token;
-  const position = { x: Number(source.x), y: Number(source.y) };
-  if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return null;
-  const snapped = typeof token.getSnappedPosition === "function"
-    ? token.getSnappedPosition({
-      ...position,
-      elevation: token.elevation,
-      width: token.width,
-      height: token.height,
-      shape: token.shape
-    })
-    : position;
+  const origin = snappedTokenOrigin(token);
+  if (!origin) return null;
+  const { position, snapped } = origin;
   const mask = directionAxis(dx, position.x, snapped.x, directions.LEFT, directions.RIGHT)
     | directionAxis(dy, position.y, snapped.y, directions.UP, directions.DOWN);
   const biasX = grid.isHexagonal && !grid.columns ? 1 : 0;
@@ -928,6 +966,65 @@ export function resolveStepTarget(token, dx, dy, directions, suppliedGrid = null
   if (!Number.isFinite(x) || !Number.isFinite(y) || (x === position.x && y === position.y)) return null;
   return Object.freeze({ x, y });
 }
+
+const SQUARE_CONTROL_DIRECTIONS = Object.freeze([[1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1], [0,-1], [1,-1]]
+  .map(([dx, dy]) => Object.freeze({ dx, dy, angle: Math.atan2(dy, dx) })));
+
+/** Stable planar edge directions from the native grid, with no document reads.
+ * Token snapping belongs to execution: off-grid positions and odd/even masks
+ * must never alter button identity or dispose a held joystick on publication.
+ */
+export function movementControlGeometry(_token, grid) {
+  const gridKey = [grid?.type, grid?.size, grid?.sizeX, grid?.sizeY, grid?.distance, grid?.diagonals].join(":");
+  if (!grid?.isHexagonal) return Object.freeze({ shape: "round", gridKey, directions: SQUARE_CONTROL_DIRECTIONS });
+  const shape = grid.columns ? "hex-columns" : "hex-rows";
+  const cell = { i: 0, j: 0 };
+  const center = grid.getCenterPoint?.(cell);
+  const directions = !center ? [] : (grid.getAdjacentOffsets?.(cell) ?? []).map(offset => {
+    const adjacent = grid.getCenterPoint(offset);
+    const angle = Math.atan2(adjacent.y - center.y, adjacent.x - center.x);
+    const dx = Math.abs(Math.cos(angle)) < 1e-8 ? 0 : Math.sign(Math.cos(angle));
+    const dy = Math.abs(Math.sin(angle)) < 1e-8 ? 0 : Math.sign(Math.sin(angle));
+    return Object.freeze({ dx, dy, angle });
+  }).sort((a, b) => a.angle - b.angle);
+  return Object.freeze({ shape, gridKey, directions: Object.freeze(directions) });
+}
+
+function snappedTokenOrigin(token) {
+  const source = token?._source ?? token;
+  const position = { x: Number(source?.x), y: Number(source?.y) };
+  if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return null;
+  const snapped = typeof token?.getSnappedPosition === "function" ? token.getSnappedPosition({
+    ...position, elevation: token.elevation, width: token.width, height: token.height, shape: token.shape
+  }) : position;
+  return { position, snapped };
+}
+
+/** Enumerate real neighbours of the current native snap anchor. Do not apply
+ * the keyboard's off-grid direction suppression to angle-based mobile input.
+ */
+function nativeHexSteps(token, grid, directions) {
+  const origin = snappedTokenOrigin(token);
+  if (!origin || !directions || typeof grid.getShiftedPoint !== "function") return [];
+  const { snapped } = origin;
+  const biasX = grid.columns ? 0 : 1, biasY = grid.columns ? 1 : 0;
+  const anchor = { x: snapped.x + biasX, y: snapped.y + biasY };
+  const unique = new Map();
+  for (const { dx, dy } of SQUARE_CONTROL_DIRECTIONS) {
+    const mask = (dx < 0 ? directions.LEFT : dx > 0 ? directions.RIGHT : 0)
+      | (dy < 0 ? directions.UP : dy > 0 ? directions.DOWN : 0);
+    const shifted = grid.getShiftedPoint(anchor, mask);
+    const x = Number(shifted?.x) - anchor.x, y = Number(shifted?.y) - anchor.y;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (!x && !y) continue;
+    const target = Object.freeze({ x: Math.round(Number(shifted.x) - biasX), y: Math.round(Number(shifted.y) - biasY) });
+    const key = `${target.x},${target.y}`;
+    if (!unique.has(key)) unique.set(key, { dx, dy, angle: Math.atan2(y, x), target });
+  }
+  return [...unique.values()];
+}
+
+function angleDistance(a, b) { return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))); }
 
 function directionAxis(delta, value, snapped, negative, positive) {
   if (delta < 0) return value <= snapped + 0.5 ? negative : 0;
@@ -1100,8 +1197,8 @@ async function settleMovementAnimation(object) {
   } catch { /* camera recentering should survive a cancelled token animation */ }
 }
 
-async function smoothlyRecenterToken(canvas, token, viewport = null, duration = 220) {
-  if (!canvas?.ready) return false;
+async function smoothlyRecenterToken(canvas, token, viewport = null, duration = 220, isCurrent = () => true) {
+  if (!canvas?.ready || !isCurrent()) return false;
   const center = cameraTargetForToken(canvas, token, viewport);
   if (!center) return false;
   if (typeof canvas.animatePan === "function") {
@@ -1110,7 +1207,7 @@ async function smoothlyRecenterToken(canvas, token, viewport = null, duration = 
       return true;
     } catch { /* use a deterministic camera fallback */ }
   }
-  if (typeof canvas.pan !== "function") return false;
+  if (!isCurrent() || typeof canvas.pan !== "function") return false;
   canvas.pan(center);
   return true;
 }

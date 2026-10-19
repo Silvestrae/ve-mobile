@@ -50,6 +50,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   let splitActionSessionScope = null;
   let sceneChooserScope = null;
   const expandedSceneFolderIds = new Set();
+  const expandedSceneLevelIds = new Set();
   let renderedSceneChooserKey = "";
   let renderedSplitSceneKey = "";
   let renderedSplitActionSessionId = "";
@@ -411,7 +412,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       && sameScreen && !viewChanged;
 
     if (splitActive) {
-      const nextSceneKey = `${scenePresentationKey(state.snapshot)}:${settings.movementRepeatDelayMs}:${settings.quickbarEnabled}:${settings.quickbarSource}:${settings.joystickResolvedSide}:${settings.combatCarousel}:${state.quickbarCollapsed}:${JSON.stringify(state.templatePlacement)}:${JSON.stringify(state.nativeTokenPlacement)}:${JSON.stringify(state.actorTokenPlacement)}`;
+      const nextSceneKey = `${scenePresentationKey(state.snapshot)}:${settings.movementControl}:${settings.movementRepeatDelayMs}:${settings.quickbarEnabled}:${settings.quickbarSource}:${settings.joystickResolvedSide}:${settings.combatCarousel}:${state.quickbarCollapsed}:${JSON.stringify(state.templatePlacement)}:${JSON.stringify(state.nativeTokenPlacement)}:${JSON.stringify(state.actorTokenPlacement)}`;
       const nextStructureKey = sceneStructureKey(state.snapshot, layoutKey, true);
       const nextFocusKey = sceneFocusKey(state.snapshot);
       let newPresentation = false;
@@ -492,8 +493,8 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     // Scene. Combat, token-control, Actor-sync and Quickbar snapshots replace
     // only the VE HUD scope; they neither resize nor repaint Foundry's board.
     if (state.status === "ready" && state.snapshot && state.route === "scene" && !splitActive) {
-      const settingsKey = `${settings.movementRepeatDelayMs}:${settings.quickbarEnabled}:${settings.quickbarSource}:${settings.joystickResolvedSide}:${settings.combatCarousel}:${state.quickbarCollapsed}`;
-      const nextSceneKey = `${scenePresentationKey(state.snapshot)}:${settingsKey}:${state.actionSession?.rootMessageId ?? ""}:${JSON.stringify(state.templatePlacement)}:${JSON.stringify(state.nativeTokenPlacement)}:${JSON.stringify(state.actorTokenPlacement)}`;
+      const settingsKey = `${settings.movementControl}:${settings.movementRepeatDelayMs}:${settings.quickbarEnabled}:${settings.quickbarSource}:${settings.joystickResolvedSide}:${settings.combatCarousel}:${state.quickbarCollapsed}`;
+      const nextSceneKey = `${scenePresentationKey(state.snapshot)}:${settingsKey}:${state.actionSession?.rootMessageId ?? ""}:${JSON.stringify(state.rollResult)}:${JSON.stringify(state.templatePlacement)}:${JSON.stringify(state.nativeTokenPlacement)}:${JSON.stringify(state.actorTokenPlacement)}`;
       const nextStructureKey = sceneStructureKey(state.snapshot, layoutKey, false);
       const nextFocusKey = sceneFocusKey(state.snapshot);
       let newPresentation = false;
@@ -508,7 +509,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
         newPresentation = true;
       }
       if (newPresentation || renderedState?.sceneKey !== nextSceneKey) {
-        const targetOnly = !newPresentation && sceneTargetsOnlyChanged(renderedState?.snapshot, state.snapshot);
+        const targetOnly = !newPresentation && !rollResultChanged && sceneTargetsOnlyChanged(renderedState?.snapshot, state.snapshot);
         if (targetOnly && updateSceneTargetPresentation(viewport.querySelector?.(".ve-scene-screen"), state.snapshot?.scene?.movement?.targetCount, activeTemplatePlacement)) {
           performanceObserver?.increment?.("render.patch.scene-targets");
         } else {
@@ -714,6 +715,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
         scope: screenScope,
         overlayHost: splitActive ? panelOverlays : null,
         expandedFolderIds: expandedSceneFolderIds,
+        expandedLevelSceneIds: expandedSceneLevelIds,
         sceneChoiceTransition
       }));
       if (state.route === "characters") characterHeaderScroll = bindCharacterHeaderScroll({ scroller: characterScroller(), screen: viewport.firstElementChild, scope: screenScope, restorePosition: restoreCharacterScrollPosition });
@@ -965,6 +967,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     metricsScope = null;
     sceneInteractionListeners.clear();
     expandedSceneFolderIds.clear();
+    expandedSceneLevelIds.clear();
     renderedSceneChooserKey = "";
     renderedSplitSceneKey = "";
     renderedSplitActionSessionId = "";
@@ -991,6 +994,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   }
 
   function reconcileSceneChooser(state, splitActive) {
+    if (!state.sceneChooserOpen) expandedSceneLevelIds.clear();
     const open = Boolean(state.sceneChooserOpen && state.route === "scene" && !state.templatePlacement && !splitActive);
     if (!open) {
       sceneChooserScope?.dispose();
@@ -1012,7 +1016,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     sceneChooserScope = scope.child("scene-chooser");
     renderedSceneChooserKey = key;
     sceneChooserOverlays.hidden = false;
-    sceneChooserOverlays.replaceChildren(renderSceneChooser({ scenes, commands, scope: sceneChooserScope, expandedFolderIds: expandedSceneFolderIds, sceneChoiceTransition }));
+    sceneChooserOverlays.replaceChildren(renderSceneChooser({ scenes, commands, scope: sceneChooserScope, expandedFolderIds: expandedSceneFolderIds, expandedLevelSceneIds: expandedSceneLevelIds, sceneChoiceTransition }));
   }
 
   function restoreSceneAnchorAfterLayout(anchor, host, { fixedScreenPosition = false } = {}) {
@@ -1661,7 +1665,7 @@ export function journalPresentationChanged(previous, current) {
     || previous?.journalImage !== current?.journalImage;
 }
 
-function renderSplitScenePicker({ commands, scope, expandedFolderIds, sceneChoiceTransition }) {
+function renderSplitScenePicker({ commands, scope, expandedFolderIds, expandedLevelSceneIds, sceneChoiceTransition }) {
   let scenes = Object.freeze([]);
   try {
     scenes = commands.readSceneNavigation();
@@ -1673,6 +1677,7 @@ function renderSplitScenePicker({ commands, scope, expandedFolderIds, sceneChoic
     commands,
     scope,
     expandedFolderIds,
+    expandedLevelSceneIds,
     host: "pane",
     sceneChoiceTransition
   });

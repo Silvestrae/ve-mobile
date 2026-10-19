@@ -1,8 +1,9 @@
 import { localizeFoundry } from "./localization.mjs";
 import { ACTOR_COMMANDS } from "../kernel/command-names.mjs";
+import { SCENE_RETURN_COMMANDS } from "../kernel/action-scene-return.mjs";
 import { biographyPlainText, createItemMenuRecord, resolveItemSourceItem } from "./actor-view.mjs";
 import { actorSourceUuid, resolveActorSource, speakerMatchesActor, validSourceUuid } from "./character-source.mjs";
-import { readDnd5eMessageItem, readDnd5eMessageOriginId as originatingMessageId } from "./dnd5e-message-reference.mjs";
+import { readDnd5eMessageItem, readDnd5eMessageRoll, readDnd5eMessageOriginId as originatingMessageId } from "./dnd5e-message-reference.mjs";
 
 export { ACTOR_COMMANDS };
 
@@ -130,6 +131,7 @@ export function createFoundryCommandGateway({
       inFlight.add(fingerprint);
       let actionCapture = null;
       let announcedActionSession = null;
+      let acceptanceAnnounced = false;
       const diceWaiter = name === ACTOR_COMMANDS.USE_ITEM ? null : createDiceSoNiceWaiter(game, getHooks);
       try {
         const actor = resolveActorSource(sourceUuid, { game });
@@ -153,6 +155,25 @@ export function createFoundryCommandGateway({
           img: String(target._source?.texture?.src ?? target.texture?.src ?? "")
         })) : [];
         const existingMessageIds = new Set(messageDocuments(game).map(messageIdentifier).filter(Boolean));
+        const announceAccepted = (message, { returned = false, userId } = {}) => {
+          if (acceptanceAnnounced || typeof observer?.onActionAccepted !== "function"
+            || !SCENE_RETURN_COMMANDS.includes(name) || !canRevealMessage(message)
+            || !messageIdentifier(message) || existingMessageIds.has(messageIdentifier(message))) return;
+          if (!returned && !isAcceptedActionMessage(message, actor, actionItem, name, payload, game.user.id, userId)) return;
+          acceptanceAnnounced = true;
+          const record = Object.freeze({ command: name, actorSourceUuid: sourceUuid,
+            itemId: String(actionItem?.id ?? ""), messageId: messageIdentifier(message) });
+          queueMicrotask(() => {
+            try {
+              const currentGame = getGame();
+              assertSession(currentGame, expectedSession, getConnectionGeneration);
+              if (currentGame !== game || resolveActorSource(sourceUuid, { game: currentGame }) !== actor || !canOwn(actor, currentGame.user)) return;
+              observer.onActionAccepted(record);
+            } catch (error) {
+              console.warn("VE Mobile | Action acceptance observer failed", error);
+            }
+          });
+        };
         const announceActionSession = (output) => {
           if (expectedSession.connectionGeneration !== undefined
             && expectedSession.connectionGeneration !== getConnectionGeneration()) return null;
@@ -184,12 +205,27 @@ export function createFoundryCommandGateway({
           }
           return session;
         };
-        actionCapture = actionItem
-          ? beginActionMessageCapture(getHooks(), existingMessageIds, () => announceActionSession())
+        actionCapture = actionItem || (typeof observer?.onActionAccepted === "function" && SCENE_RETURN_COMMANDS.includes(name))
+          ? beginActionMessageCapture(getHooks(), existingMessageIds, (message, userId) => {
+            announceActionSession();
+            announceAccepted(message, { userId });
+          })
           : null;
         const output = await handler(actor, payload);
         assertSession(game, expectedSession, getConnectionGeneration);
+        // Native return values are tied to this exact command, including
+        // integrations that do not publish createChatMessage on this client.
+        const returnedId = returnedActionMessageId(output);
+        const returnedMessage = returnedId ? uniqueMessages([...messageDocuments(game), ...(actionCapture?.messages ?? [])])
+          .find(message => messageIdentifier(message) === returnedId) : null;
+        if (returnedMessage) announceAccepted(returnedMessage, { returned: true });
         let rollResult = resultFromRollOutput(output) ?? resultFromNewMessage(game, existingMessageIds, actor, game.user.id);
+        if (!actionItem && rollResult && output) {
+          const message = uniqueMessages([...messageDocuments(game), ...(actionCapture?.messages ?? [])])
+            .find(message => !existingMessageIds.has(messageIdentifier(message))
+              && isAcceptedActionMessage(message, actor, null, name, payload, game.user.id));
+          if (message) announceAccepted(message);
+        }
         if (rollResult && diceWaiter) rollResult = await diceWaiter.finalize(rollResult, game, output);
         const response = { ok: true, command: name, actorId, ...(explicitSourceUuid ? { actorSourceUuid: sourceUuid } : {}) };
         if (name === ACTOR_COMMANDS.ADJUST_HIT_DICE && output) response.hitDice = output;
@@ -557,11 +593,11 @@ function actionSessionFromNewMessages(game, existingIds, actor, item, output, ca
 function beginActionMessageCapture(hooks, existingIds, onMessage = () => {}) {
   const messages = [];
   const waiters = new Set();
-  const onCreate = (message) => {
+  const onCreate = (message, _options, userId) => {
     const id = messageIdentifier(message);
     if (!id || existingIds.has(id) || messages.some((candidate) => messageIdentifier(candidate) === id)) return;
     messages.push(message);
-    onMessage(message);
+    onMessage(message, userId);
     for (const wake of [...waiters]) wake();
   };
   const hookId = hooks?.on?.("createChatMessage", onCreate);
@@ -632,7 +668,7 @@ function speakerActorId(message) {
 }
 
 function messageAuthorId(message) {
-  return String(message?.author?.id ?? message?.user?.id ?? message?._source?.user ?? "");
+  return String(message?.author?.id ?? message?.user?.id ?? message?._source?.author ?? message?._source?.user ?? "");
 }
 
 function messageReferencesItem(message, itemId) {
@@ -641,6 +677,30 @@ function messageReferencesItem(message, itemId) {
   const uuid = String(reference?.uuid ?? "");
   const expected = String(itemId ?? "");
   return id === expected || uuid.endsWith(`.Item.${expected}`);
+}
+
+/** Strict provenance for navigation. Summary-card discovery may deliberately
+ * accept looser integration formats; those never grant navigation authority. */
+function isAcceptedActionMessage(message, actor, item, command, payload, userId, initiatingUserId) {
+  if (!speakerMatchesActor(message, actor)) return false;
+  const tokenSource = String(payload?.actorSourceUuid ?? "").match(/^Scene\.([^.]+)\.Token\.([^.]+)$/u);
+  const speaker = message?.speaker ?? message?._source?.speaker ?? {};
+  if (tokenSource && (String(speaker.scene ?? "") !== tokenSource[1] || String(speaker.token ?? "") !== tokenSource[2])) return false;
+  const author = messageAuthorId(message);
+  if (initiatingUserId ? String(initiatingUserId) !== String(userId) : author !== String(userId)) return false;
+  if (author && author !== String(userId)) return false;
+  if (item) return messageReferencesItem(message, item.id);
+  const roll = readDnd5eMessageRoll(message);
+  const type = String(roll.type ?? "");
+  switch (command) {
+    case ACTOR_COMMANDS.ROLL_ABILITY: return type === "ability" && String(roll.ability ?? "") === String(payload.ability ?? "");
+    case ACTOR_COMMANDS.ROLL_SAVE: return type === "save" && String(roll.ability ?? "") === String(payload.ability ?? "");
+    case ACTOR_COMMANDS.ROLL_SKILL: return type === "skill" && String(roll.skill ?? "") === String(payload.skill ?? "");
+    case ACTOR_COMMANDS.ROLL_TOOL: return type === "tool" && String(roll.tool ?? "") === String(payload.tool ?? "");
+    case ACTOR_COMMANDS.ROLL_INITIATIVE: return type === "initiative";
+    case ACTOR_COMMANDS.ROLL_DEATH_SAVE: return type === "death";
+    default: return false;
+  }
 }
 
 function canRevealMessage(message) {

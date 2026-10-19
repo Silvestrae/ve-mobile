@@ -59,11 +59,31 @@
         "STALE_SCENE": "La escena activa ha cambiado",
         "TARGET_MISSING": "Ese token ya no está disponible",
         "MOVEMENT_BUSY": "Espera a que termine el paso actual",
-        "Failed": "No se pudo mover el token"
+        "Failed": "No se pudo mover el token",
+        "Label": "Mover a {name} en {count} direcciones",
+        "Step": "Mover hacia {direction}",
+        "North": "Norte",
+        "NorthEast": "Nordeste",
+        "East": "Este",
+        "SouthEast": "Sudeste",
+        "South": "Sur",
+        "SouthWest": "Sudoeste",
+        "West": "Oeste",
+        "NorthWest": "Noroeste",
+        "InvalidAngle": "Ángulo de movimiento no válido."
       },
       "Unnamed": "Escena sin nombre",
       "NoActive": "No hay ninguna escena activa",
-      "UnnamedFolder": "Carpeta sin nombre"
+      "UnnamedFolder": "Carpeta sin nombre",
+      "Levels": {
+        "Show": "Mostrar niveles de {name}",
+        "Hide": "Ocultar niveles de {name}",
+        "List": "Niveles de {name}",
+        "Inactive": "Este control de niveles de escena ya no está activo.",
+        "CanvasUnavailable": "Abre el mapa y espera a que se cargue antes de elegir un nivel.",
+        "Unavailable": "Ese nivel de escena ya no está disponible.",
+        "NotViewed": "Foundry no pudo abrir el nivel de escena seleccionado."
+      }
     },
     "Settings": {
       "DesktopMobileNotice": "Los controles de Teléfono y tableta están disponibles en esos modos. Tus preferencias se conservan y cambiar el Modo móvil recarga Foundry.",
@@ -597,6 +617,19 @@
       "FcsAutoSoftOverride": {
         "Name": "El perfil gráfico de VE tiene prioridad sobre Force Client Settings",
         "Hint": "Cuando está activado, la anulación de lectura local de la página de VE Mobile proporciona los valores gráficos que requiere el perfil de protección de memoria activo, aunque Force Client Settings indique valores distintos."
+      },
+      "MovementControl": {
+        "Name": "Control de movimiento",
+        "Hint": "Elige un joystick que se inicia desde el centro o botones de dirección. Las escenas hexagonales usan seis direcciones nativas.",
+        "Joystick": "Palanca",
+        "Dpad": "Cruceta"
+      },
+      "ActionSceneReturn": {
+        "Name": "Volver a Escena tras las acciones",
+        "Hint": "Solo en teléfono y tableta a pantalla completa. Vuelve al iniciarse una acción nativa. La vista dividida no cambia. El mapa debe estar disponible.",
+        "Always": "Siempre",
+        "Combat": "Solo durante el combate",
+        "Off": "Desactivado"
       }
     },
     "Character": {

@@ -2555,7 +2555,7 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
   padding: 8px;
   display: grid;
   align-content: start;
-  gap: 7px;
+  gap: 6px;
   overflow: hidden auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -2566,9 +2566,9 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
   height: auto;
   flex-shrink: 0;
   width: 100%;
-  min-height: 68px;
+  min-height: 60px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   border: 1px solid var(--ve-border);
   border-radius: 14px 6px 14px 6px;
@@ -2580,13 +2580,13 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 .ve-mobile-app button.ve-scene-choice-main {
   width: 100%;
   height: auto;
-  min-height: 68px;
+  min-height: 60px;
   max-height: none;
   padding: 6px 10px 6px 6px;
   display: grid;
-  grid-template-columns: 86px minmax(0, 1fr) 24px;
+  grid-template-columns: 64px minmax(0, 1fr);
   align-items: center;
-  gap: 11px;
+  gap: 8px;
   border: 0;
   border-radius: 0;
   color: inherit;
@@ -2602,10 +2602,10 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 }
 
 .ve-mobile-app button.ve-scene-choice-menu-button {
-  width: 42px;
-  min-width: 42px;
-  height: 52px;
-  margin-right: 5px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  margin: 0;
   padding: 0;
   display: grid;
   place-items: center;
@@ -2617,8 +2617,8 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 }
 
 .ve-scene-choice-preview {
-  width: 86px;
-  height: 54px;
+  width: 64px;
+  height: 40px;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -2641,7 +2641,7 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 
 .ve-scene-choice-copy {
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .ve-scene-choice-copy > strong {
@@ -2716,13 +2716,15 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 }
 
 .ve-scene-context-menu {
-  position: fixed;
+  position: absolute;
   z-index: calc(var(--ve-layer-modal) + 1);
   box-sizing: border-box;
   width: min(260px, calc(100vw - 16px));
   max-height: min(420px, calc(100dvh - 16px));
   padding: 6px;
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   overflow: hidden auto;
   border: 1px solid var(--ve-border);
   border-radius: 14px;
@@ -2732,6 +2734,9 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 
 .ve-mobile-app button.ve-scene-context-option {
   min-height: 44px;
+  height: auto;
+  max-height: none;
+  margin: 0;
   padding: 8px 10px;
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
@@ -2742,7 +2747,34 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
   color: var(--ve-text);
   background: transparent;
   text-align: left;
+  white-space: normal;
 }
+
+.ve-scene-choice-header { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.ve-scene-choice-actions { display: flex; align-items: center; gap: 3px; padding-right: 5px; }
+.ve-scene-choice-actions:empty { display: none; }
+.ve-mobile-app button.ve-scene-level-toggle {
+  width: 44px; min-width: 44px; height: 44px; margin: 0; padding: 0;
+  display: grid; place-items: center; border: 1px solid var(--ve-border); border-radius: 8px;
+  color: var(--ve-subtle); background: color-mix(in srgb, var(--ve-surface) 45%, transparent);
+}
+.ve-scene-level-toggle > i { font-size: 0.7rem; transition: transform 150ms ease; }
+.ve-scene-level-toggle[aria-expanded="true"] > i { transform: rotate(90deg); }
+.ve-mobile-app button.ve-scene-level-toggle[aria-expanded="true"] { color: var(--ve-class-accent-primary); }
+.ve-scene-level-list { padding: 8px 8px 8px 12px; display: grid; gap: 3px; border-top: 1px solid var(--ve-border); }
+.ve-scene-level-list[hidden] { display: none; }
+.ve-mobile-app button.ve-scene-level-option {
+  min-width: 0; width: 100%; height: auto; min-height: 44px; margin: 0; padding: 8px 10px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 20px; align-items: center; gap: 8px;
+  border: 0; border-left: 2px solid color-mix(in srgb, var(--ve-class-accent-primary) 25%, var(--ve-border));
+  border-radius: 0 8px 8px 0; background: transparent; color: var(--ve-text); text-align: left; white-space: normal;
+}
+.ve-scene-level-option > span:first-child, .ve-scene-context-label { min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.ve-mobile-app button.ve-scene-level-option.is-viewed { color: var(--ve-class-accent-primary); background: color-mix(in srgb, var(--ve-class-accent-primary) 12%, var(--ve-surface)); }
+.ve-scene-level-check, .ve-scene-context-icon { display: grid; place-items: center; color: var(--ve-class-accent-primary); }
+.ve-scene-context-icon { width: 24px; overflow: hidden; }
+.ve-scene-choice :is(button, summary):focus-visible { outline-offset: -3px; }
+@media (prefers-reduced-motion: reduce) { .ve-scene-level-toggle > i { transition: none; } }
 
 .ve-scene-context-option + .ve-scene-context-option { border-top: 1px solid var(--ve-border) !important; }
 
@@ -2999,6 +3031,120 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
   background: linear-gradient(145deg, var(--ve-surface-up), var(--ve-surface));
   box-shadow: 0 7px 16px rgb(0 0 0 / 0.24);
 }
+
+/* The pad owns the complete hit footprint. The release pill deliberately sits
+   outside the clip so it remains reachable at either hex orientation. */
+.ve-joystick-base[data-shape] {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+.ve-joystick-base[data-shape="hex-rows"] { width: calc(var(--ve-joystick-size) * 0.8660254); }
+.ve-joystick-base[data-shape="hex-columns"] { height: calc(var(--ve-joystick-size) * 0.8660254); }
+.ve-movement-pad {
+  --ve-pad-clip: circle(50%);
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  clip-path: var(--ve-pad-clip);
+  background: color-mix(in srgb, var(--ve-border) 60%, transparent);
+  pointer-events: auto;
+  touch-action: none;
+}
+.ve-movement-pad::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  clip-path: var(--ve-pad-clip);
+  background: radial-gradient(circle, color-mix(in srgb, var(--ve-surface-up) 78%, transparent), color-mix(in srgb, var(--ve-bg) 76%, transparent));
+  pointer-events: none;
+}
+[data-shape="hex-rows"] > .ve-movement-pad {
+  --ve-pad-clip: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+[data-shape="hex-columns"] > .ve-movement-pad {
+  --ve-pad-clip: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+.ve-joystick-base.is-idle > .ve-movement-pad { pointer-events: none; }
+.ve-movement-pad > .ve-joystick-knob, .ve-movement-pad > .ve-joystick-ring { z-index: 1; }
+/* One continuous annular pad. Each native button is clipped to its visible
+   sector, including its feedback; no hidden rectangular touch/glow surfaces. */
+.ve-joystick-base[data-control="dpad"] {
+  --ve-joystick-size: 132px;
+  bottom: max(14px, var(--ve-safe-bottom));
+}
+.ve-mobile-app .ve-joystick-base[data-control="dpad"][data-side="left"] { left: max(14px, var(--ve-safe-left)); }
+.ve-mobile-app .ve-joystick-base[data-control="dpad"][data-side="right"] { right: max(14px, var(--ve-safe-right)); }
+.ve-joystick-base[data-control="dpad"] > .ve-movement-pad {
+  background: none;
+  pointer-events: none;
+}
+.ve-joystick-base[data-control="dpad"] > .ve-movement-pad::before,
+.ve-joystick-base[data-control="dpad"] .ve-joystick-ring { display: none; }
+.ve-joystick-base[data-control="dpad"] .ve-joystick-knob {
+  pointer-events: auto;
+  will-change: auto;
+}
+.ve-joystick-base[data-control="dpad"] .ve-joystick-token {
+  top: -2px;
+  transform: translate(-50%, -100%);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.12);
+}
+.ve-mobile-app button.ve-dpad-direction {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #eee8dc;
+  color: #39352f;
+  box-shadow: inset 0 0 3px rgb(87 70 46 / 0.2);
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.ve-dpad-direction > i {
+  position: absolute;
+  left: var(--ve-direction-x);
+  top: var(--ve-direction-y);
+  font-size: 18px;
+  line-height: 1;
+  transform: translate(-50%, -50%) rotate(var(--ve-direction-angle));
+  pointer-events: none;
+}
+.ve-mobile-app button.ve-dpad-direction:active,
+.ve-mobile-app button.ve-dpad-direction.is-pressed {
+  background: color-mix(in srgb, var(--ve-class-accent-primary) 36%, #eee8dc);
+  box-shadow: inset 0 0 22px color-mix(in srgb, var(--ve-class-accent-primary) 65%, transparent);
+}
+.ve-dpad-direction:focus-visible { outline: none; }
+.ve-dpad-direction:focus-visible > i {
+  outline: 2px solid var(--ve-class-accent-primary);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.ve-dpad-direction[data-press-pulse] { animation-duration: 260ms; animation-timing-function: ease-out; }
+.ve-dpad-direction[data-press-pulse="a"] { animation-name: ve-dpad-flash-a; }
+.ve-dpad-direction[data-press-pulse="b"] { animation-name: ve-dpad-flash-b; }
+@keyframes ve-dpad-flash-a {
+  from { background: color-mix(in srgb, var(--ve-class-accent-primary) 50%, #eee8dc); box-shadow: inset 0 0 22px var(--ve-class-accent-primary); }
+}
+@keyframes ve-dpad-flash-b {
+  from { background: color-mix(in srgb, var(--ve-class-accent-primary) 50%, #eee8dc); box-shadow: inset 0 0 22px var(--ve-class-accent-primary); }
+}
+.ve-joystick-base.is-idle .ve-dpad-direction,
+.ve-joystick-base.is-idle[data-control="dpad"] .ve-joystick-knob { pointer-events: none; }
 
 .ve-scene-screen.is-template-placement .ve-scene-combat-carousel {
   opacity: 0.34;
@@ -5041,7 +5187,7 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 
 .ve-roll-result-layer {
   position: fixed;
-  z-index: 70;
+  z-index: var(--ve-layer-modal);
   inset: 0;
   touch-action: manipulation;
 }

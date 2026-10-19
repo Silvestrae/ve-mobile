@@ -37,6 +37,8 @@ const KEYS = Object.freeze({
   MOVEMENT_REPEAT_DELAY: "movementRepeatDelay",
   RECENTER_AFTER_MOVE: "recenterAfterMove",
   JOYSTICK_SIDE: "joystickSide",
+  MOVEMENT_CONTROL: "movementControl",
+  ACTION_SCENE_RETURN: "actionSceneReturn",
   COMBAT_CAROUSEL: "combatCarousel",
   KEEP_SCREEN_AWAKE: "keepScreenAwake",
   PROTECT_VE_STYLING: "protectVeStyling",
@@ -69,6 +71,8 @@ const CHOICES = Object.freeze({
   [KEYS.MEMORY_PROTECTION_BEHAVIOR]: Object.freeze(["recommend", "automatic", "off"]),
   [KEYS.AFTER_GRAPHICS_FAILURE]: Object.freeze(["ask", "auto", "nothing"]),
   [KEYS.JOYSTICK_SIDE]: Object.freeze(["follow", "left", "right"]),
+  [KEYS.MOVEMENT_CONTROL]: Object.freeze(["joystick", "dpad"]),
+  [KEYS.ACTION_SCENE_RETURN]: Object.freeze(["always", "combat", "off"]),
   [KEYS.CHARACTER_INVENTORY_SORT]: Object.freeze(["manual", "alphabetical"]),
   [KEYS.CHARACTER_SPELL_SORT]: Object.freeze(["manual", "alphabetical"]),
   [KEYS.CHARACTER_SPELL_FILTER]: Object.freeze(["all", "prepared"]),
@@ -79,7 +83,7 @@ const CHOICES = Object.freeze({
   [KEYS.LOGGING_LEVEL]: Object.freeze(["off", "error", "warn", "info", "debug"])
 });
 
-const DEFAULTS = Object.freeze({ mode: "auto", theme: "system", colorScheme: "class", headerArtwork: "automatic", headerArtworkOpacity: 1, quickbarEnabled: true, quickbarSource: "character", quickbarRows: "1", showActionSummaries: true, compactActionSummaries: false, graphicsSafety: "auto", diceRendering: "auto", mobileOptimizedAssets: "auto", lowMemoryCanvas: false, memoryProtectionProfile: "normal", memoryProtectionBehavior: "recommend", afterGraphicsFailure: "ask", sceneMemoryWarnings: true, fcsAutoSoftOverride: true, movementRepeatDelay: 0.5, recenterAfterMove: false, joystickSide: "follow", combatCarousel: true, keepScreenAwake: false, protectVeStyling: true, moduleOverlayVisibility: Object.freeze({}), moduleOverlayCatalog: Object.freeze({ scanned: false, entries: Object.freeze([]) }), moduleOverlayOrder: Object.freeze([]), moduleOverlayScale: Object.freeze({}), characterInventorySort: "manual", characterSpellSort: "manual", characterSpellFilter: "all", characterFeatureSort: "manual", characterFavouritesSort: "manual", characterEffectsSort: "manual", characterFavouritesSource: "core", loggingLevel: "warn", saveDiagnosticsToJournal: true });
+const DEFAULTS = Object.freeze({ mode: "auto", theme: "system", colorScheme: "class", headerArtwork: "automatic", headerArtworkOpacity: 1, quickbarEnabled: true, quickbarSource: "character", quickbarRows: "1", showActionSummaries: true, compactActionSummaries: false, graphicsSafety: "auto", diceRendering: "auto", mobileOptimizedAssets: "auto", lowMemoryCanvas: false, memoryProtectionProfile: "normal", memoryProtectionBehavior: "recommend", afterGraphicsFailure: "ask", sceneMemoryWarnings: true, fcsAutoSoftOverride: true, movementRepeatDelay: 0.5, recenterAfterMove: false, joystickSide: "follow", movementControl: "joystick", actionSceneReturn: "off", combatCarousel: true, keepScreenAwake: false, protectVeStyling: true, moduleOverlayVisibility: Object.freeze({}), moduleOverlayCatalog: Object.freeze({ scanned: false, entries: Object.freeze([]) }), moduleOverlayOrder: Object.freeze([]), moduleOverlayScale: Object.freeze({}), characterInventorySort: "manual", characterSpellSort: "manual", characterSpellFilter: "all", characterFeatureSort: "manual", characterFavouritesSort: "manual", characterEffectsSort: "manual", characterFavouritesSource: "core", loggingLevel: "warn", saveDiagnosticsToJournal: true });
 
 const CHARACTER_COLLECTION_SETTING_KEYS = Object.freeze({
   inventorySort: KEYS.CHARACTER_INVENTORY_SORT,
@@ -467,6 +471,17 @@ export function registerPreferences({
     onChange: changed(KEYS.JOYSTICK_SIDE, onApplicationChange)
   });
 
+  for (const [key, group] of [[KEYS.MOVEMENT_CONTROL, "MovementControl"], [KEYS.ACTION_SCENE_RETURN, "ActionSceneReturn"]]) {
+    game.settings.register(MODULE_ID, key, {
+      name: `VEMOBILE.Settings.${group}.Name`,
+      hint: `VEMOBILE.Settings.${group}.Hint`,
+      scope: "client", config: true, type: String,
+      choices: Object.fromEntries(CHOICES[key].map(choice => [choice, `VEMOBILE.Settings.${group}.${choice[0].toUpperCase()}${choice.slice(1)}`])),
+      default: DEFAULTS[key],
+      onChange: changed(key, onApplicationChange)
+    });
+  }
+
   game.settings.register(MODULE_ID, KEYS.COMBAT_CAROUSEL, {
     name: "VEMOBILE.Settings.CombatCarousel.Name",
     hint: "VEMOBILE.Settings.CombatCarousel.Hint",
@@ -746,6 +761,8 @@ export function createFoundryPreferencesGateway({
     sceneMemoryWarnings: () => setting(KEYS.SCENE_MEMORY_WARNINGS) !== false,
     recenterAfterMove: () => Boolean(setting(KEYS.RECENTER_AFTER_MOVE)),
     joystickSide: () => normalizedChoice(KEYS.JOYSTICK_SIDE, setting(KEYS.JOYSTICK_SIDE), DEFAULTS.joystickSide),
+    movementControl: () => normalizedChoice(KEYS.MOVEMENT_CONTROL, setting(KEYS.MOVEMENT_CONTROL), DEFAULTS.movementControl),
+    actionSceneReturn: () => normalizedChoice(KEYS.ACTION_SCENE_RETURN, setting(KEYS.ACTION_SCENE_RETURN), DEFAULTS.actionSceneReturn),
     combatCarousel: () => setting(KEYS.COMBAT_CAROUSEL) !== false,
     keepScreenAwake: () => Boolean(setting(KEYS.KEEP_SCREEN_AWAKE)),
     protectVeStyling: () => setting(KEYS.PROTECT_VE_STYLING) !== false,
@@ -777,10 +794,11 @@ export function createFoundryPreferencesGateway({
     readLocale: () => readLocale(getGame()),
     presentation,
     layout: () => pick(["mode", "joystickSide"]),
-    frame: () => pick(["colorScheme", "headerArtworkOpacity", "protectVeStyling", "joystickSide", "movementRepeatDelayMs", "quickbarEnabled", "quickbarSource", "combatCarousel"]),
+    frame: () => pick(["colorScheme", "headerArtworkOpacity", "protectVeStyling", "joystickSide", "movementControl", "movementRepeatDelayMs", "quickbarEnabled", "quickbarSource", "combatCarousel"]),
     character: () => pick(["colorScheme", "headerArtwork", "quickbarEnabled", "quickbarSource", "characterCollections", "characterFavouritesSource", "characterFavouritesEnabled"]),
-    scene: () => pick(["joystickSide", "movementRepeatDelayMs", "quickbarEnabled", "quickbarSource", "quickbarRows", "combatCarousel", "showActionSummaries", "compactActionSummaries"]),
+    scene: () => pick(["joystickSide", "movementControl", "movementRepeatDelayMs", "quickbarEnabled", "quickbarSource", "quickbarRows", "combatCarousel", "showActionSummaries", "compactActionSummaries"]),
     actionMenu: () => pick(["quickbarEnabled", "quickbarSource"]),
+    actionNavigation: () => pick(["actionSceneReturn"]),
     actionSummaries: () => pick(["showActionSummaries", "compactActionSummaries"]),
     snapshot() {
       const fields = preferenceFields(setting, localize, getNavigator, getGame);
@@ -959,6 +977,8 @@ function preferenceFields(setting, localize, getNavigator, getGame) {
     }),
     booleanField(KEYS.RECENTER_AFTER_MOVE, "RecenterAfterMove", setting(KEYS.RECENTER_AFTER_MOVE), localize),
     choiceField(KEYS.JOYSTICK_SIDE, "JoystickSide", normalizedChoice(KEYS.JOYSTICK_SIDE, setting(KEYS.JOYSTICK_SIDE), DEFAULTS.joystickSide), localize),
+    choiceField(KEYS.MOVEMENT_CONTROL, "MovementControl", normalizedChoice(KEYS.MOVEMENT_CONTROL, setting(KEYS.MOVEMENT_CONTROL), DEFAULTS.movementControl), localize),
+    choiceField(KEYS.ACTION_SCENE_RETURN, "ActionSceneReturn", normalizedChoice(KEYS.ACTION_SCENE_RETURN, setting(KEYS.ACTION_SCENE_RETURN), DEFAULTS.actionSceneReturn), localize),
     booleanField(KEYS.COMBAT_CAROUSEL, "CombatCarousel", setting(KEYS.COMBAT_CAROUSEL) !== false, localize),
     Object.freeze({
       ...booleanField(KEYS.KEEP_SCREEN_AWAKE, "KeepScreenAwake", setting(KEYS.KEEP_SCREEN_AWAKE), localize),
