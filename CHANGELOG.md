@@ -2,13 +2,13 @@
 
 ## Unreleased
 
-## 1.0.6 ó 2026-10-25
+## 1.0.6 ‚Äî 2026-10-25
 
 - Replace the exhaustion toggle with compact, right-aligned minus, level and plus
   controls, allowing exhaustion to be reduced to zero as well as increased.
 - Show spell attack and save DC beside the Spellcasting heading. Multiclass
   casters can choose a class without changing their Actor's casting ability.
-  The selector starts on the named primary class instead of ìDefaultî.
+  The selector starts on the named primary class instead of ‚ÄúDefault‚Äù.
 - Speed up reconnects by keeping unchanged Actors and Scenes intact, including
   legacy records with generated IDs and native token overrides. Avoid repeated
   preparation that could double character level and proficiency.
