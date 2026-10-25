@@ -1,6 +1,11 @@
 import { localizedText } from "../ui/localized-text.mjs";
 import { icon, node } from "./dom.mjs";
 
+/** Every placement surface owns interaction until its native workflow settles. */
+export function actionResultsDeferred(state) {
+  return Boolean(state?.templatePlacement || state?.nativeTokenPlacement || state?.actorTokenPlacement);
+}
+
 /** Render VE Mobile's shared, incrementally updated native action-session surface. */
 export function renderActionSessionModal(session, commands, scope) {
   if (!session) return null;

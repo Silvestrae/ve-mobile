@@ -3,7 +3,7 @@ import { icon, node } from "../../ui/dom.mjs";
 import { bindJoystickReleaseControl, createJoystickController, createDpadController } from "./joystick-controller.mjs";
 import { renderActionBar, bindActionBarLayout } from "./action-bar.mjs";
 import { ACTOR_COMMANDS } from "../../kernel/command-names.mjs";
-import { renderActionSessionModal } from "../../ui/action-session-modal.mjs";
+import { actionResultsDeferred, renderActionSessionModal } from "../../ui/action-session-modal.mjs";
 import { renderRollResultOverlay } from "../../ui/roll-result-overlay.mjs";
 import { renderSceneCombatCarousel } from "../combat/presenter.mjs";
 import { sceneCombat } from "../combat/model.mjs";
@@ -158,7 +158,7 @@ export function renderScene({
   const actionModal = shouldRenderSceneActionSession(state, splitViewport)
     ? renderActionSessionModal(state.actionSession, commands, scope)
     : null;
-  const rollModal = !splitViewport && state.rollResult?.sceneReturn
+  const rollModal = !actionResultsDeferred(state) && !splitViewport && state.rollResult?.sceneReturn
     ? renderRollResultOverlay(state.rollResult, commands, scope) : null;
   const templateUi = placement ? renderTemplatePlacement({ placement, commands, scope, liveStatus }) : null;
   const nativeTokenUi = nativePlacement ? renderNativeTokenPlacement({ placement: nativePlacement, commands, scope }) : null;
@@ -753,7 +753,7 @@ export function shouldRenderQuickbar(preferences, placement) {
 /** Full-screen Scene owns the result surface after native template placement,
  * regardless of whether the action began in Character or the Quickbar. */
 export function shouldRenderSceneActionSession(state, splitViewport = false) {
-  return Boolean(state?.actionSession && !state?.templatePlacement && !state?.nativeTokenPlacement && !state?.actorTokenPlacement && !splitViewport);
+  return Boolean(state?.actionSession && !actionResultsDeferred(state) && !splitViewport);
 }
 
 function renderNativeTokenPlacement({ placement, commands, scope }) {

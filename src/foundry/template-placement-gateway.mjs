@@ -1,8 +1,9 @@
 const TEMPLATE_TYPES = new Set(["circle", "cone", "ray", "rect"]);
+const REGION_TEMPLATE_TYPES = Object.freeze({ rectangle: "rect", line: "ray", circle: "circle", cone: "cone", ring: "circle", emanation: "circle" });
 const DIRECT_ROTATION_INCREMENT = 1;
 
 /**
- * Adapt D&D5e's live AbilityTemplate preview without reproducing its activity
+ * Adapt D&D5e's live legacy and Region previews without reproducing activity
  * execution or final document creation. The patch exists only for VE's active
  * task scope and is restored verbatim on shutdown.
  */
@@ -22,9 +23,29 @@ export function createFoundryTemplatePlacementGateway({
     const prototype = AbilityTemplate?.prototype;
     const original = prototype?.activatePreviewListeners;
     const originalDrawPreview = prototype?.drawPreview;
-    if (!prototype || typeof original !== "function") return false;
+    const legacyAvailable = typeof original === "function";
+    if (!legacyAvailable && typeof getCanvas()?.regions?.placeRegion !== "function") return false;
     const interactionStates = new WeakMap();
     enabled = true;
+
+    const requestAdapter = (adapter) => {
+      current = adapter;
+      adapter.settle.then(() => {
+        if (current === adapter) current = null;
+      }, () => {
+        if (current === adapter) current = null;
+      });
+      queueMicrotaskFn(() => {
+        if (!enabled || current !== adapter) {
+          void adapter.cancel().catch(() => {});
+          return;
+        }
+        Promise.resolve().then(() => onRequest?.(adapter)).catch((error) => {
+          console.warn("VE Mobile | Could not start mobile template placement", error);
+          return adapter.cancel();
+        });
+      });
+    };
 
     function drawPreview(...args) {
       interactionStates.set(this, captureTemplateInteractionState(getCanvas(), getGame()));
@@ -68,31 +89,20 @@ export function createFoundryTemplatePlacementGateway({
         interactionState: savedInteractionState,
         labels: templatePlacementLabels(getGame())
       });
-      current = adapter;
-      adapter.settle.then(() => {
-        if (current === adapter) current = null;
-      }, () => {
-        if (current === adapter) current = null;
-      });
-      queueMicrotaskFn(() => {
-        if (!enabled || current !== adapter) {
-          void adapter.cancel().catch(() => {});
-          return;
-        }
-        Promise.resolve(onRequest?.(adapter)).catch((error) => {
-          console.warn("VE Mobile | Could not start mobile template placement", error);
-          return adapter.cancel();
-        });
-      });
+      requestAdapter(adapter);
       return nativeResult;
     }
 
-    if (typeof originalDrawPreview === "function") prototype.drawPreview = drawPreview;
-    prototype.activatePreviewListeners = activatePreviewListeners;
+    if (legacyAvailable) {
+      if (typeof originalDrawPreview === "function") prototype.drawPreview = drawPreview;
+      prototype.activatePreviewListeners = activatePreviewListeners;
+    }
+    bindRegionTemplatePlacement({ scope, getCanvas, getGame, isEnabled: () => enabled,
+      nextId: () => `region-template-${++sequence}`, onRequest: requestAdapter });
     scope?.own?.(() => {
       enabled = false;
-      if (prototype.drawPreview === drawPreview) prototype.drawPreview = originalDrawPreview;
-      if (prototype.activatePreviewListeners === activatePreviewListeners) prototype.activatePreviewListeners = original;
+      if (prototype?.drawPreview === drawPreview) prototype.drawPreview = originalDrawPreview;
+      if (prototype?.activatePreviewListeners === activatePreviewListeners) prototype.activatePreviewListeners = original;
       const active = current;
       current = null;
       void active?.cancel?.();
@@ -107,6 +117,165 @@ export function createFoundryTemplatePlacementGateway({
     },
     get active() {
       return current;
+    }
+  });
+}
+
+/** D&D5e 6 uses RegionLayer.placeRegion, not the deprecated AbilityTemplate.
+ * Keep its native shape, callbacks, sequence and final Region creation intact.
+ * Only measured-template requests enter VE's existing placement coordinator.
+ */
+function bindRegionTemplatePlacement({ scope, getCanvas, getGame, isEnabled, nextId, onRequest }) {
+  let patch = null;
+  const restore = () => {
+    if (!patch) return;
+    if (patch.layer.placeRegion === patch.wrapper) {
+      if (patch.hadOwn) patch.layer.placeRegion = patch.original;
+      else delete patch.layer.placeRegion;
+    }
+    patch = null;
+  };
+  const attach = () => {
+    const canvas = getCanvas();
+    const layer = canvas?.regions;
+    if (!layer || layer === patch?.layer) return;
+    restore();
+    const original = layer.placeRegion;
+    if (typeof original !== "function") return;
+    const hadOwn = Object.hasOwn(layer, "placeRegion");
+    function placeRegion(data, options = {}) {
+      const measured = data?.flags?.core?.MeasuredTemplate === true || data?.["flags.core.MeasuredTemplate"] === true;
+      if (!isEnabled() || this !== layer || getCanvas() !== canvas || !measured
+        || data.shapes?.length !== 1 || !REGION_TEMPLATE_TYPES[data.shapes[0]?.type]) return original.call(this, data, options);
+      const state = captureTemplateInteractionState(canvas, getGame());
+      const beforeMove = stageListeners(canvas.stage, "pointermove");
+      const beforeConfirm = stageListeners(canvas.stage, "pointerdown");
+      const previous = layer._placementContext;
+      const confirmation = { rejected: false, error: null };
+      const preConfirm = options.preConfirm;
+      const nativeResult = original.call(this, data, { ...options, preConfirm(args) {
+        try {
+          const allowed = preConfirm?.(args);
+          confirmation.rejected = allowed === false;
+          return allowed;
+        } catch (error) {
+          confirmation.error = error;
+          return false;
+        }
+      } });
+      // In 14.369 the context/listeners are installed synchronously, before the
+      // native promise awaits user input. Do not intercept an unrelated preview.
+      const context = layer._placementContext;
+      if (!context || context === previous || context.shapes?.length !== 1) return nativeResult;
+      const move = stageListeners(canvas.stage, "pointermove").filter((listener) => !beforeMove.includes(listener));
+      const confirm = stageListeners(canvas.stage, "pointerdown").filter((listener) => !beforeConfirm.includes(listener));
+      if (move.length !== 1 || confirm.length !== 1) return nativeResult;
+      canvas.stage.off("pointermove", move[0]);
+      canvas.stage.off("pointerdown", confirm[0]);
+      restoreTemplateInteractionState(canvas, getGame(), state);
+      onRequest(createRegionPreviewAdapter({ id: nextId(), canvas, layer, context, nativeResult,
+        move: move[0], confirm: confirm[0], confirmation, getCanvas, getGame,
+        interactionState: state, labels: templatePlacementLabels(getGame()) }));
+      return nativeResult;
+    }
+    layer.placeRegion = placeRegion;
+    patch = { layer, original, wrapper: placeRegion, hadOwn };
+  };
+  attach();
+  scope?.hook?.("canvasReady", attach);
+  scope?.own?.(restore);
+}
+
+function createRegionPreviewAdapter({ id, canvas, layer, context, nativeResult, move, confirm,
+  confirmation, getCanvas, getGame, interactionState, labels }) {
+  const shape = context.shape;
+  const type = REGION_TEMPLATE_TYPES[shape.type];
+  const rotatable = context.allowRotation !== false && ["cone", "line"].includes(shape?.type);
+  const settle = Promise.resolve(nativeResult);
+  const scene = canvas.scene;
+  const world = getGame()?.world?.id;
+  const user = getGame()?.user?.id;
+  let operation = "active";
+  const ownsPreview = () => getCanvas() === canvas && canvas.scene === scene && layer._placementContext === context;
+  const previewAlive = () => operation === "active" && ownsPreview() && !context.preview?.destroyed
+    && getGame()?.world?.id === world && getGame()?.user?.id === user;
+  const eventAt = (point = { x: 0, y: 0 }) => ({
+    x: point.x, y: point.y, clientX: point.x, clientY: point.y, button: 0, shiftKey: false,
+    getLocalPosition: () => canvas.canvasCoordinatesFromClient(point),
+    preventDefault() {}, stopPropagation() {}
+  });
+  const moveOrigin = (point) => {
+    if (!previewAlive() || ![point?.x, point?.y].every(Number.isFinite)) return false;
+    move(eventAt(point));
+    context.preview?.applyRenderFlags?.();
+    return true;
+  };
+  const directionAt = (point) => {
+    const origin = shape.origin;
+    const worldPoint = canvas.canvasCoordinatesFromClient(point);
+    return [origin?.x, origin?.y, worldPoint?.x, worldPoint?.y].every(Number.isFinite)
+      ? normalizeDegrees(Math.atan2(worldPoint.y - origin.y, worldPoint.x - origin.x) * 180 / Math.PI) : null;
+  };
+  const rotateBy = (degrees) => {
+    if (!previewAlive() || !rotatable || !Number.isFinite(degrees)) return false;
+    const args = { event: { delta: Math.sign(degrees), shiftKey: false }, preview: context.preview,
+      document: context.preview.document, regionIndex: context.regionIndex, regionCount: context.regionCount,
+      shape, shapeIndex: shape._index, shapeCount: context.shapes.length, precise: true };
+    if (context.onRotate?.(args) !== false) shape.rotate(degrees);
+    const document = context.preview.document;
+    document.updateSource({ shapes: [...document.shapes.slice(0, -1), shape] });
+    document.updateShapeConstraints();
+    context.preview.renderFlags.set({ refreshShapes: true });
+    context.preview.applyRenderFlags?.();
+    context.onChange?.(args);
+    return true;
+  };
+  const aimAt = (point, offset = 0) => {
+    const direction = directionAt(point);
+    return direction !== null && rotateBy(normalizeSignedDegrees(direction + offset - shape.rotation));
+  };
+  const snapshot = () => {
+    // Native rays account for grid shape and snapping. The fallback is only
+    // the UI handle of a shape without a directional ray, never placement data.
+    const origin = shape.origin;
+    const ray = shape._getRays?.();
+    const endpoint = ray?.center?.B ?? ray?.axisX?.B ?? (rotatable && origin ? {
+      x: origin.x + Math.cos(shape.rotation * Math.PI / 180) * shape.length,
+      y: origin.y + Math.sin(shape.rotation * Math.PI / 180) * shape.length
+    } : null);
+    return Object.freeze({ id, type, supported: true, rotatable, labels,
+      origin: finitePoint(origin && canvas.clientCoordinatesFromCanvas(origin)),
+      direction: finitePoint(rotatable && endpoint && canvas.clientCoordinatesFromCanvas(endpoint)) });
+  };
+  return Object.freeze({ id, type, supported: true, rotatable, labels, settle, previewAlive,
+    originalControlledTokenIdentity: interactionState.originalControlledTokenIdentity,
+    establishInitialOrigin: moveOrigin, moveOrigin, aimAt, rotateBy, snapshot,
+    beginAim(point) { const angle = directionAt(point); return angle === null ? 0 : normalizeSignedDegrees(shape.rotation - angle); },
+    bindGestures(surface, scope, onOverlay) {
+      return bindTemplatePointerGestures({ surface, scope, onOverlay, rotatable,
+        adapter: { moveOrigin, aimAt, rotateBy, beginAim(point) {
+          const angle = directionAt(point); return angle === null ? 0 : normalizeSignedDegrees(shape.rotation - angle);
+        }, snapshot, previewAlive } });
+    },
+    async commit() {
+      if (!previewAlive()) return false;
+      operation = "committing";
+      confirmation.rejected = false;
+      confirmation.error = null;
+      confirm(eventAt(snapshot().origin ?? { x: 0, y: 0 }));
+      if (confirmation.rejected || confirmation.error) {
+        operation = "cancelling";
+        if (ownsPreview()) layer._cancelPlacement();
+        throw confirmation.error ?? new Error(localized(getGame(), "VEMOBILE.Interface.Presenter.TemplatePlacementCouldNotFinish", "Template placement could not finish"));
+      }
+      return settle;
+    },
+    async cancel() {
+      if (operation === "active" && ownsPreview()) {
+        operation = "cancelling";
+        layer._cancelPlacement();
+      }
+      return settle;
     }
   });
 }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.0.7 — 2026-10-25
+
+- Restore the mobile Place/Cancel template controls for D&D5e 6 on Foundry v14.
+- Keep action summaries and result popups out of the way until template
+  placement finishes on both supported Foundry versions.
+
 ## 1.0.6 — 2026-10-25
 
 - Replace the exhaustion toggle with compact, right-aligned minus, level and plus

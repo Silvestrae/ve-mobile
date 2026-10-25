@@ -5,7 +5,7 @@ import { countInventoryContents, favouriteItemMetadata, filterSpellsByAvailabili
 import { sheetTabIcon } from "./sheet-icons.mjs";
 import { resolveCharacterTheme } from "../../kernel/character-theme.mjs";
 import { bindLongPress } from "../../ui/long-press.mjs";
-import { renderActionSessionModal } from "../../ui/action-session-modal.mjs";
+import { actionResultsDeferred, renderActionSessionModal } from "../../ui/action-session-modal.mjs";
 import { bindDetailsDisclosure } from "../../ui/disclosure.mjs";
 import { hasCharacterDisclosure } from "../../kernel/app-state.mjs";
 import { renderImageViewer } from "../../ui/image-viewer.mjs";
@@ -67,13 +67,14 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
   const status = shell.status ??= node("p", { className: "ve-action-status", attrs: { role: "status", "aria-live": "polite" } });
   const selectedItem = actorItemById(actor, state.characterItemId);
   const openItem = (item) => commands.openCharacterItem(item.id);
-  const itemModal = itemDetailModal(selectedItem, commands.closeCharacterItem, shell.overlayScope, commands);
-  const actionModal = state.actionSessionOrigin === "scene" ? null : renderActionSessionModal(state.actionSession, commands, shell.overlayScope);
-  const hpModal = hitPointEditor(actor, state.hitPointEditor, commands, shell.overlayScope);
-  const restModal = hitDiceRestEditor(actor, state.restEditor, commands, shell.overlayScope);
-  const spellSlotModal = spellSlotEditor(actor, state.spellSlotEditor, commands, shell.overlayScope);
-  const xpModal = experienceEditor(actor, state.xpEditor, commands, shell.overlayScope);
-  const portraitModal = renderImageViewer(state.portraitImage, commands.closeCharacterPortrait, shell.overlayScope, { localize: commands.localize });
+  const resultsDeferred = actionResultsDeferred(state);
+  const itemModal = resultsDeferred ? null : itemDetailModal(selectedItem, commands.closeCharacterItem, shell.overlayScope, commands);
+  const actionModal = state.actionSessionOrigin === "scene" || resultsDeferred ? null : renderActionSessionModal(state.actionSession, commands, shell.overlayScope);
+  const hpModal = resultsDeferred ? null : hitPointEditor(actor, state.hitPointEditor, commands, shell.overlayScope);
+  const restModal = resultsDeferred ? null : hitDiceRestEditor(actor, state.restEditor, commands, shell.overlayScope);
+  const spellSlotModal = resultsDeferred ? null : spellSlotEditor(actor, state.spellSlotEditor, commands, shell.overlayScope);
+  const xpModal = resultsDeferred ? null : experienceEditor(actor, state.xpEditor, commands, shell.overlayScope);
+  const portraitModal = resultsDeferred ? null : renderImageViewer(state.portraitImage, commands.closeCharacterPortrait, shell.overlayScope, { localize: commands.localize });
   const settings = commands.readCharacterPreferences();
   const collectiveTabs = actorSheetTabs(actor.type);
   const favouritesEnabled = !collectiveTabs && settings.characterFavouritesEnabled !== false && settings.characterFavouritesSource !== "off";
@@ -81,7 +82,7 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
   const activePage = (collectiveTabs ? collectiveTabs.some(([key]) => key === state.characterTab) : SHEET_PAGES.has(state.characterTab) && (state.characterTab !== "favourites" || favouritesEnabled)) ? state.characterTab : "overview";
   const activeTab = ["abilities", "effects"].includes(activePage) ? "overview" : activePage;
   const characterTheme = resolveCharacterTheme(actor.themeClassKey, settings.colorScheme);
-  const overlays = [itemModal, hpModal, restModal, spellSlotModal, xpModal, portraitModal, actionModal, renderRollResultOverlay(state.rollResult, commands, shell.overlayScope)].filter(Boolean);
+  const overlays = resultsDeferred ? [] : [itemModal, hpModal, restModal, spellSlotModal, xpModal, portraitModal, actionModal, renderRollResultOverlay(state.rollResult, commands, shell.overlayScope)].filter(Boolean);
   shell.overlayScope.own(() => overlays.forEach(element => element.remove()));
   if (overlayHost) overlayHost.append(...overlays);
 
@@ -134,7 +135,7 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
       node("div", { className: "ve-character-content-scroller", attrs: { tabindex: "0" } })]
   });
   screen.classList.toggle("has-roll-result", Boolean(state.rollResult));
-  screen.classList.toggle("has-action-session", Boolean(state.actionSession));
+  screen.classList.toggle("has-action-session", Boolean(state.actionSession) && !resultsDeferred);
   screen.dataset.characterTheme = characterTheme;
   screen.dataset.actorType = actor.type;
   const contentHost = screen.querySelector(".ve-character-content-scroller");

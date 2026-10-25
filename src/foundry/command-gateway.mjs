@@ -133,6 +133,7 @@ export function createFoundryCommandGateway({
 
       inFlight.add(fingerprint);
       let actionCapture = null;
+      let templateUsage = null;
       let announcedActionSession = null;
       let acceptanceAnnounced = false;
       const diceWaiter = name === ACTOR_COMMANDS.USE_ITEM ? null : createDiceSoNiceWaiter(game, getHooks);
@@ -181,6 +182,7 @@ export function createFoundryCommandGateway({
           if (expectedSession.connectionGeneration !== undefined
             && expectedSession.connectionGeneration !== getConnectionGeneration()) return null;
           if (!actionItem) return null;
+          if (templateUsage?.pending) return null;
           const session = actionSessionFromNewMessages(
             game,
             existingMessageIds,
@@ -214,7 +216,9 @@ export function createFoundryCommandGateway({
             announceAccepted(message, { userId });
           })
           : null;
+        if (actionItem) templateUsage = watchTemplateUsage(getHooks(), actor, actionItem, announceActionSession);
         const output = await handler(actor, payload);
+        templateUsage?.finish();
         assertSession(game, expectedSession, getConnectionGeneration);
         // Native return values are tied to this exact command, including
         // integrations that do not publish createChatMessage on this client.
@@ -257,11 +261,41 @@ export function createFoundryCommandGateway({
         if (error instanceof CommandError) throw error;
         throw new CommandError("COMMAND_FAILED", error?.message ?? localizeFoundry("VEMOBILE.Character.CommandGateway.TheFoundryActionFailed", "The Foundry action failed."), { cause: error });
       } finally {
+        templateUsage?.dispose();
         actionCapture?.dispose();
         diceWaiter?.dispose();
         inFlight.delete(fingerprint);
       }
     }
+  });
+}
+
+/** D&D5e creates the chat card before it awaits template placement. Keep the
+ * actual, dialog-adjusted usage configuration by reference until postUseActivity,
+ * which runs after placement and before interactive follow-up rolls. Non-template
+ * Midi cards must remain usable while their item workflow is still pending.
+ */
+function watchTemplateUsage(hooks, actor, item, onReady) {
+  const usages = new Map();
+  const matches = (activity) => activity?.item?.id === item.id
+    && actorSourceUuid(activity.actor ?? activity.item.actor) === actorSourceUuid(actor);
+  const registrations = [];
+  const register = (name, listener) => {
+    const id = hooks?.on?.(name, listener);
+    if (id !== undefined && id !== null) registrations.push([name, id]);
+  };
+  register("dnd5e.preUseActivity", (activity, config) => {
+    if (matches(activity)) usages.set(activity.id, config);
+  });
+  register("dnd5e.postUseActivity", (activity, _config, results) => {
+    if (!matches(activity)) return;
+    usages.delete(activity.id);
+    onReady(results);
+  });
+  return Object.freeze({
+    get pending() { return [...usages.values()].some((config) => config?.create?.measuredTemplate === true); },
+    finish() { usages.clear(); },
+    dispose() { for (const [name, id] of registrations.splice(0)) hooks?.off?.(name, id); usages.clear(); }
   });
 }
 

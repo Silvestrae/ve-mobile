@@ -8,7 +8,7 @@ import { renderSettings } from "../features/settings/presenter.mjs";
 import { createCombatCarouselUiState, renderCombat, renderGmCombatControls } from "../features/combat/presenter.mjs";
 import { sheetTabIcon } from "../features/characters/sheet-icons.mjs";
 import { resolveCharacterThemeProfile } from "../kernel/character-theme.mjs";
-import { renderActionSessionModal } from "./action-session-modal.mjs";
+import { actionResultsDeferred, renderActionSessionModal } from "./action-session-modal.mjs";
 import { createSceneChoiceTransition } from "./scene-choice-transition.mjs";
 import { createVeBackDispatcher } from "./ve-back-dispatcher.mjs";
 import { createVeCloseWatcherBack, veCloseWatcherLayers } from "./ve-close-watcher-back.mjs";
@@ -396,7 +396,8 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       || (state.route === "characters" && state.snapshot?.selectedActor === null && Boolean(viewport.firstElementChild?.__veUpdateCharacter));
     const characterTabChanged = renderedState?.characterTab !== state.characterTab;
     const rollResultChanged = renderedState?.rollResult !== state.rollResult;
-    const actionSessionChanged = renderedState?.actionSession !== state.actionSession;
+    const actionSessionChanged = renderedState?.actionSession !== state.actionSession
+      || actionResultsDeferred(renderedState) !== actionResultsDeferred(state);
     const characterItemChanged = renderedState?.characterItemId !== state.characterItemId;
     const expandedCharacterItemChanged = renderedState?.expandedCharacterItemId !== state.expandedCharacterItemId;
     const hitPointEditorChanged = renderedState?.hitPointEditor !== state.hitPointEditor;
@@ -1444,7 +1445,7 @@ export function activeTemplatePresentationUnchanged(previous, current) {
 /** Split Scene results remain deferred while its native template surface owns
  * input. Character-origin results continue to belong to the companion pane. */
 export function splitSceneActionSessionId(state, splitActive) {
-  if (!splitActive || state?.templatePlacement || state?.nativeTokenPlacement || state?.actionSessionOrigin !== "scene") return "";
+  if (!splitActive || actionResultsDeferred(state) || state?.actionSessionOrigin !== "scene") return "";
   return String(state?.actionSession?.rootMessageId ?? "");
 }
 
