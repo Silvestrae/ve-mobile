@@ -294,7 +294,7 @@
         "ModuleOverlayScale": "Escala",
         "SessionTitle": "Sesión",
         "Online": "En línea",
-        "LatencyTitle": "Latencia local de ida y vuelta",
+        "LatencyTitle": "Latencia local media de conexión en un sentido",
         "FpsTitle": "Frecuencia de fotogramas local",
         "SessionMetricsNote": "La latencia y los FPS solo están disponibles para este dispositivo."
       },
@@ -523,7 +523,7 @@
           "support": "Ayuda",
           "additional": "Otros ajustes de VE"
         },
-        "LatencyTitle": "Latencia local de ida y vuelta de la conexión",
+        "LatencyTitle": "Latencia local media de conexión en un sentido",
         "FpsTitle": "Frecuencia de fotogramas local de la pantalla",
         "Online": "En línea",
         "SessionMetricsNote": "La latencia y los FPS solo están disponibles para este dispositivo.",
@@ -858,7 +858,12 @@
         "BiographyFlaws": "Defectos",
         "BiographyPersonalityTraits": "Rasgos de personalidad",
         "BiographyAppearance": "Apariencia",
-        "SavingThrowShort": "Salv."
+        "SavingThrowShort": "Salv.",
+        "UpdatingExhaustion": "Actualizando agotamiento…",
+        "SpellAttackBonus": "Ataque de conjuro {modifier}",
+        "SpellSaveDC": "CD de salvación {dc}",
+        "SpellcastingClass": "Clase lanzadora de conjuros",
+        "DefaultSpellcasting": "Predeterminado"
       },
       "ActorView": {
         "Senses": "Sentidos",
@@ -999,7 +1004,10 @@
         "Prepared": "Preparado",
         "Unprepared": "No preparado",
         "Empty": "(vacío)",
-        "SpellSlotValueMustBeNumeric": "El valor del espacio de conjuro debe ser numérico."
+        "SpellSlotValueMustBeNumeric": "El valor del espacio de conjuro debe ser numérico.",
+        "UseExhaustionControls": "Usa los controles del nivel de agotamiento.",
+        "ExhaustionUnavailable": "Los niveles de agotamiento no están disponibles para este actor.",
+        "ExhaustionChanged": "El agotamiento ha cambiado. Inténtalo de nuevo con el nivel actual."
       },
       "ActiveEffectContextGateway": {
         "DDESNativeActiveEffectProviderIs": "El proveedor nativo de efectos activos de D&D5e no está disponible.",
@@ -1461,6 +1469,9 @@
         "AttackResultHidden": "Resultado del ataque oculto"
       },
       "AuthoritativeSessionGateway": {
+        "DocumentTransportUnavailable": "La conexión de documentos de Foundry no está disponible.",
+        "InvalidDocumentCollection": "Foundry devolvió datos del mundo no válidos.",
+        "InvalidDocumentSource": "Foundry devolvió un registro de documento no válido.",
         "TheFoundrySessionIsNotReadyForResynchronisation": "La sesión de Foundry no está lista para resincronizarse.",
         "RestoringGameMessages": "Restaurando los mensajes del juego…",
         "WorldDataReady": "Datos del mundo listos"
@@ -1714,7 +1725,7 @@
         "Ms": "— ms",
         "FPS": "— FPS",
         "ConnectionAndRenderingStatus": "Estado de conexión y renderizado",
-        "RoundTripConnectionLatency": "Latencia de ida y vuelta de la conexión",
+        "OneWayConnectionLatency": "Latencia media de conexión en un sentido",
         "EstimatedDisplayFrameRate": "Frecuencia de fotogramas estimada de la pantalla",
         "Ms2": "{latency} ms",
         "FPS2": "{fps} FPS",

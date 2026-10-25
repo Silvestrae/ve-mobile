@@ -294,7 +294,7 @@
         "ModuleOverlayScale": "Échelle",
         "SessionTitle": "Session",
         "Online": "En ligne",
-        "LatencyTitle": "Latence locale aller-retour",
+        "LatencyTitle": "Latence locale moyenne dans un seul sens",
         "FpsTitle": "Fréquence d’affichage locale",
         "SessionMetricsNote": "La latence et les FPS sont disponibles uniquement pour cet appareil."
       },
@@ -523,7 +523,7 @@
           "support": "Assistance",
           "additional": "Autres paramètres VE"
         },
-        "LatencyTitle": "Latence locale aller-retour",
+        "LatencyTitle": "Latence locale moyenne dans un seul sens",
         "FpsTitle": "Fréquence d’affichage locale",
         "Online": "En ligne",
         "SessionMetricsNote": "La latence et les FPS sont disponibles uniquement pour cet appareil.",
@@ -858,7 +858,12 @@
         "BiographyFlaws": "Défauts",
         "BiographyPersonalityTraits": "Traits de personnalité",
         "BiographyAppearance": "Apparence",
-        "SavingThrowShort": "JS"
+        "SavingThrowShort": "JS",
+        "UpdatingExhaustion": "Mise à jour de l’épuisement…",
+        "SpellAttackBonus": "Attaque de sort {modifier}",
+        "SpellSaveDC": "DD de sauvegarde {dc}",
+        "SpellcastingClass": "Classe de lanceur de sorts",
+        "DefaultSpellcasting": "Par défaut"
       },
       "ActorView": {
         "Senses": "Sens",
@@ -999,7 +1004,10 @@
         "Prepared": "préparé",
         "Unprepared": "non préparé",
         "Empty": "(vide)",
-        "SpellSlotValueMustBeNumeric": "La valeur de l’emplacement de sort doit être numérique."
+        "SpellSlotValueMustBeNumeric": "La valeur de l’emplacement de sort doit être numérique.",
+        "UseExhaustionControls": "Utilisez les commandes du niveau d’épuisement.",
+        "ExhaustionUnavailable": "Les niveaux d’épuisement ne sont pas disponibles pour cet acteur.",
+        "ExhaustionChanged": "L’épuisement a changé. Réessayez avec le niveau actuel."
       },
       "ActiveEffectContextGateway": {
         "DDESNativeActiveEffectProviderIs": "Le fournisseur d’effets actifs natifs D&D5e est indisponible.",
@@ -1461,6 +1469,9 @@
         "AttackResultHidden": "Résultat de l’attaque masqué"
       },
       "AuthoritativeSessionGateway": {
+        "DocumentTransportUnavailable": "La connexion aux documents de Foundry est indisponible.",
+        "InvalidDocumentCollection": "Foundry a renvoyé des données de monde invalides.",
+        "InvalidDocumentSource": "Foundry a renvoyé un enregistrement de document invalide.",
         "TheFoundrySessionIsNotReadyForResynchronisation": "La session Foundry n’est pas prête pour la resynchronisation.",
         "RestoringGameMessages": "Restauration des messages de jeu…",
         "WorldDataReady": "Données du monde prêtes"
@@ -1714,7 +1725,7 @@
         "Ms": "— ms",
         "FPS": "— FPS",
         "ConnectionAndRenderingStatus": "État de la connexion et du rendu",
-        "RoundTripConnectionLatency": "Latence de connexion aller-retour",
+        "OneWayConnectionLatency": "Latence moyenne de connexion dans un seul sens",
         "EstimatedDisplayFrameRate": "Fréquence d’affichage estimée",
         "Ms2": "{latency} ms",
         "FPS2": "{fps} FPS",

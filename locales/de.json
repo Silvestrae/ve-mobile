@@ -294,7 +294,7 @@
         "ModuleOverlayScale": "Skalierung",
         "SessionTitle": "Sitzung",
         "Online": "Online",
-        "LatencyTitle": "Lokale Roundtrip-Latenz der Verbindung",
+        "LatencyTitle": "Lokale durchschnittliche Verbindungslatenz in eine Richtung",
         "FpsTitle": "Lokale Bildrate der Anzeige",
         "SessionMetricsNote": "Latenz und FPS sind nur für dieses Gerät verfügbar."
       },
@@ -523,7 +523,7 @@
           "support": "Support",
           "additional": "Weitere VE-Einstellungen"
         },
-        "LatencyTitle": "Lokale Roundtrip-Latenz der Verbindung",
+        "LatencyTitle": "Lokale durchschnittliche Verbindungslatenz in eine Richtung",
         "FpsTitle": "Lokale Bildrate der Anzeige",
         "Online": "Online",
         "SessionMetricsNote": "Latenz und FPS sind nur für dieses Gerät verfügbar.",
@@ -858,7 +858,12 @@
         "BiographyFlaws": "Makel",
         "BiographyPersonalityTraits": "Persönlichkeitsmerkmale",
         "BiographyAppearance": "Aussehen",
-        "SavingThrowShort": "RW"
+        "SavingThrowShort": "RW",
+        "UpdatingExhaustion": "Erschöpfung wird aktualisiert…",
+        "SpellAttackBonus": "Zauberangriff {modifier}",
+        "SpellSaveDC": "Rettungswurf-SG {dc}",
+        "SpellcastingClass": "Zauberwirkende Klasse",
+        "DefaultSpellcasting": "Standard"
       },
       "ActorView": {
         "Senses": "Sinne",
@@ -999,7 +1004,10 @@
         "Prepared": "vorbereitet",
         "Unprepared": "nicht vorbereitet",
         "Empty": "(leer)",
-        "SpellSlotValueMustBeNumeric": "Der Zauberplatzwert muss numerisch sein."
+        "SpellSlotValueMustBeNumeric": "Der Zauberplatzwert muss numerisch sein.",
+        "UseExhaustionControls": "Verwende die Steuerelemente für die Erschöpfungsstufe.",
+        "ExhaustionUnavailable": "Für diesen Akteur sind keine Erschöpfungsstufen verfügbar.",
+        "ExhaustionChanged": "Die Erschöpfung hat sich geändert. Versuche es mit der aktuellen Stufe erneut."
       },
       "ActiveEffectContextGateway": {
         "DDESNativeActiveEffectProviderIs": "Der native D&D5e-Anbieter für aktive Effekte ist nicht verfügbar.",
@@ -1461,6 +1469,9 @@
         "AttackResultHidden": "Angriffsergebnis verborgen"
       },
       "AuthoritativeSessionGateway": {
+        "DocumentTransportUnavailable": "Foundrys Dokumentverbindung ist nicht verfügbar.",
+        "InvalidDocumentCollection": "Foundry hat ungültige Weltdaten zurückgegeben.",
+        "InvalidDocumentSource": "Foundry hat einen ungültigen Dokumentdatensatz zurückgegeben.",
         "TheFoundrySessionIsNotReadyForResynchronisation": "Die Foundry-Sitzung ist noch nicht zur Neusynchronisierung bereit.",
         "RestoringGameMessages": "Spielnachrichten werden wiederhergestellt …",
         "WorldDataReady": "Weltdaten bereit"
@@ -1714,7 +1725,7 @@
         "Ms": "— ms",
         "FPS": "— FPS",
         "ConnectionAndRenderingStatus": "Verbindungs- und Renderstatus",
-        "RoundTripConnectionLatency": "Roundtrip-Latenz der Verbindung",
+        "OneWayConnectionLatency": "Durchschnittliche Verbindungslatenz in eine Richtung",
         "EstimatedDisplayFrameRate": "Geschätzte Bildfrequenz der Anzeige",
         "Ms2": "{latency} ms",
         "FPS2": "{fps} FPS",

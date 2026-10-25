@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 1.0.6 — 2026-10-25
+
+- Replace the exhaustion toggle with compact, right-aligned minus, level and plus
+  controls, allowing exhaustion to be reduced to zero as well as increased.
+- Show spell attack and save DC beside the Spellcasting heading. Multiclass
+  casters can choose a class without changing their Actor's casting ability.
+  The selector starts on the named primary class instead of “Default”.
+- Speed up reconnects by keeping unchanged Actors and Scenes intact, including
+  legacy records with generated IDs and native token overrides. Avoid repeated
+  preparation that could double character level and proficiency.
+- Fix the doubled DNA icon used for unrecognized species/backgrounds in the header.
+- Match Foundry's average one-way latency in the tab bar and Settings.
+- Restore translucent joystick and D-pad surfaces, including press feedback,
+  and give the hotbar/quickbar backing the same translucency without fading icons.
+- Restore older Desktop theme snapshots when newer Foundry versions add UI
+  defaults, while preserving all captured preference values.
+- Add a short AI-assistance disclosure under README Disclaimer and Independence.
+
 ## 1.0.5 â€” 2026-10-19
 
 - Choose Scene levels on Foundry v14 from an expandable list beneath each

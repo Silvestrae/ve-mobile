@@ -185,7 +185,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     className: "ve-tablet-metrics",
     attrs: { "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.ConnectionAndRenderingStatus", "Connection and rendering status") },
     children: [
-      node("span", { attrs: { title: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.RoundTripConnectionLatency", "Round-trip connection latency") }, children: [latencyValue] }),
+      node("span", { attrs: { title: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.OneWayConnectionLatency", "Average one-way connection latency") }, children: [latencyValue] }),
       node("span", { attrs: { title: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.EstimatedDisplayFrameRate", "Estimated display frame rate") }, children: [fpsValue] })
     ]
   });

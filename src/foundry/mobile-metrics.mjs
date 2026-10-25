@@ -34,7 +34,7 @@ export function createMobileMetrics({
         latencyTimer = null;
         if (!visible()) return;
         const oneWay = Number(readGame()?.time?.averageLatency);
-        publish({ latency: Number.isFinite(oneWay) && oneWay >= 0 ? Math.round(oneWay * 2) : null });
+        publish({ latency: Number.isFinite(oneWay) && oneWay >= 0 ? Math.round(oneWay) : null });
         latencyTimer = setTimer(sampleLatency, LATENCY_REFRESH_MS);
       };
       const frame = (timestamp) => {

@@ -455,6 +455,9 @@ license.
 
 ## Disclaimer and Independence
 
+VE Mobile is developed and maintained with AI assistance. The project is guided
+by deliberate design decisions, testing and ongoing refinement.
+
 VE Mobile is an independent module for Foundry Virtual Tabletop. It is not
 affiliated with or endorsed by Foundry Gaming LLC or Wizards of the Coast.
 It interoperates with Foundry VTT and D&D5e through their normal module and

@@ -21,6 +21,7 @@ export async function restoreLocalSetting(game, key, value, { notify = true } = 
   const config = game?.settings?.settings?.get?.(key);
   const storage = game?.settings?.storage?.get?.("client");
   const [namespace, name] = key.split(".");
+  let expected = value;
   if (!storage || config?.scope !== "client") {
     // Older adapters may use the ordinary native route only for unforced keys.
     if (config?.scope && config.scope !== "client") throw new Error(localizeFoundry("VEMOBILE.Interface.ClientSettingRestoration.NonClientRestorationSetting", "Non-client restoration setting: {key}", { key: (key) }));
@@ -28,11 +29,15 @@ export async function restoreLocalSetting(game, key, value, { notify = true } = 
     await game.settings.set(namespace, name, value);
   } else {
     const cleaned = typeof config.type?.clean === "function" ? config.type.clean(structuredClone(value)) : value;
+    // A newer native schema may add defaults missing from an older snapshot.
+    // Accept those additions, but never silently coerce or drop captured values.
+    if (!preservesCapturedValue(value, cleaned)) throw new Error(localizeFoundry("VEMOBILE.Interface.ClientSettingRestoration.RestorationVerificationFailedFor", "Restoration verification failed for {key}", { key: (key) }));
     const invalid = config.type?.validate?.(cleaned, { fallback: false });
     if (invalid) throw invalid.asError?.() ?? new Error(localizeFoundry("VEMOBILE.Interface.ClientSettingRestoration.InvalidCapturedValueFor", "Invalid captured value for {key}", { key: (key) }));
     const json = JSON.stringify(cleaned);
     if (json === undefined) throw new Error(localizeFoundry("VEMOBILE.Interface.ClientSettingRestoration.MissingCapturedValueFor", "Missing captured value for {key}", { key: (key) }));
     storage.setItem(key, json);
+    expected = cleaned;
     if (notify) {
       // Honour current effective FCS policy in live callbacks. The restored
       // local preference remains latent while the administrator's lock applies.
@@ -41,6 +46,21 @@ export async function restoreLocalSetting(game, key, value, { notify = true } = 
       globalThis.Hooks?.callAll?.("clientSettingChanged", key, effective, {});
     }
   }
-  if (JSON.stringify(readLocalSetting(game, key)) !== JSON.stringify(value)) throw new Error(localizeFoundry("VEMOBILE.Interface.ClientSettingRestoration.RestorationVerificationFailedFor", "Restoration verification failed for {key}", { key: (key) }));
+  if (!sameSettingValue(readLocalSetting(game, key), expected)) throw new Error(localizeFoundry("VEMOBILE.Interface.ClientSettingRestoration.RestorationVerificationFailedFor", "Restoration verification failed for {key}", { key: (key) }));
   return value;
+}
+
+function preservesCapturedValue(original, cleaned) {
+  if (Object.is(original, cleaned)) return true;
+  if (!original || !cleaned || typeof original !== "object" || typeof cleaned !== "object"
+    || Array.isArray(original) !== Array.isArray(cleaned)) return false;
+  if (Array.isArray(original) && original.length !== cleaned.length) return false;
+  return Object.keys(original).filter(key => original[key] !== undefined)
+    .every(key => Object.hasOwn(cleaned, key) && preservesCapturedValue(original[key], cleaned[key]));
+}
+
+function sameSettingValue(left, right) {
+  const canonical = value => JSON.stringify(value, (_key, entry) => entry && typeof entry === "object" && !Array.isArray(entry)
+    ? Object.fromEntries(Object.keys(entry).sort().map(key => [key, entry[key]])) : entry);
+  return canonical(left) === canonical(right);
 }

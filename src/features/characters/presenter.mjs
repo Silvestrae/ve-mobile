@@ -50,6 +50,9 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
   scope = shell.paneScope;
   // Disclosure initialization belongs to this pane, including its async task.
   const sourceUuid = actor.sourceUuid ?? state.selectedActorSourceUuid;
+  // This presentation choice belongs to the retained character shell. It
+  // survives publications/tab changes but never crosses exact Actor sources.
+  if (shell.spellcastingSelection?.sourceUuid !== sourceUuid) shell.spellcastingSelection = { sourceUuid, classId: "" };
   let defaultClaimed = hasCharacterDisclosure(state, sourceUuid, state.characterTab)
     || Boolean(state.characterOpenSections?.length);
   const suppliedCommands = commands;
@@ -123,7 +126,7 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
       abilities: () => compactAbilitiesPanel(actor, commands, status, scope),
       traits: () => traitsPanel(actor, commands.localize),
       effects: owner => effectsPanel(actor, commands, status, state.characterOpenSections, owner, settings)
-    }) : renderSheetPanel(activePage, actor, commands, status, openItem, state.expandedCharacterItemId, state.characterOpenSections, scope, settings)] });
+    }) : renderSheetPanel(activePage, actor, commands, status, openItem, state.expandedCharacterItemId, state.characterOpenSections, scope, settings, shell.spellcastingSelection)] });
   const screen = shell.screen ??= node("section", {
     className: "ve-character-screen ve-character-shared-shell",
     dataset: { characterTheme, actorType: actor.type },
@@ -701,7 +704,9 @@ function characterBackgroundIcon(actor) {
     ["gladiator", "fa-trophy"]
   ];
   const name = backgroundIcons.find(([label]) => background.includes(label))?.[1];
-  return { name: name ?? "fa-dna", style: name ? "solid" : "sharp-duotone" };
+  // The bundled Pro font renders both unsupported Sharp Duotone layers as
+  // separate complete glyphs. Use its supported single-layer DNA fallback.
+  return { name: name ?? "fa-dna", style: "solid" };
 }
 
 function characterHitPoints(actor, commands, status, scope) {
@@ -1317,12 +1322,12 @@ function headerInitiative(actor, commands, status, scope) {
   }, scope);
 }
 
-function renderSheetPanel(tab, actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings) {
+function renderSheetPanel(tab, actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings, spellcastingSelection) {
   if (tab === "effects") return effectsPanel(actor, commands, status, openSectionIds, scope, settings);
   if (tab === "abilities") return abilitiesFullPanel(actor, commands, status, scope);
   if (tab === "favourites") return favouritesPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings);
   if (tab === "inventory") return inventoryPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings);
-  if (tab === "spells") return spellsPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings);
+  if (tab === "spells") return spellsPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings, spellcastingSelection);
   if (tab === "features") return featuresPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings);
   if (tab === "biography") return biographyPanel(actor, commands, status, scope);
   return overviewPanel(actor, commands, status, scope);
@@ -1620,7 +1625,7 @@ function inventoryNode(entry, actor, commands, status, openItem, expandedItemId,
   return container;
 }
 
-function spellsPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings) {
+function spellsPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings, selection) {
   const preferences = settings.characterCollections ?? {};
   let sortMode = preferences.spellSort ?? "manual";
   let filterMode = preferences.spellFilter ?? "all";
@@ -1651,13 +1656,15 @@ function spellsPanel(actor, commands, status, openItem, expandedItemId, openSect
     const visibleSpells = filterSpellsByAvailability(actor.spells, filterMode === "prepared");
     const sections = groupSpells(visibleSpells, sortMode, commands.localize);
     if (commands.claimDefaultCharacterSection?.(sections[0]?.key)) openSections.add(sections[0].key);
-    const hasSpellcasting = groupSpells(actor.spells, sortMode, commands.localize).some((section) => section.group === "spellcasting");
+    const hasSpellcasting = actor.spellcasting?.attackBonus != null || actor.spellcasting?.saveDC != null
+      || groupSpells(actor.spells, sortMode, commands.localize).some((section) => section.group === "spellcasting");
     let priorGroup = "";
     const children = [];
-    if (hasSpellcasting && !sections.some((section) => section.group === "spellcasting")) children.push(spellGroupDivider(localizedText(commands.localize, "VEMOBILE.Character.Copy.Spellcasting", "Spellcasting")));
+    const castingHeading = () => spellGroupDivider(localizedText(commands.localize, "VEMOBILE.Character.Copy.Spellcasting", "Spellcasting"), actor.spellcasting, commands.localize, selection, renderScope);
+    if (hasSpellcasting && !sections.some((section) => section.group === "spellcasting")) children.push(castingHeading());
     for (const section of sections) {
         if (section.group !== priorGroup) {
-          children.push(spellGroupDivider(section.group === "spellcasting" ? localizedText(commands.localize, "VEMOBILE.Character.Copy.Spellcasting", "Spellcasting") : localizedText(commands.localize, "VEMOBILE.Character.Collections.Spells.Other", "Other Spells")));
+          children.push(section.group === "spellcasting" ? castingHeading() : spellGroupDivider(localizedText(commands.localize, "VEMOBILE.Character.Collections.Spells.Other", "Other Spells")));
           priorGroup = section.group;
         }
         const slots = section.level > 0 ? actor.resources?.find((resource) => resource.id === `spell-slot:spell${section.level}`) : null;
@@ -2047,6 +2054,7 @@ function conditionsSection(actor, commands, status, openSections, scope) {
 }
 
 function conditionControl(condition, actor, commands, status, scope) {
+  if (condition.id === "exhaustion" && condition.maximumLevel) return exhaustionControl(condition, actor, commands, status, scope);
   const editable = Boolean(actor.capabilities?.toggleConditions);
   const label = condition.active && condition.level ? localizedText(commands.localize, "VEMOBILE.Character.Presenter.Level", "{label} · Level {level}", { label: (condition.label), level: (condition.level) }) : condition.label;
   return node("button", {
@@ -2098,8 +2106,77 @@ function collectionSection(key, label, count, children, expanded = false, onChan
   return details;
 }
 
-function spellGroupDivider(label) {
-  return node("h3", { className: "ve-spell-group-divider", text: label });
+function exhaustionControl(condition, actor, commands, status, scope) {
+  const level = condition.level ?? 0;
+  const editable = Boolean(actor.capabilities?.editExhaustion);
+  let pending = false;
+  const buttons = [];
+  const adjustButton = (direction) => {
+    const label = localizedText(commands.localize, direction < 0 ? "VEMOBILE.Character.Presenter.Decrease2" : "VEMOBILE.Character.Presenter.Increase2", direction < 0 ? "Decrease {label}" : "Increase {label}", { label: condition.label });
+    const button = node("button", {
+      className: "ve-exhaustion-step",
+      attrs: { type: "button", "aria-label": label, title: label, disabled: !editable || level + direction < 0 || level + direction > condition.maximumLevel },
+      children: [icon(direction < 0 ? "fa-minus" : "fa-plus")],
+      on: { click: async () => {
+        if (pending || scope.disposed || button.disabled) return;
+        pending = true;
+        const action = runActorCommand(button, ACTOR_COMMANDS.SET_EXHAUSTION_LEVEL, actor, { originalLevel: level, level: level + direction }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.UpdatingExhaustion", "Updating exhaustion…"), "");
+        for (const entry of buttons) entry.disabled = true;
+        try { await action; }
+        finally {
+          pending = false;
+          if (!scope.disposed) for (const [index, entry] of buttons.entries()) entry.disabled = !editable || (index === 0 ? level <= 0 : level >= condition.maximumLevel);
+        }
+      } }
+    }, scope);
+    buttons.push(button);
+    return button;
+  };
+  return node("div", {
+    className: `ve-condition-control ve-exhaustion-control${level > 0 ? " is-active" : ""}`,
+    children: [
+      node("span", { className: "ve-condition-art", children: condition.img ? [node("img", { attrs: { src: condition.img, alt: "", draggable: "false" } })] : [icon("fa-circle-exclamation")] }),
+      node("span", { className: "ve-condition-label", text: condition.label }),
+      node("span", { className: "ve-exhaustion-controls", attrs: { role: "group", "aria-label": condition.label }, children: [
+        adjustButton(-1),
+        node("span", { className: "ve-exhaustion-level", attrs: { "aria-live": "polite" }, text: localizedNumber(level, actor.header?.locale) }),
+        adjustButton(1)
+      ] })
+    ]
+  });
+}
+
+function spellGroupDivider(label, spellcasting = null, localize, selection = { classId: "" }, scope) {
+  const classes = spellcasting?.classes ?? [];
+  if (!classes.some(entry => entry.id === selection.classId)) {
+    selection.classId = classes.find(entry => entry.id === spellcasting?.defaultClassId)?.id
+      ?? classes.find(entry => entry.attackBonus === spellcasting?.attackBonus && entry.saveDC === spellcasting?.saveDC)?.id
+      ?? classes[0]?.id ?? "";
+  }
+  const current = classes.find(entry => entry.id === selection.classId) ?? spellcasting;
+  const selector = classes.length > 1 ? node("select", {
+    className: "ve-spellcasting-class",
+    attrs: { "aria-label": localizedText(localize, "VEMOBILE.Character.Presenter.SpellcastingClass", "Spellcasting class") },
+    children: classes.map(entry => node("option", { attrs: { value: entry.id, selected: selection.classId === entry.id }, text: entry.label })),
+    on: { change: () => { selection.classId = selector.value; updateStats(); } }
+  }, scope) : null;
+  const stats = node("span", { className: "ve-spellcasting-stats", attrs: { "aria-live": "polite" } });
+  function updateStats() {
+    const casting = classes.find(entry => entry.id === selection.classId) ?? spellcasting;
+    stats.replaceChildren(...spellcastingStats(casting, localize));
+  }
+  stats.append(...spellcastingStats(current, localize));
+  return node("h3", { className: "ve-spell-group-divider", children: [
+    node("span", { className: "ve-spellcasting-heading", text: label }),
+    spellcasting ? node("span", { className: "ve-spellcasting-summary", children: [selector, stats] }) : null
+  ] });
+}
+
+function spellcastingStats(spellcasting, localize) {
+  const stats = [];
+  if (spellcasting?.attackBonus != null) stats.push(node("span", { text: localizedText(localize, "VEMOBILE.Character.Presenter.SpellAttackBonus", "Spell attack {modifier}", { modifier: formatModifier(spellcasting.attackBonus) }) }));
+  if (spellcasting?.saveDC != null) stats.push(node("span", { text: localizedText(localize, "VEMOBILE.Character.Presenter.SpellSaveDC", "Save DC {dc}", { dc: spellcasting.saveDC }) }));
+  return stats;
 }
 
 function itemRow(item, actor, commands, status, openItem, expandedItemId, scope, depth = 0, muted = false) {

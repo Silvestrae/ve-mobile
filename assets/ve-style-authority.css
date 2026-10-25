@@ -444,7 +444,7 @@
     max-width: 100% !important;
     padding: 6px !important;
     border: 1px solid color-mix(in srgb, var(--ve-class-accent-primary) 34%, var(--ve-border)) !important;
-    background: color-mix(in srgb, var(--ve-surface) 83%, transparent) !important;
+    background: color-mix(in srgb, var(--ve-surface) 32%, transparent) !important;
   }
 
   .ve-mobile-app[data-ve-style-authority] .ve-quickbar-wrap[data-columns="10"] .ve-quickbar {

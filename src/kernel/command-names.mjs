@@ -7,6 +7,7 @@ export const ACTOR_COMMANDS = Object.freeze({
   ROLL_DEATH_SAVE: "actor.roll-death-save",
   SET_INSPIRATION: "actor.set-inspiration",
   TOGGLE_CONDITION: "actor.toggle-condition",
+  SET_EXHAUSTION_LEVEL: "actor.set-exhaustion-level",
   EDIT_HIT_POINTS: "actor.edit-hit-points",
   ADD_EXPERIENCE: "actor.add-experience",
   UPDATE_BIOGRAPHY_SECTION: "actor.update-biography-section",

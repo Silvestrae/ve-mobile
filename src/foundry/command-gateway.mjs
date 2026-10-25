@@ -47,6 +47,7 @@ export function createFoundryCommandGateway({
     [ACTOR_COMMANDS.ROLL_DEATH_SAVE]: (actor) => rollDeathSave(actor),
     [ACTOR_COMMANDS.SET_INSPIRATION]: (actor, payload) => setInspiration(actor, payload),
     [ACTOR_COMMANDS.TOGGLE_CONDITION]: (actor, payload) => toggleCondition(actor, payload),
+    [ACTOR_COMMANDS.SET_EXHAUSTION_LEVEL]: (actor, payload) => setExhaustionLevel(actor, payload),
     [ACTOR_COMMANDS.EDIT_HIT_POINTS]: (actor, payload) => editHitPoints(actor, payload),
     [ACTOR_COMMANDS.ADD_EXPERIENCE]: (actor, payload) => addExperience(actor, payload),
     [ACTOR_COMMANDS.UPDATE_BIOGRAPHY_SECTION]: (actor, payload) => updateBiographySection(actor, payload),
@@ -86,6 +87,8 @@ export function createFoundryCommandGateway({
         editInspiration: actor.type === "character" && typeof actor.update === "function" && typeof actor.system?.attributes?.inspiration === "boolean",
         configureArmorClass: ["character", "npc"].includes(actor.type) && Boolean(actor.system?.attributes?.ac),
         toggleConditions: !group && typeof actor.toggleStatusEffect === "function",
+        editExhaustion: ["character", "npc"].includes(actor.type) && typeof actor.update === "function"
+          && Number.isSafeInteger(actor.system?.attributes?.exhaustion),
         editHitPoints: !group && typeof actor.update === "function" && typeof actor.applyDamage === "function"
           && (actor.type !== "vehicle" || Number.isFinite(actor.system?.attributes?.hp?.value)),
         editExperience: actor.type === "character" && typeof actor.update === "function"
@@ -365,8 +368,27 @@ async function toggleCondition(actor, payload) {
     throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.ChooseANativeDDECondition", "Choose a native D&D5e condition."));
   }
   const active = requiredBoolean(payload?.active, "active");
+  if (conditionId === "exhaustion") throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.UseExhaustionControls", "Use the exhaustion level controls."));
   await actor.toggleStatusEffect(conditionId, { active });
   return Object.freeze({ conditionId, active });
+}
+
+async function setExhaustionLevel(actor, payload) {
+  const maximum = globalThis.CONFIG?.DND5E?.conditionTypes?.exhaustion?.levels;
+  const current = actor.system?.attributes?.exhaustion;
+  if (!["character", "npc"].includes(actor.type) || typeof actor.update !== "function"
+    || !Number.isSafeInteger(maximum) || maximum < 1 || !Number.isSafeInteger(current) || current < 0 || current > maximum) {
+    throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ExhaustionUnavailable", "Exhaustion levels are unavailable for this Actor."));
+  }
+  if (typeof payload?.originalLevel !== "number" || typeof payload?.level !== "number") throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.UseExhaustionControls", "Use the exhaustion level controls."));
+  const original = wholeNumber(payload?.originalLevel, "originalLevel", 0, maximum);
+  const level = wholeNumber(payload?.level, "level", 0, maximum);
+  if (current !== original) throw new CommandError("STALE_STATE", localizeFoundry("VEMOBILE.Character.CommandGateway.ExhaustionChanged", "Exhaustion changed. Try again using the current level."));
+  if (Math.abs(level - current) !== 1) throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.UseExhaustionControls", "Use the exhaustion level controls."));
+  // Matches D&D5e's native exhaustion control: the Actor update synchronizes
+  // the exhaustion ActiveEffect, including removing it when the level reaches 0.
+  await actor.update({ "system.attributes.exhaustion": level });
+  return Object.freeze({ level });
 }
 
 async function rollDeathSave(actor) {
@@ -718,6 +740,7 @@ function emptyActorCapabilities() {
     editInspiration: false,
     configureArmorClass: false,
     toggleConditions: false,
+    editExhaustion: false,
     editHitPoints: false,
     editExperience: false,
     editBiography: false,
@@ -821,6 +844,8 @@ function commandFingerprint(name, actorId, payload) {
   else if (name === ACTOR_COMMANDS.TAKE_REST) option = payload.type;
   else if (name === ACTOR_COMMANDS.SET_INSPIRATION) option = payload.active;
   else if (name === ACTOR_COMMANDS.TOGGLE_CONDITION) option = `${payload.conditionId}:${payload.active}`;
+  // Both directions share one lock so competing taps cannot race each other.
+  else if (name === ACTOR_COMMANDS.SET_EXHAUSTION_LEVEL) option = "exhaustion";
   else if (name === ACTOR_COMMANDS.ROLL_SKILL) option = payload.skill;
   else if (name === ACTOR_COMMANDS.ROLL_TOOL) option = payload.tool;
   return `${name}:${actorId}:${String(option ?? "")}`;

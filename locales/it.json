@@ -294,7 +294,7 @@
         "ModuleOverlayScale": "Scala",
         "SessionTitle": "Sessione",
         "Online": "Online",
-        "LatencyTitle": "Latenza locale di andata e ritorno",
+        "LatencyTitle": "Latenza locale media in una direzione",
         "FpsTitle": "Frequenza fotogrammi locale",
         "SessionMetricsNote": "Latenza e FPS sono disponibili solo per questo dispositivo."
       },
@@ -523,7 +523,7 @@
           "support": "Supporto",
           "additional": "Altre impostazioni VE"
         },
-        "LatencyTitle": "Latenza locale di andata e ritorno",
+        "LatencyTitle": "Latenza locale media in una direzione",
         "FpsTitle": "Frequenza fotogrammi locale",
         "Online": "Online",
         "SessionMetricsNote": "Latenza e FPS sono disponibili solo per questo dispositivo.",
@@ -858,7 +858,12 @@
         "BiographyFlaws": "Difetti",
         "BiographyPersonalityTraits": "Tratti della personalità",
         "BiographyAppearance": "Aspetto",
-        "SavingThrowShort": "TS"
+        "SavingThrowShort": "TS",
+        "UpdatingExhaustion": "Aggiornamento indebolimento…",
+        "SpellAttackBonus": "Attacco con incantesimo {modifier}",
+        "SpellSaveDC": "CD del tiro salvezza {dc}",
+        "SpellcastingClass": "Classe da incantatore",
+        "DefaultSpellcasting": "Predefinito"
       },
       "ActorView": {
         "Senses": "Sensi",
@@ -999,7 +1004,10 @@
         "Prepared": "preparato",
         "Unprepared": "non preparato",
         "Empty": "(vuoto)",
-        "SpellSlotValueMustBeNumeric": "Il valore dello slot incantesimo deve essere numerico."
+        "SpellSlotValueMustBeNumeric": "Il valore dello slot incantesimo deve essere numerico.",
+        "UseExhaustionControls": "Usa i controlli del livello di indebolimento.",
+        "ExhaustionUnavailable": "I livelli di indebolimento non sono disponibili per questo attore.",
+        "ExhaustionChanged": "Il livello di indebolimento è cambiato. Riprova con il livello attuale."
       },
       "ActiveEffectContextGateway": {
         "DDESNativeActiveEffectProviderIs": "Il provider degli effetti attivi nativo di D&D5e non è disponibile.",
@@ -1461,6 +1469,9 @@
         "AttackResultHidden": "Risultato attacco nascosto"
       },
       "AuthoritativeSessionGateway": {
+        "DocumentTransportUnavailable": "La connessione ai documenti di Foundry non è disponibile.",
+        "InvalidDocumentCollection": "Foundry ha restituito dati del mondo non validi.",
+        "InvalidDocumentSource": "Foundry ha restituito un record di documento non valido.",
         "TheFoundrySessionIsNotReadyForResynchronisation": "La sessione Foundry non è pronta per la sincronizzazione.",
         "RestoringGameMessages": "Ripristino dei messaggi di gioco…",
         "WorldDataReady": "Dati del mondo pronti"
@@ -1714,7 +1725,7 @@
         "Ms": "— ms",
         "FPS": "— FPS",
         "ConnectionAndRenderingStatus": "Stato connessione e rendering",
-        "RoundTripConnectionLatency": "Latenza connessione di andata e ritorno",
+        "OneWayConnectionLatency": "Latenza media della connessione in una direzione",
         "EstimatedDisplayFrameRate": "Frequenza fotogrammi stimata",
         "Ms2": "{latency} ms",
         "FPS2": "{fps} FPS",

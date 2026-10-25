@@ -903,7 +903,7 @@ function sessionStatusPanel(commands, scope, labels) {
     if (ids.length !== rows.size || ids.some((id) => !rows.has(id))) {
       rows.clear();
       const elements = users.map((user) => {
-        const latency = node("span", { className: "ve-session-metric", attrs: { title: labels.latencyTitle ?? uiText(commands, "LatencyTitle", "Local round-trip connection latency") } });
+        const latency = node("span", { className: "ve-session-metric", attrs: { title: labels.latencyTitle ?? uiText(commands, "LatencyTitle", "Local average one-way connection latency") } });
         const fps = node("span", { className: "ve-session-metric", attrs: { title: labels.fpsTitle ?? uiText(commands, "FpsTitle", "Local display frame rate") } });
         const element = node("div", { className: "ve-session-user", children: [
           node("span", { className: "ve-session-user-dot", attrs: { "aria-hidden": "true", style: `--ve-session-user-color:${user.color}` } }),

@@ -294,7 +294,7 @@
         "ModuleOverlayScale": "Scale",
         "SessionTitle": "Session",
         "Online": "Online",
-        "LatencyTitle": "Local round-trip connection latency",
+        "LatencyTitle": "Local average one-way connection latency",
         "FpsTitle": "Local display frame rate",
         "SessionMetricsNote": "Latency and FPS are available for this device only."
       },
@@ -523,7 +523,7 @@
           "support": "Support",
           "additional": "Additional VE Settings"
         },
-        "LatencyTitle": "Local round-trip connection latency",
+        "LatencyTitle": "Local average one-way connection latency",
         "FpsTitle": "Local display frame rate",
         "Online": "Online",
         "SessionMetricsNote": "Latency and FPS are available for this device only.",
@@ -858,7 +858,12 @@
         "BiographyFlaws": "Flaws",
         "BiographyPersonalityTraits": "Personality traits",
         "BiographyAppearance": "Appearance",
-        "SavingThrowShort": "Save"
+        "SavingThrowShort": "Save",
+        "UpdatingExhaustion": "Updating exhaustion…",
+        "SpellAttackBonus": "Spell attack {modifier}",
+        "SpellSaveDC": "Save DC {dc}",
+        "SpellcastingClass": "Spellcasting class",
+        "DefaultSpellcasting": "Default"
       },
       "ActorView": {
         "Senses": "Senses",
@@ -999,7 +1004,10 @@
         "Prepared": "prepared",
         "Unprepared": "unprepared",
         "Empty": "(empty)",
-        "SpellSlotValueMustBeNumeric": "Spell-slot value must be numeric."
+        "SpellSlotValueMustBeNumeric": "Spell-slot value must be numeric.",
+        "UseExhaustionControls": "Use the exhaustion level controls.",
+        "ExhaustionUnavailable": "Exhaustion levels are unavailable for this Actor.",
+        "ExhaustionChanged": "Exhaustion changed. Try again using the current level."
       },
       "ActiveEffectContextGateway": {
         "DDESNativeActiveEffectProviderIs": "D&D5e's native Active Effect provider is unavailable.",
@@ -1461,6 +1469,9 @@
         "AttackResultHidden": "Attack result hidden"
       },
       "AuthoritativeSessionGateway": {
+        "DocumentTransportUnavailable": "Foundry's document connection is unavailable.",
+        "InvalidDocumentCollection": "Foundry returned invalid world data.",
+        "InvalidDocumentSource": "Foundry returned an invalid document record.",
         "TheFoundrySessionIsNotReadyForResynchronisation": "The Foundry session is not ready for resynchronization.",
         "RestoringGameMessages": "Restoring game messages…",
         "WorldDataReady": "World data ready"
@@ -1714,7 +1725,7 @@
         "Ms": "— ms",
         "FPS": "— FPS",
         "ConnectionAndRenderingStatus": "Connection and rendering status",
-        "RoundTripConnectionLatency": "Round-trip connection latency",
+        "OneWayConnectionLatency": "Average one-way connection latency",
         "EstimatedDisplayFrameRate": "Estimated display frame rate",
         "Ms2": "{latency} ms",
         "FPS2": "{fps} FPS",

@@ -179,6 +179,7 @@ export function createActorViewRecord(actor, user, capabilitiesForActor = () => 
     movement: speed.value,
     speed,
     proficiency: numericOrNull(attributes.prof),
+    spellcasting: spellcastingRecord(actor, attributes),
     themeClassKey: themeClassKeys[0] ?? "neutral",
     themeClassKeys,
     capabilities: capabilitiesForActor(actor, user),
@@ -979,6 +980,24 @@ function applicableEffects(actor) {
   return Array.from(source ?? []);
 }
 
+function spellcastingRecord(actor, attributes) {
+  // Match the native character sheet's prepared class/subclass spellcasting
+  // getters. Ability modifiers alone omit class spell attack bonuses.
+  const prepared = Object.values(actor.spellcastingClasses ?? {}).map(item => ({ item, casting: item.spellcasting }))
+    .filter(({ casting }) => casting && casting.progression !== "none");
+  const classes = prepared.map(({ item, casting }) => ({
+      id: String(item.id),
+      label: String(item.system?.spellcasting?.progression === casting.progression ? item.name : item.subclass?.name ?? item.name),
+      attackBonus: numericOrNull(casting.attack),
+      saveDC: numericOrNull(casting.save)
+    }));
+  const attackBonus = numericOrNull(attributes.spell?.attack);
+  const saveDC = numericOrNull(attributes.spell?.dc);
+  const primary = attributes.spellcasting && prepared.find(({ casting }) => casting.ability === attributes.spellcasting);
+  const matching = classes.find(entry => entry.attackBonus === attackBonus && entry.saveDC === saveDC);
+  return { attackBonus, saveDC, defaultClassId: String(primary?.item?.id ?? matching?.id ?? classes[0]?.id ?? ""), classes };
+}
+
 function conditionRecords(actor) {
   const definitions = globalThis.CONFIG?.DND5E?.conditionTypes ?? {};
   const effects = applicableEffects(actor).filter((effect) => !effect.disabled && !effect.isSuppressed);
@@ -990,6 +1009,9 @@ function conditionRecords(actor) {
       const value = effect.getFlag?.("dnd5e", "exhaustionLevel") ?? effect.flags?.dnd5e?.exhaustionLevel;
       level = clamp(Math.floor(number(value, 1)), 1, maximumLevel);
     }
+    // Prepared exhaustion is the same authoritative value used by the native
+    // control, including disabled/suppressed effect handling. Never read _source.
+    if (id === "exhaustion" && maximumLevel) level = clamp(number(actor.system?.attributes?.exhaustion, level ?? 0), 0, maximumLevel);
     return Object.freeze({
       id,
       label: localized(definition?.name ?? definition?.label) || titleCase(id),

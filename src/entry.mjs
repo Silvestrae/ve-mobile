@@ -796,6 +796,7 @@ if (isGamePage) {
     });
     lastSelectedRuntimeMode = readPolicy().runtimeMode;
     if (isMobilePerformanceAuthorityActive(readPolicy)) {
+      authoritativeGateway.captureInitialSources();
       installVeChatWindowClass();
       mobileAssetGateway.registerAliases();
     }
@@ -815,6 +816,7 @@ if (isGamePage) {
     reconcileMediaGuard();
   });
   Hooks.once("setup", () => {
+    authoritativeGateway.bindInitialDocuments();
     advanceBootstrap("world");
     const artworkScope = createTaskScope("native-scene-artwork-progress", performanceObserver);
     artworkScope.listen(window, "pagehide", () => artworkScope.dispose(), { once: true, passive: true });
