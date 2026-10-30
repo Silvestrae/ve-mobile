@@ -7,7 +7,7 @@
 [![MIT License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/Silvestrae/ve-mobile/total?label=Downloads&color=blue)](https://github.com/Silvestrae/ve-mobile/releases)
 
-[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/silvestrae)
+[![Ko-fi: Silvestrae](https://img.shields.io/badge/Ko--fi-Silvestrae-29abe0?logo=kofi&logoColor=white)](https://ko-fi.com/silvestrae)
 
 VE Mobile brings a purpose-built phone and tablet interface to your Foundry
 Virtual Tabletop game. Read your character, use spells and items, follow chat,
