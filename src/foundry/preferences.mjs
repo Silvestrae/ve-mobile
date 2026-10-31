@@ -1,4 +1,5 @@
 import { COLOR_SCHEME_CHOICES } from "../kernel/character-theme.mjs";
+import { CUSTOM_THEME_DEFAULTS, normalizeCustomThemeColors, normalizeThemeColor } from "../kernel/custom-theme.mjs";
 import { localizeFoundry } from "./localization.mjs";
 
 export const MODULE_ID = "ve-mobile";
@@ -9,6 +10,10 @@ const KEYS = Object.freeze({
   MODE: "mode",
   THEME: "theme",
   COLOR_SCHEME: "colorScheme",
+  CUSTOM_THEME_PRIMARY: "customThemePrimary",
+  CUSTOM_THEME_SECONDARY: "customThemeSecondary",
+  CUSTOM_THEME_THIRD_ENABLED: "customThemeThirdEnabled",
+  CUSTOM_THEME_THIRD: "customThemeThird",
   HEADER_ARTWORK: "headerArtwork",
   HEADER_ARTWORK_OPACITY: "headerArtworkOpacity",
   QUICKBAR_ENABLED: "quickbarEnabled",
@@ -83,7 +88,7 @@ const CHOICES = Object.freeze({
   [KEYS.LOGGING_LEVEL]: Object.freeze(["off", "error", "warn", "info", "debug"])
 });
 
-const DEFAULTS = Object.freeze({ mode: "auto", theme: "system", colorScheme: "class", headerArtwork: "automatic", headerArtworkOpacity: 1, quickbarEnabled: true, quickbarSource: "character", quickbarRows: "1", showActionSummaries: true, compactActionSummaries: false, graphicsSafety: "auto", diceRendering: "auto", mobileOptimizedAssets: "auto", lowMemoryCanvas: false, memoryProtectionProfile: "normal", memoryProtectionBehavior: "recommend", afterGraphicsFailure: "ask", sceneMemoryWarnings: true, fcsAutoSoftOverride: true, movementRepeatDelay: 0.5, recenterAfterMove: false, joystickSide: "follow", movementControl: "joystick", actionSceneReturn: "off", combatCarousel: true, keepScreenAwake: false, protectVeStyling: true, moduleOverlayVisibility: Object.freeze({}), moduleOverlayCatalog: Object.freeze({ scanned: false, entries: Object.freeze([]) }), moduleOverlayOrder: Object.freeze([]), moduleOverlayScale: Object.freeze({}), characterInventorySort: "manual", characterSpellSort: "manual", characterSpellFilter: "all", characterFeatureSort: "manual", characterFavouritesSort: "manual", characterEffectsSort: "manual", characterFavouritesSource: "core", loggingLevel: "warn", saveDiagnosticsToJournal: true });
+const DEFAULTS = Object.freeze({ mode: "auto", theme: "system", colorScheme: "class", customThemePrimary: CUSTOM_THEME_DEFAULTS.primary, customThemeSecondary: CUSTOM_THEME_DEFAULTS.secondary, customThemeThird: CUSTOM_THEME_DEFAULTS.third, customThemeThirdEnabled: false, headerArtwork: "automatic", headerArtworkOpacity: 1, quickbarEnabled: true, quickbarSource: "character", quickbarRows: "1", showActionSummaries: true, compactActionSummaries: false, graphicsSafety: "auto", diceRendering: "auto", mobileOptimizedAssets: "auto", lowMemoryCanvas: false, memoryProtectionProfile: "normal", memoryProtectionBehavior: "recommend", afterGraphicsFailure: "ask", sceneMemoryWarnings: true, fcsAutoSoftOverride: true, movementRepeatDelay: 0.5, recenterAfterMove: false, joystickSide: "follow", movementControl: "joystick", actionSceneReturn: "off", combatCarousel: true, keepScreenAwake: false, protectVeStyling: true, moduleOverlayVisibility: Object.freeze({}), moduleOverlayCatalog: Object.freeze({ scanned: false, entries: Object.freeze([]) }), moduleOverlayOrder: Object.freeze([]), moduleOverlayScale: Object.freeze({}), characterInventorySort: "manual", characterSpellSort: "manual", characterSpellFilter: "all", characterFeatureSort: "manual", characterFavouritesSort: "manual", characterEffectsSort: "manual", characterFavouritesSource: "core", loggingLevel: "warn", saveDiagnosticsToJournal: true });
 
 const CHARACTER_COLLECTION_SETTING_KEYS = Object.freeze({
   inventorySort: KEYS.CHARACTER_INVENTORY_SORT,
@@ -154,10 +159,25 @@ export function registerPreferences({
       class: "VEMOBILE.Settings.ColourScheme.Class",
       red: "VEMOBILE.Settings.ColourScheme.Red",
       neutral: "VEMOBILE.Settings.ColourScheme.Neutral",
-      bestiary: "VEMOBILE.Settings.ColourScheme.Bestiary"
+      bestiary: "VEMOBILE.Settings.ColourScheme.Bestiary",
+      custom: "VEMOBILE.Settings.ColourScheme.Custom"
     },
     default: "class",
     onChange: changed(KEYS.COLOR_SCHEME, onApplicationChange)
+  });
+
+  // VE uses colour pickers; native Settings also permits editing the hex
+  // strings. Reads normalize legacy or externally supplied invalid values.
+  for (const [key, group] of [
+    [KEYS.CUSTOM_THEME_PRIMARY, "CustomThemePrimary"],
+    [KEYS.CUSTOM_THEME_SECONDARY, "CustomThemeSecondary"],
+    [KEYS.CUSTOM_THEME_THIRD, "CustomThemeThird"],
+    [KEYS.CUSTOM_THEME_THIRD_ENABLED, "CustomThemeThirdEnabled"]
+  ]) game.settings.register(MODULE_ID, key, {
+    name: `VEMOBILE.Settings.${group}.Name`, hint: `VEMOBILE.Settings.${group}.Hint`,
+    scope: "client", config: true,
+    type: key === KEYS.CUSTOM_THEME_THIRD_ENABLED ? Boolean : String,
+    default: DEFAULTS[key], onChange: changed(key, onApplicationChange)
   });
 
   game.settings.register(MODULE_ID, KEYS.HEADER_ARTWORK, {
@@ -734,10 +754,20 @@ export function syncBootstrapPreferences(getGame = () => globalThis.game, { getS
 export function createFoundryPreferencesGateway({
   getGame = () => globalThis.game,
   getNavigator = () => globalThis.navigator,
+  getWindow = () => globalThis.window,
   setMobileNoCanvas = null
 } = {}) {
   const localize = (key, data) => localizeValue(getGame(), key, data);
   const setting = (key) => getGame()?.settings?.get?.(MODULE_ID, key);
+  let customColors = null, customInputs = [];
+  const readCustomTheme = () => {
+    const inputs = [setting(KEYS.CUSTOM_THEME_PRIMARY), setting(KEYS.CUSTOM_THEME_SECONDARY), setting(KEYS.CUSTOM_THEME_THIRD_ENABLED) === true, setting(KEYS.CUSTOM_THEME_THIRD)];
+    if (!customColors || inputs.some((value, index) => value !== customInputs[index])) {
+      customColors = normalizeCustomThemeColors({ primary: inputs[0], secondary: inputs[1], third: inputs[2] ? inputs[3] ?? CUSTOM_THEME_DEFAULTS.third : null });
+      customInputs = inputs;
+    }
+    return customColors;
+  };
 
   const readers = {
     mode: () => normalizedModePreference(setting(KEYS.MODE)),
@@ -794,14 +824,17 @@ export function createFoundryPreferencesGateway({
     readLocale: () => readLocale(getGame()),
     presentation,
     layout: () => pick(["mode", "joystickSide"]),
-    frame: () => pick(["colorScheme", "headerArtworkOpacity", "protectVeStyling", "joystickSide", "movementControl", "movementRepeatDelayMs", "quickbarEnabled", "quickbarSource", "combatCarousel"]),
+    frame: () => {
+      const frame = pick(["colorScheme", "headerArtworkOpacity", "protectVeStyling", "joystickSide", "movementControl", "movementRepeatDelayMs", "quickbarEnabled", "quickbarSource", "combatCarousel"]);
+      return frame.colorScheme === "custom" ? Object.freeze({ ...frame, customTheme: readCustomTheme() }) : frame;
+    },
     character: () => pick(["colorScheme", "headerArtwork", "quickbarEnabled", "quickbarSource", "characterCollections", "characterFavouritesSource", "characterFavouritesEnabled"]),
     scene: () => pick(["joystickSide", "movementControl", "movementRepeatDelayMs", "quickbarEnabled", "quickbarSource", "quickbarRows", "combatCarousel", "showActionSummaries", "compactActionSummaries"]),
     actionMenu: () => pick(["quickbarEnabled", "quickbarSource"]),
     actionNavigation: () => pick(["actionSceneReturn"]),
     actionSummaries: () => pick(["showActionSummaries", "compactActionSummaries"]),
     snapshot() {
-      const fields = preferenceFields(setting, localize, getNavigator, getGame);
+      const fields = preferenceFields(setting, localize, getNavigator, getGame, getWindow);
       return Object.freeze({
         ...presentation(),
         loggingLevel: normalizedLoggingLevel(setting(KEYS.LOGGING_LEVEL)),
@@ -850,7 +883,7 @@ export function createFoundryPreferencesGateway({
       restoring = true;
       try {
         const session = getGame();
-        const fields = preferenceFields(setting, localize, getNavigator, getGame);
+        const fields = preferenceFields(setting, localize, getNavigator, getGame, getWindow);
         let requiresReload = false;
         const overlayVisibility = sanitizeBooleanRecord(setting(KEYS.MODULE_OVERLAY_VISIBILITY));
         if (Object.keys(overlayVisibility).length) {
@@ -932,11 +965,15 @@ export function performanceModeField(game = globalThis.game, localize = (key) =>
   });
 }
 
-function preferenceFields(setting, localize, getNavigator, getGame) {
+function preferenceFields(setting, localize, getNavigator, getGame, getWindow) {
   return Object.freeze([
     choiceField(KEYS.MODE, "Mode", normalizedModePreference(setting(KEYS.MODE)), localize),
     choiceField(KEYS.THEME, "Theme", setting(KEYS.THEME), localize),
     choiceField(KEYS.COLOR_SCHEME, "ColourScheme", setting(KEYS.COLOR_SCHEME), localize),
+    colorField(KEYS.CUSTOM_THEME_PRIMARY, "CustomThemePrimary", setting(KEYS.CUSTOM_THEME_PRIMARY), localize),
+    colorField(KEYS.CUSTOM_THEME_SECONDARY, "CustomThemeSecondary", setting(KEYS.CUSTOM_THEME_SECONDARY), localize),
+    booleanField(KEYS.CUSTOM_THEME_THIRD_ENABLED, "CustomThemeThirdEnabled", setting(KEYS.CUSTOM_THEME_THIRD_ENABLED) === true, localize),
+    colorField(KEYS.CUSTOM_THEME_THIRD, "CustomThemeThird", setting(KEYS.CUSTOM_THEME_THIRD), localize),
     booleanField(KEYS.PROTECT_VE_STYLING, "ProtectVeStyling", setting(KEYS.PROTECT_VE_STYLING) !== false, localize),
     choiceField(KEYS.HEADER_ARTWORK, "HeaderArtwork", setting(KEYS.HEADER_ARTWORK), localize),
     Object.freeze({
@@ -983,7 +1020,9 @@ function preferenceFields(setting, localize, getNavigator, getGame) {
     Object.freeze({
       ...booleanField(KEYS.KEEP_SCREEN_AWAKE, "KeepScreenAwake", setting(KEYS.KEEP_SCREEN_AWAKE), localize),
       supported: typeof getNavigator()?.wakeLock?.request === "function",
-      unsupported: localize("VEMOBILE.Settings.KeepScreenAwake.Unsupported"),
+      unsupported: getWindow()?.isSecureContext === false
+        ? localize("VEMOBILE.Settings.KeepScreenAwake.SecureContextRequired")
+        : localize("VEMOBILE.Settings.KeepScreenAwake.Unsupported"),
       wakeLock: true,
       failure: localize("VEMOBILE.Settings.KeepScreenAwake.Failure")
     })
@@ -1126,7 +1165,18 @@ function booleanField(key, group, value, localize) {
   });
 }
 
+function colorField(key, group, value, localize) {
+  return Object.freeze({ namespace: MODULE_ID, key, type: "color",
+    name: localize(`VEMOBILE.Settings.${group}.Name`), hint: localize(`VEMOBILE.Settings.${group}.Hint`),
+    value: normalizeThemeColor(value) ?? DEFAULTS[key] });
+}
+
 function normalizeSetting(key, value) {
+  if ([KEYS.CUSTOM_THEME_PRIMARY, KEYS.CUSTOM_THEME_SECONDARY, KEYS.CUSTOM_THEME_THIRD].includes(key)) {
+    const color = normalizeThemeColor(value);
+    if (!color) throw new Error(localizeFoundry("VEMOBILE.Settings.Errors.ColorExpected", "Choose a colour in #RRGGBB format."));
+    return color;
+  }
   if (key === KEYS.MODE && value === "off") return "desktop";
   if (CHOICES[key]) {
     const choice = String(value ?? "");
@@ -1139,7 +1189,7 @@ function normalizeSetting(key, value) {
   if (key === KEYS.MODULE_OVERLAY_CATALOG) return sanitizeOverlayCatalog(value);
   if (key === KEYS.MODULE_OVERLAY_ORDER) return sanitizeStringArray(value);
   if (key === KEYS.MODULE_OVERLAY_SCALE) return sanitizeScaleRecord(value);
-  if (key === KEYS.RECENTER_AFTER_MOVE || key === KEYS.COMBAT_CAROUSEL || key === KEYS.KEEP_SCREEN_AWAKE || key === KEYS.PROTECT_VE_STYLING || key === KEYS.QUICKBAR_ENABLED || key === KEYS.SHOW_ACTION_SUMMARIES || key === KEYS.COMPACT_ACTION_SUMMARIES
+  if (key === KEYS.CUSTOM_THEME_THIRD_ENABLED || key === KEYS.RECENTER_AFTER_MOVE || key === KEYS.COMBAT_CAROUSEL || key === KEYS.KEEP_SCREEN_AWAKE || key === KEYS.PROTECT_VE_STYLING || key === KEYS.QUICKBAR_ENABLED || key === KEYS.SHOW_ACTION_SUMMARIES || key === KEYS.COMPACT_ACTION_SUMMARIES
     || key === KEYS.LOW_MEMORY_CANVAS || key === KEYS.SCENE_MEMORY_WARNINGS || key === KEYS.FCS_AUTO_SOFT_OVERRIDE || key === KEYS.SAVE_DIAGNOSTICS_TO_JOURNAL) {
     if (typeof value !== "boolean") throw new Error(localizeFoundry("VEMOBILE.Settings.Errors.BooleanExpected", "That setting requires an on or off value."));
     return value;

@@ -1,5 +1,9 @@
 {
   "VEMOBILE": {
+    "System": {
+      "Unsupported": "VE Mobile unterstützt das Spielsystem dieser Welt nicht.",
+      "Changed": "Das Spielsystem der Welt hat sich geändert. Lade VE Mobile neu, bevor du fortfährst."
+    },
     "Navigation": {
       "Character": "Charakter",
       "Chat": "Chat",
@@ -7,7 +11,12 @@
       "Scene": "Szene",
       "Combat": "Kampf",
       "Settings": "Einstellungen",
-      "MoveRight": "Navigation auf die rechte Seite verschieben"
+      "MoveRight": "Navigation auf die rechte Seite verschieben",
+      "PausedHint": "Spiel pausiert · Szene doppelt antippen zum Fortsetzen",
+      "Paused": "Spiel pausiert",
+      "PauseDenied": "Du darfst das Spiel nicht pausieren.",
+      "ChatUnreadOne": "Chat · 1 ungelesene Nachricht",
+      "ChatUnreadMany": "Chat · {count} ungelesene Nachrichten"
     },
     "Scene": {
       "ReleaseToken": "Token freigeben",
@@ -35,14 +44,6 @@
         "SourceChanged": "Die Akteur-Ziehquelle wurde geändert.",
         "PrototypeChanged": "Der Prototyp-Token des Akteurs wurde während der Platzierung geändert.",
         "PlaceFailed": "Der Token konnte nicht platziert werden."
-      },
-      "ClearTargets": {
-        "One": "{count} Ziel entfernen",
-        "Other": "{count} Ziele entfernen"
-      },
-      "TargetCount": {
-        "One": "{count} Ziel",
-        "Other": "{count} Ziele"
       },
       "CurrentlyViewed": "Derzeit angezeigt",
       "WorldActive": "Welt aktiv",
@@ -83,6 +84,14 @@
         "CanvasUnavailable": "Öffne die Karte und warte, bis sie geladen ist, bevor du eine Ebene auswählst.",
         "Unavailable": "Diese Szenenebene ist nicht mehr verfügbar.",
         "NotViewed": "Foundry konnte die ausgewählte Szenenebene nicht öffnen."
+      },
+      "ClearTargets": {
+        "One": "{count} Ziel entfernen",
+        "Other": "{count} Ziele entfernen"
+      },
+      "TargetCount": {
+        "One": "{count} Ziel",
+        "Other": "{count} Ziele"
       }
     },
     "Settings": {
@@ -108,7 +117,8 @@
         "Class": "Klassenbasiert",
         "Red": "VE-Rot",
         "Neutral": "Neutral",
-        "Bestiary": "Bestiarium"
+        "Bestiary": "Bestiarium",
+        "Custom": "Benutzerdefiniert"
       },
       "ProtectVeStyling": {
         "Name": "VE-Stil schützen",
@@ -219,6 +229,7 @@
         "Name": "Bildschirm aktiv halten",
         "Hint": "Bittet diesen Browser, den Bildschirm eingeschaltet zu lassen, während VE Mobile aktiv ist. Der Browser muss diese Funktion unterstützen.",
         "Unsupported": "Bildschirm-Wake-Lock ist in diesem Browser nicht verfügbar.",
+        "SecureContextRequired": "Erfordert HTTPS.",
         "Failure": "Der Browser hat den Bildschirm-Wake-Lock abgelehnt. Prüfe den Energiesparmodus und die Browserberechtigungen und versuche es erneut."
       },
       "CharacterFavouritesSource": {
@@ -608,7 +619,8 @@
         "NumberExpected": "Diese Einstellung erfordert eine Zahl.",
         "RangeExceeded": "Diese Einstellung liegt außerhalb des zulässigen Bereichs.",
         "MobileTypeUnsupported": "Dieser Einstellungstyp wird auf Mobilgeräten nicht unterstützt.",
-        "VeSettingMissing": "Diese VE-Mobile-Einstellung ist nicht vorhanden."
+        "VeSettingMissing": "Diese VE-Mobile-Einstellung ist nicht vorhanden.",
+        "ColorExpected": "Wähle eine Farbe im Format #RRGGBB."
       },
       "LowMemoryCanvas": {
         "Name": "Canvas-Profil für wenig Speicher aktiv",
@@ -630,6 +642,22 @@
         "Always": "Immer",
         "Combat": "Nur im Kampf",
         "Off": "Aus"
+      },
+      "CustomThemePrimary": {
+        "Name": "Primärfarbe",
+        "Hint": "Wird für Schaltflächen und ausgewählte Steuerelemente verwendet."
+      },
+      "CustomThemeSecondary": {
+        "Name": "Sekundärfarbe",
+        "Hint": "Dient zum Einfärben von Hintergründen und Bedienfeldern."
+      },
+      "CustomThemeThirdEnabled": {
+        "Name": "Dritte Farbe verwenden",
+        "Hint": "Wähle eine eigene Akzentfarbe; andernfalls leitet VE Mobile sie aus deinen beiden Farben ab."
+      },
+      "CustomThemeThird": {
+        "Name": "Akzentfarbe",
+        "Hint": "Wird für Hervorhebungen, Rahmen und dekorative Details verwendet."
       }
     },
     "Character": {
@@ -756,6 +784,10 @@
         "Edit": "{label} bearbeiten",
         "CloseEditor": "{label}-Editor schließen",
         "TextAndFoundryRichHTML": "Text und Foundry-Rich-HTML",
+        "RichTextToolbar": "Textformatierung",
+        "RichTextBold": "Fett",
+        "RichTextItalic": "Kursiv",
+        "RichTextBulletedList": "Aufzählung",
         "No": "Keine {label}.",
         "Conditions": "Zustände",
         "Active": "Aktiv: {activeCount}",
@@ -863,7 +895,8 @@
         "SpellAttackBonus": "Zauberangriff {modifier}",
         "SpellSaveDC": "Rettungswurf-SG {dc}",
         "SpellcastingClass": "Zauberwirkende Klasse",
-        "DefaultSpellcasting": "Standard"
+        "DefaultSpellcasting": "Standard",
+        "AddToHotbar": "Zur Aktionsleiste hinzufügen"
       },
       "ActorView": {
         "Senses": "Sinne",
@@ -1124,14 +1157,14 @@
         "Effectscount": "Effekte ({count})",
         "valueofmaximumweight": "{value} von {maximum} Gewicht",
         "Emptycontainer": "Leerer Behälter",
-        "ItemCount": {
-          "One": "{count} Gegenstand",
-          "Other": "{count} Gegenstände"
-        },
         "Effects": "Effekte",
         "BonusActionAbbreviation": "BA",
         "ReactionAbbreviation": "R",
-        "ActionAbbreviation": "A"
+        "ActionAbbreviation": "A",
+        "ItemCount": {
+          "One": "{count} Gegenstand",
+          "Other": "{count} Gegenstände"
+        }
       },
       "EffectsEmpty": {
         "temporary": "Keine vorübergehenden Effekte.",
@@ -1166,16 +1199,16 @@
       "Next": "Nächste Seite",
       "Empty": "Dieses Journal hat keine sichtbaren Seiten.",
       "Enlarge": "{name} vergrößern",
-      "PageCount": {
-        "One": "{count} Seite",
-        "Other": "{count} Seiten"
-      },
       "PagesAndHeadings": "Journal-Seiten und -Überschriften",
       "ChoosePageOrHeading": "Journal-Seite oder -Überschrift auswählen",
       "ChoosePage": "Seite auswählen",
       "OpenAttachment": "Anhang öffnen",
       "UntitledPage": "Unbenannte Seite",
-      "Edit": "Bearbeiten"
+      "Edit": "Bearbeiten",
+      "PageCount": {
+        "One": "{count} Seite",
+        "Other": "{count} Seiten"
+      }
     },
     "RestorationRecovery": {
       "title": "Desktop-Einstellungen müssen wiederhergestellt werden",
@@ -1295,7 +1328,8 @@
         "DesktopReview": "Du siehst dir die mobile Steuerung auf dem Desktop an. „Mobiler Modus“ in den Foundry-Einstellungen aktiviert oder wählt für diesen Browser die Smartphone- oder Tablet-Darstellung und lädt Foundry neu.",
         "Phone": "Das Smartphone zeigt jeweils einen Bildschirm. Die Akteurplatzierung verwendet eine Vorschau mit den Schaltflächen Platzieren und Abbrechen.",
         "TabletSplit": "Der geteilte Tabletmodus zeigt im Querformat Inhalte neben der Szene. Verwende die Seitensteuerung, um das Dock zu verschieben. Im Hochformat werden Tokens durch Ablegen direkt erstellt; Vorschauen nativer Aktionen verwenden weiterhin Platzieren und Abbrechen.",
-        "TabletFull": "Der Tablet-Vollbildmodus zeigt den ausgewählten Bildschirm über den verfügbaren Platz. Verwende Geteilter Bildschirm, um bei verfügbarem Querformat und Live-Karte zur nebeneinanderliegenden Ansicht zurückzukehren."
+        "TabletFull": "Der Tablet-Vollbildmodus zeigt den ausgewählten Bildschirm über den verfügbaren Platz. Verwende Geteilter Bildschirm, um bei verfügbarem Querformat und Live-Karte zur nebeneinanderliegenden Ansicht zurückzukehren.",
+        "ScenePause": "Tippe zweimal auf den Navigationsreiter Szene, um das Spiel zu pausieren oder fortzusetzen. Dies erfordert Spielleitungsrechte. Der Pausenhinweis und das wechselnde Szene-/Pausensymbol sind für alle sichtbar."
       },
       "Settings": {
         "preferences": "Smartphone- und Tablet-Einstellungen",
@@ -1569,7 +1603,8 @@
         "AMacroIDOrNullIsRequired": "Eine Makro-ID oder null ist erforderlich.",
         "ChooseADifferentDestinationSlot": "Wähle ein anderes Zielfeld.",
         "YouCanNoLongerEditThatMacro": "Du kannst dieses Makro nicht mehr bearbeiten.",
-        "ThatMacroHasNoEditableSheet": "Dieses Makro hat kein bearbeitbares Blatt."
+        "ThatMacroHasNoEditableSheet": "Dieses Makro hat kein bearbeitbares Blatt.",
+        "ItemHotbarMacrosUnavailable": "Gegenstands-Makros in der Schnellleiste sind nicht verfügbar."
       },
       "LowMemoryCanvasGateway": {
         "GraphicsRestorationLedgerCouldNotBeVerified": "Das Wiederherstellungsjournal der Grafik konnte nicht überprüft werden.",
@@ -1656,7 +1691,9 @@
         "ThisQuickbarChangedWhileYouWereEditingReopenIt": "Diese Schnellleiste wurde während der Bearbeitung geändert. Öffne sie erneut und versuche es noch einmal.",
         "ThatActionTypeCannotBePlacedOnTheQuickbar": "Dieser Aktionstyp kann nicht auf der Schnellleiste abgelegt werden.",
         "ThatItemOrActivityIsNoLongerAvailable": "Dieser Gegenstand oder diese Aktivität ist nicht mehr verfügbar.",
-        "ThatSkillIsNoLongerAvailable": "Diese Fertigkeit ist nicht mehr verfügbar."
+        "ThatSkillIsNoLongerAvailable": "Diese Fertigkeit ist nicht mehr verfügbar.",
+        "ThatActionTypeIsUnavailable": "Dieser Aktionstyp ist nicht verfügbar.",
+        "ThatItemIsNoLongerAvailable": "Dieser Gegenstand ist nicht mehr verfügbar."
       },
       "SceneGateway": {
         "ChooseAValidScene": "Wähle eine gültige Szene.",
@@ -1830,11 +1867,14 @@
       "CurrentDefeated": "{name}, derzeit am Zug, besiegt",
       "Current": "{name}, derzeit am Zug",
       "DefeatedName": "{name}, besiegt",
+      "TokenUnavailable": "Der Token dieses Kämpfers ist nicht mehr verfügbar.",
       "Count": {
         "One": "{count} Kämpfer",
         "Other": "{count} Kämpfer"
       },
-      "TokenUnavailable": "Der Token dieses Kämpfers ist nicht mehr verfügbar."
+      "RollAll": "Alle würfeln",
+      "RollNPCs": "NSC würfeln",
+      "NoInitiativeAvailable": "Keine Initiativewürfe verfügbar"
     },
     "Action": {
       "Close": "Aktion schließen"
@@ -2257,6 +2297,341 @@
       "Mode": {
         "phone": "Telefon",
         "tablet": "Tablet"
+      }
+    },
+    "PF2E": {
+      "Character": {
+        "Recovery": "Erholung",
+        "Sections": "Charakterbereiche",
+        "SelectCharacter": "Charakter auswählen",
+        "Character": "Charakter",
+        "EditorFailed": "Der Akteur-Editor konnte nicht geöffnet werden.",
+        "Edit": "Bearbeiten",
+        "ArmorClass": "Rüstungsklasse",
+        "Speed": "Bewegungsrate",
+        "Perception": "Wahrnehmung",
+        "Initiative": "Initiative",
+        "HitPointAmount": "Trefferpunktmenge",
+        "Attack": "Angriff",
+        "Unidentified": "Nicht identifiziert",
+        "CarryState": "Tragestatus",
+        "Spells": "Zauber",
+        "LoadingBiography": "Biografie wird geladen…",
+        "InlineRollUnavailable": "Inline-Wurf ohne OWNER-Berechtigung nicht verfügbar",
+        "EmptyBiography": "Es wurde keine Biografie eingetragen.",
+        "BiographyUnavailable": "Biografie ist nicht verfügbar.",
+        "AddCondition": "Zustand hinzufügen",
+        "Working": "Wird ausgeführt…",
+        "ActionFailed": "Diese Aktion konnte nicht abgeschlossen werden.",
+        "Empty": "Hier gibt es nichts anzuzeigen.",
+        "Tab": {
+          "Overview": "Übersicht",
+          "Statistics": "Werte",
+          "Inventory": "Inventar",
+          "Spells": "Zauber",
+          "Features": "Merkmale",
+          "Biography": "Biografie",
+          "Actions": "Aktionen",
+          "Gear": "Ausrüstung",
+          "More": "Mehr"
+        },
+        "Carry": {
+          "Held1": "Gehalten (1 Hand)",
+          "Held2": "Gehalten (2 Hände)",
+          "WornSlot": "Getragen im Ausrüstungsslot",
+          "WornNoSlot": "Getragen außerhalb des Ausrüstungsslots",
+          "Stowed": "Verstaut",
+          "Dropped": "Fallen gelassen",
+          "Held": "In der Hand",
+          "Worn": "Getragen"
+        },
+        "Type": {
+          "Character": "Charakter",
+          "NPC": "NSC",
+          "Familiar": "Vertrauter",
+          "Hazard": "Gefahr",
+          "Loot": "Beute",
+          "Party": "Gruppe",
+          "Army": "Armee",
+          "Vehicle": "Fahrzeug"
+        },
+        "Biography": {
+          "Age": "Alter",
+          "Gender": "Geschlecht",
+          "Height": "Größe",
+          "Weight": "Gewicht",
+          "BirthPlace": "Geburtsort",
+          "Attitude": "Einstellung",
+          "Beliefs": "Überzeugungen",
+          "Edicts": "Edikte",
+          "Anathema": "Anathema"
+        },
+        "Section": {
+          "VitalStatistics": "Grundwerte",
+          "HitPoints": "Trefferpunkte",
+          "Resources": "Ressourcen",
+          "Strikes": "Angriffe",
+          "Conditions": "Zustände",
+          "SavingThrows": "Rettungswürfe",
+          "Skills": "Fertigkeiten",
+          "Perception": "Wahrnehmung",
+          "CurrencyAndWealth": "Münzen und Vermögen",
+          "Inventory": "Inventar",
+          "Biography": "Biografie",
+          "Spells": "Zauber",
+          "Attributes": "Attribute",
+          "Actions": "Aktionen",
+          "PassiveFeatures": "Passive Fähigkeiten",
+          "PinnedActions": "Angeheftete Aktionen"
+        },
+        "Action": {
+          "Add": "Hinzufügen",
+          "ApplyCarry": "Tragestatus anwenden",
+          "Attack": "Angreifen",
+          "Cast": "Wirken",
+          "CriticalDamage": "Kritischer Schaden",
+          "Damage": "Schaden",
+          "Details": "Details",
+          "Heal": "Heilen",
+          "Invest": "Investieren",
+          "ItemCard": "Gegenstandskarte",
+          "RestOvernight": "Über Nacht rasten",
+          "RollInitiative": "Initiative würfeln",
+          "SetTemporaryHP": "Temporäre TP festlegen",
+          "Uninvest": "Nicht mehr investieren",
+          "Use": "Verwenden",
+          "DecreaseResource": "{resource} verringern",
+          "IncreaseResource": "{resource} erhöhen",
+          "DecreaseCondition": "{condition} verringern",
+          "IncreaseCondition": "{condition} erhöhen",
+          "PostToChat": "Im Chat veröffentlichen",
+          "ViewAll": "Alle anzeigen",
+          "ViewAllStatistics": "Alle Werte anzeigen"
+        },
+        "ActionCost": {
+          "Actions": "Aktionskosten",
+          "Free": "Freie Aktion",
+          "Reaction": "Reaktion"
+        },
+        "AdjustHitPoints": "Trefferpunkte anpassen",
+        "AllRanks": "Alle Ränge",
+        "AtWill": "Beliebig oft",
+        "AttackVariants": "Angriffsvarianten",
+        "Cantrip": "Zaubertrick",
+        "Cantrips": "Zaubertricks",
+        "ClassDC": "Klassen-SG",
+        "EditCharacter": "Charakter bearbeiten",
+        "Expended": "Aufgebraucht",
+        "Filter": {
+          "All": "Alle Aktionen",
+          "Pinned": "Angeheftet",
+          "Reactions": "Reaktionen"
+        },
+        "FilterActions": "Aktionen filtern",
+        "FilterSpells": "Zauber filtern",
+        "Focus": "Fokus",
+        "HeroPoints": "Heldenpunkte",
+        "ItemActions": "Gegenstandsaktionen",
+        "MoreDetails": "Weitere Details",
+        "ProficiencyRank": "{rank} geübt",
+        "Rank": {
+          "Untrained": "Ungeübt",
+          "Label": "Rang"
+        },
+        "PrepareSpells": "Zauber vorbereiten",
+        "PrepareEntry": "{entry} vorbereiten",
+        "Preparation": {
+          "Title": "Zauber vorbereiten",
+          "Intro": "Wähle einen Zauber für jeden Platz und tippe auf Anwenden. Änderungen werden sofort gespeichert; verbrauchte Plätze bleiben verbraucht.",
+          "SlotLabel": "{rank}, Platz {slot}",
+          "EmptySlot": "Leerer Platz",
+          "UnavailableSpell": "Zauber nicht verfügbar",
+          "Apply": "Anwenden",
+          "SpellCollection": "Zauberauswahl",
+          "SpellCollectionCount": "Zauberauswahl · {value}/{max}",
+          "Remove": "Entfernen",
+          "NoSlots": "Für diesen Eintrag sind keine Vorbereitungsplätze verfügbar."
+        },
+        "RollSave": "{label}-Rettungswurf {modifier} würfeln",
+        "RollSkill": "{label} {modifier} würfeln; {rank}",
+        "RollStatistic": "{label} {modifier} würfeln",
+        "SearchActions": "Aktionen durchsuchen",
+        "SearchGear": "Ausrüstung durchsuchen",
+        "SearchSpells": "Zauber durchsuchen",
+        "Shield": {
+          "Broken": "Zerbrochen",
+          "Destroyed": "Zerstört",
+          "Raised": "Erhoben",
+          "Details": "Schilddetails",
+          "Intact": "Unbeschädigt",
+          "HP": "Schild-TP",
+          "RaisedAC": "RK bei erhobenem Schild",
+          "BreakThreshold": "Bruchschwelle",
+          "None": "Kein Schild",
+          "Tab": "Schild",
+          "Repair": "Reparatur versuchen",
+          "Changed": "Die Schildtrefferpunkte haben sich geändert. Öffne den Editor erneut."
+        },
+        "SpellAttack": "Zauberangriff",
+        "SpellDC": "Zauber-SG",
+        "TemporaryHP": "Temporäre TP",
+        "Details": "Details",
+        "AC": "RK",
+        "Actions": "Aktionen",
+        "Bulk": {
+          "Encumbered": "Überlastet ab",
+          "Label": "Last",
+          "Maximum": "Maximum"
+        },
+        "Check": "Probe",
+        "HP": "TP",
+        "Hardness": "Härte",
+        "CharacterOptions": "Charakteroptionen",
+        "TempHPShort": "Temp. TP",
+        "NoActiveConditions": "Keine aktiven Zustände.",
+        "Supplement": {
+          "Effects": "Effekte",
+          "NativeManagement": "Funktionen des PF2e-Bogens",
+          "NativeManagementHint": "Zaubervorbereitung, Rituale, Herstellung, Charakteraufstieg und Kampagneneinstellungen werden im PF2e-Bogen verwaltet.",
+          "Bulk": "Last",
+          "Identity": "Identität & Erkundung",
+          "Heritage": "Abstammung",
+          "Background": "Hintergrund",
+          "Deity": "Gottheit",
+          "Size": "Größe",
+          "Traits": "Merkmale",
+          "Experience": "Erfahrung",
+          "Languages": "Sprachen",
+          "Senses": "Sinne",
+          "Movement": "Bewegung",
+          "Proficiencies": "Weitere Übungsgrade",
+          "Equipment": "Währung & Investitionen",
+          "Currency": "Währung",
+          "Invested": "Investiert",
+          "Defenses": "Immunitäten, Schwächen & Resistenzen",
+          "Immunities": "Immunitäten",
+          "Weaknesses": "Schwächen",
+          "Resistances": "Resistenzen",
+          "Expired": "Abgelaufen",
+          "Slots": "Zauberplätze"
+        },
+        "ArmorClassModifiers": "Rüstungsklassen-Modifikatoren",
+        "ModifierName": "Modifikatorname",
+        "ModifierValue": "Modifikatorwert",
+        "ModifierType": "Modifikatortyp",
+        "RemoveModifier": "{label} entfernen",
+        "ModifiersChanged": "Rüstungsklassen-Modifikatoren wurden geändert. Öffne den Editor erneut und versuche es noch einmal.",
+        "Defenses": {
+          "Immunities": "Immunitäten",
+          "Weaknesses": "Schwächen",
+          "Resistances": "Resistenzen",
+          "Add": "{category} hinzufügen",
+          "Derived": "Aus Talenten und Effekten abgeleitet",
+          "Exception": "Außer {value}",
+          "Type": "Verteidigungstyp",
+          "Value": "Wert",
+          "ChooseType": "Typ auswählen",
+          "Remove": "{type} entfernen",
+          "More": "Mehr",
+          "Exceptions": "Ausnahmen",
+          "DoubleVs": "Doppelte Resistenz gegen",
+          "ChooseTag": "Merkmal auswählen",
+          "RemoveTag": "{tag} entfernen",
+          "Changed": "Resistenzen haben sich geändert. Öffne den Editor erneut und versuche es noch einmal."
+        },
+        "ShortcutUnavailable": "Dieser Kurzbefehl ist nicht mehr verfügbar.",
+        "ModifierTypes": {
+          "ability": "Attribut",
+          "proficiency": "Übung",
+          "item": "Gegenstand",
+          "status": "Statusbonus",
+          "circumstance": "Umstand",
+          "untyped": "Typenlos"
+        },
+        "EffectsAndConditions": "Effekte und Zustände",
+        "RollPerception": "Wahrnehmung würfeln",
+        "RestHint": "Beende den Tag. Bereite dich auf den nächsten vor.",
+        "OverviewDefenses": "Verteidigung",
+        "ViewDetails": "Details anzeigen",
+        "PerceptionStatus": "Status",
+        "DamageType": "Schadensart",
+        "LimitedUses": "Anwendungen",
+        "Charges": "Ladungen"
+      },
+      "NativeEditorRequired": "Für diese Aktion ist der native PF2e-Akteur-Editor erforderlich.",
+      "RequiresV14": "Diese PF2e-Aktion erfordert Foundry VTT 14 oder neuer.",
+      "Unavailable": "Diese PF2e-Aktion ist nicht verfügbar.",
+      "InvalidInput": "Diese PF2e-Aktion ist ungültig oder hat sich geändert. Aktualisiere und versuche es erneut.",
+      "SpellPreparation": {
+        "InvalidInput": "Diese Zaubervorbereitung ist ungültig oder hat sich geändert. Aktualisiere und versuche es erneut.",
+        "Unavailable": "Dieser Zaubereintrag ist nicht mehr zum Vorbereiten verfügbar.",
+        "Changed": "Die Zaubervorbereitung wurde geändert. Aktualisiere und versuche es erneut."
+      },
+      "ItemMissing": "Dieser Gegenstand ist nicht mehr verfügbar.",
+      "ResourceChanged": "Diese Ressource wurde geändert. Aktualisiere und versuche es erneut.",
+      "HitPointsChanged": "Die Trefferpunkte wurden geändert. Aktualisiere und versuche es erneut.",
+      "CurrencyChanged": "Das Guthaben wurde geändert. Aktualisiere und versuche es erneut.",
+      "InventoryEffect": {
+        "Changed": "Dieser Gegenstand wurde geändert. Aktualisiere und versuche es erneut."
+      },
+      "EditItem": "Gegenstand bearbeiten",
+      "ItemDetailsChanged": "Dieser Gegenstand ist nicht mehr verfügbar. Aktualisiere die Ansicht und versuche es erneut.",
+      "Play": {
+        "Changed": "Diese Option wurde geändert oder ist nicht verfügbar. Aktualisiere und versuche es erneut.",
+        "Options": "Optionen",
+        "ActiveExploration": "Aktive Erkundung",
+        "StartExploration": "Erkundung beginnen",
+        "Ammunition": "Munition",
+        "NoAmmo": "Keine Munition",
+        "LoadedAmmo": "Geladene Munition",
+        "ElementalBlasts": "Elementarstöße",
+        "DamageType": "Schadensart",
+        "ChannelElements": "Elemente kanalisieren",
+        "Melee": "Nahkampf",
+        "Ranged": "Fernkampf",
+        "Damage": "Schaden",
+        "Critical": "Kritisch"
+      },
+      "Spells": {
+        "Title": "Zauber verwalten",
+        "ManageIntro": "Verwalte die Zauber dieses Eintrags und verfügbare Signaturzauber oder füge Zauber aus installierten Kompendien hinzu.",
+        "Signatures": "Signaturzauber",
+        "Unsign": "Signaturzauber entfernen",
+        "Sign": "Als Signaturzauber festlegen",
+        "Search": "Installierte Zauber durchsuchen",
+        "SearchButton": "Suchen",
+        "Add": "Zauber hinzufügen",
+        "ImportRank": "Auf Grad importieren",
+        "Import": "Hinzufügen",
+        "More": "Weitere Ergebnisse",
+        "NoResults": "Keine passenden Zauber gefunden.",
+        "SearchFailed": "Die Zaubersuche konnte nicht abgeschlossen werden."
+      },
+      "Controls": {
+        "Quantity": "Menge",
+        "ApplyQuantity": "Menge anwenden",
+        "Container": "Behälter",
+        "NoContainer": "Kein Behälter",
+        "ApplyContainer": "Gegenstand verschieben",
+        "DecreaseEffect": "Effektwert verringern",
+        "IncreaseEffect": "Effektwert erhöhen",
+        "RemoveEffect": "Effekt entfernen",
+        "ConfirmRemoveEffect": "Zum Entfernen erneut tippen"
+      },
+      "PersistentDamage": {
+        "Title": "Anhaltender Schaden",
+        "Unavailable": "Diese PF2e-Aktion für anhaltenden Schaden ist nicht verfügbar.",
+        "InvalidInput": "Diese Aktion ist ungültig oder wurde geändert. Aktualisiere die Ansicht und versuche es erneut.",
+        "Changed": "Der anhaltende Schaden wurde geändert. Öffne den Editor erneut.",
+        "Formula": "Schadensformel",
+        "DamageType": "Schadensart",
+        "DC": "Erholungs-SG",
+        "Add": "Hinzufügen",
+        "AddTitle": "Anhaltenden Schaden hinzufügen",
+        "Empty": "Kein anhaltender Schaden eingetragen.",
+        "Remove": "Entfernen",
+        "Recovery": "Erholung",
+        "RollDamage": "Schaden würfeln"
       }
     }
   }

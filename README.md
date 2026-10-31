@@ -1,466 +1,406 @@
-# <img src="Icon.png" alt="VE Foundry Client logo" height="40">  VE Mobile
+# <img src="Icon.png" alt="VE Mobile logo" height="40"> VE Mobile
 
 [![Latest release](https://img.shields.io/github/v/release/Silvestrae/ve-mobile?label=Release)](https://github.com/Silvestrae/ve-mobile/releases/latest)
 ![Foundry VTT 13 and 14](https://img.shields.io/badge/Foundry_VTT-13_%26_14-orange)
-![D&D5e 5.3 and 6.x](https://img.shields.io/badge/D%26D5e-5.3_%26_6.x-red)
+![D&D5e](https://img.shields.io/badge/System-D%26D5e-red)
+![Pathfinder Second Edition](https://img.shields.io/badge/System-PF2e-5c6840)
 ![Phone and Tablet](https://img.shields.io/badge/Phone_%26_Tablet-supported-blue)
 [![MIT License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/Silvestrae/ve-mobile/total?label=Downloads&color=blue)](https://github.com/Silvestrae/ve-mobile/releases)
-
 [![Ko-fi: Silvestrae](https://img.shields.io/badge/Ko--fi-Silvestrae-29abe0?logo=kofi&logoColor=white)](https://ko-fi.com/silvestrae)
 
-VE Mobile brings a purpose-built phone and tablet interface to your Foundry
-Virtual Tabletop game. Read your character, use spells and items, follow chat,
-and interact with the Scene through layouts designed for touch. It runs in
-your browser, inside your existing authenticated Foundry session—no separate
-app is required.
+**Your Foundry game, designed for touch.**
 
-The screenshots below show VE Mobile running in Foundry VTT with D&D5e.
+VE Mobile gives Foundry Virtual Tabletop a dedicated phone and tablet interface
+for **Dungeons & Dragons Fifth Edition** and **Pathfinder Second Edition**.
+Read your character, roll saves, cast spells, manage equipment, follow chat,
+and move tokens through layouts built for a smaller screen.
+
+Open your usual Foundry world in a browser and sign in—no separate app or account
+is required. Rolls and actions use your game system and its usual chat cards,
+permissions, and automation.
 
 <p align="center">
-  <img src="docs/screenshots/tablet-split-scene.png" alt="Tablet Split with the live Scene and combat carousel beside an expanded Character sheet" width="960">
+  <img src="docs/screenshots/tablet-split-scene.png" alt="D&D5e in Tablet Split: a live Scene and combat carousel beside the character sheet" width="960">
 </p>
 
-## Why VE Mobile?
-
-VE Mobile gives phones and tablets their own interface, rather than simply
-shrinking Foundry's desktop workspace. Dedicated Character, NPC, Group, and
-Vehicle sheets make common information and actions accessible on a narrow
-screen. Phone, Tablet Split, and Tablet Full presentations adapt navigation
-and content to the space available.
-
-On a tablet, keep the Scene alongside your sheet or chat. When you do not need
-the map, no-Canvas mode lets you use sheets, chat, and journals with less
-graphics work. Graphics profiles, loading status, resync, and recovery controls
-help you manage the practical limits of mobile hardware and connections.
-
-Rolls and supported activities use Foundry and D&D5e's native action pathways.
-Your game keeps its rules, permissions, chat cards, and automation; VE Mobile
-provides the touch interface for using them.
+*The introduction image shows D&D5e. [PF2e phone screenshots](#pf2e-phone-screenshots)
+appear in the PF2e section below.*
 
 ## Contents
 
-- [Why VE Mobile?](#why-ve-mobile)
-- [Start Here](#start-here)
-- [Features at a Glance](#features-at-a-glance)
-- [Phone and Tablet Layouts](#phone-and-tablet-layouts)
-- [Character and Actor Sheets](#character-and-actor-sheets)
-- [Scene and Touch Controls](#scene-and-touch-controls)
-- [Quickbar, Actions, and Gameplay](#quickbar-actions-and-gameplay)
-- [Chat, Journals, and Combat](#chat-journals-and-combat)
-- [Performance and Mobile Graphics](#performance-and-mobile-graphics)
-- [Compatibility and Requirements](#compatibility-and-requirements)
-- [Languages](#languages)
-- [Controls and Gestures](#controls-and-gestures)
-- [Installation](#installation)
-- [Settings](#settings)
-- [Getting Unstuck](#getting-unstuck)
-- [Reporting Bugs](#reporting-bugs)
-- [Support](#support)
-- [License](#license)
-- [Screenshot Credits](#screenshot-credits)
-- [Disclaimer and Independence](#disclaimer-and-independence)
+- [Compatibility](#compatibility)
+- [Install and start playing](#install-and-start-playing)
+- [Phone and tablet layouts](#phone-and-tablet-layouts)
+- [Dungeons & Dragons Fifth Edition](#dungeons--dragons-fifth-edition)
+- [Pathfinder Second Edition](#pathfinder-second-edition)
+- [Controls and shortcuts](#controls-and-shortcuts)
+- [Scene and token movement](#scene-and-token-movement)
+- [Chat, journals, and combat](#chat-journals-and-combat)
+- [Appearance and performance](#appearance-and-performance)
+- [Troubleshooting](#troubleshooting)
+- [Feedback and support](#feedback-and-support)
+- [License and credits](#license-and-credits)
 
-## Start Here
+## Compatibility
 
-1. [Install and enable VE Mobile](#installation), then open your usual Foundry
-   world in your phone or tablet browser and sign in. Choose **Auto-detect**,
-   **Phone**, or **Tablet** in Mobile Mode if you need to change the layout.
-2. Tap the character name to choose an Actor. If a character or token is not
-   available, ask your GM to check your access and token ownership.
-3. Tap item, spell and feature rows to read their details. **Hold a row** for
-   more actions, including use and action-bar shortcuts where available.
-4. Open **Scene**, then tap a token you control. In **Settings → Scene &
-   Controls**, choose **Joystick** or **D-pad** under **Movement control**.
-5. For a return to the map after using an item, spell or ability, set
-   **Return to Scene after actions** to **Always** or **During combat only**.
-   It starts **Off**. Enabled action summaries stay above the map after return.
-6. Open **Settings → Support → Controls & Gestures** for the full touch guide.
-   It explains holds, dragging, targeting and placement for each surface.
-
-## Features at a Glance
-
-| Area | What you can do |
+| Game system | Minimum requirements |
 | --- | --- |
-| Layouts | Use Phone, Tablet Split, or Tablet Full, with light and dark presentation. |
-| Actor sheets | Browse PCs, NPCs, Groups, and Vehicles through dedicated layouts and a folder-based chooser. |
-| Gameplay | Roll checks and saves, use items and spells, manage supported resources, and open native action dialogs. |
-| Scene | Pan, zoom, select, target, choose available Scene levels, and move permitted tokens with a joystick or D-pad. |
-| Action bar | Choose Character Quickbar or Foundry Hotbar, with ten slots per page and five pages. |
-| Reading and communication | Use native chat, read journals and images, and follow combat turn order. |
-| Mobile operation | Use Keep Screen Awake, graphics profiles, no-Canvas mode, connection status, and recovery tools. |
-| Languages | Use VE's interface in US or Australian English, Spanish, German, French, or Italian. |
+| **D&D5e** | Foundry 13; D&D5e 5.3.2 |
+| **PF2e** | Foundry 14; PF2e 8.6.1 |
 
-Available information and actions follow your Foundry permissions and the
-capabilities of the selected Actor, item, or Scene.
+**PF2e requires Foundry v14+.** Other game systems are not currently supported.
 
-## Phone and Tablet Layouts
+<details>
+<summary>Tested versions and compatibility notes</summary>
 
-- **Phone** uses bottom navigation and a single content pane. Character headers
-  compact as you scroll, keeping key stats and section tabs close at hand.
-- **Tablet Split** puts the live Scene beside your selected content in
-  landscape, so you can consult a sheet or chat while keeping the map visible.
-  Character headers compact as you scroll the sheet pane.
-- **Tablet Full** gives the selected sheet or content the main surface, with
-  side navigation and wider layouts where useful. Character headers stay
-  expanded while you scroll.
+- D&D5e: Foundry 13.351 / D&D5e 5.3.3 and Foundry 14.369 / D&D5e 6.0.6.
+- PF2e: Foundry 14.369 / PF2e 8.6.1.
 
-Auto-detect chooses a presentation for your device; you can also select Phone,
-Tablet, or Desktop explicitly. The layout responds to viewport changes, and
-Tablet's Split Screen control switches between Split and Full.
+These tests do not cover every version, device, or combination of modules.
+Live maps need working Canvas graphics. Your Foundry permissions determine
+which actors and controls you can use.
+
+</details>
+
+The repository README may include unreleased changes. Check the
+[release notes](https://github.com/Silvestrae/ve-mobile/releases) for the features
+included in a particular download.
+
+## Install and start playing
+
+1. In Foundry **Setup**, open **Add-on Modules → Install Module**.
+2. Paste this address into **Manifest URL**, then select **Install**:
+
+   ```text
+   https://github.com/Silvestrae/ve-mobile/releases/latest/download/module.json
+   ```
+
+3. Launch a supported world and enable **VE Mobile** in **Manage Modules**.
+4. Fully reload Foundry, then open the world in your phone or tablet browser
+   and sign in with your usual world account.
+
+<details>
+<summary>Manual installation</summary>
+
+Extract the module ZIP from the
+[latest release](https://github.com/Silvestrae/ve-mobile/releases/latest) into
+`Data/modules/ve-mobile`. Place `module.json` directly in that folder, alongside
+`src`, `assets`, and `locales`, then fully reload Foundry.
+
+</details>
+
+On first use:
+
+- Choose **Auto-detect**, **Phone**, or **Tablet** in **Mobile Mode** if needed.
+- Use the **character header chevron** to open the actor chooser.
+- Tap item rows to read details; use their action controls to roll or cast.
+- Choose **Joystick** or **D-pad** in **Settings → Scene & Controls → Movement control**.
+- Open **Settings → Support → Controls & Gestures** for the touch guide.
+
+## Phone and tablet layouts
+
+| Layout | How it works |
+| --- | --- |
+| **Phone** | One content pane with bottom navigation. Character headers compact as you scroll. |
+| **Tablet Split** | The live Scene beside a sheet, chat, or other content in landscape. Headers compact within the sheet pane. |
+| **Tablet Full** | A wide content surface with side navigation. Character headers stay expanded. |
+
+Auto-detect selects a presentation for your device. You can choose a mode
+explicitly; Tablet's Split Screen control switches between Split and Full.
+Character tabs scroll horizontally and retain their content position and
+expanded sections for the current actor view during the session.
 
 <p align="center">
-  <img src="docs/screenshots/phone-character.png" alt="Expanded Phone Character header with health, core stats and section tabs" width="300">
-  <img src="docs/screenshots/phone-character-compact.png" alt="Scrolled Phone Character overview with a compact header above the persistent section tabs" width="300">
+  <img src="docs/screenshots/phone-character.png" alt="D&D5e character sheet with its expanded phone header" width="300">
+  <img src="docs/screenshots/phone-character-compact.png" alt="The same sheet after scrolling, with its compact header" width="300">
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/tablet-full-character.png" alt="Tablet Full character overview with a wider header and side navigation" width="960">
-</p>
+## Dungeons & Dragons Fifth Edition
 
-## Character and Actor Sheets
+D&D5e has dedicated **Character, NPC, Group, and Vehicle** layouts using the
+system's calculated statistics and actions.
 
 ### Characters and NPCs
 
-Move between Favorites, Overview, Inventory, Spells, Features, and Biography.
-Browse Actors through folders, open portraits in the image viewer, and return
-to previous content with integrated navigation.
+Navigate **Favorites, Overview, Inventory, Spells, Features, and Biography**.
+Class accents and optional artwork personalize the header; tapping character
+artwork opens a full-screen viewer.
 
-Character section tabs stay in place while their content scrolls. Each subtab
-remembers its scroll position and disclosure choices for the current session;
-the first meaningful group opens initially. These choices are kept separately
-for each exact Actor or token Actor view.
+- **Essentials:** HP/temp HP, Heroic Inspiration, death saves, abilities, saves,
+  skills, conditions, active effects, hit dice, and native rests.
+- **Items and spells:** expandable descriptions, native activities and use
+  actions, spell slots, supported resources, favorites, and sorting.
+- **Equipment:** currency, containers, and supported equipment controls.
+- **NPCs:** their own identity, challenge information, statistics, and actions.
 
-Supported controls include HP and temporary HP, resources and spell slots,
-conditions and effects, Heroic Inspiration, death saves, hit dice and rests,
-abilities, saving throws, skills, and movement choices. Inventory includes
-containers, currency, and supported equipment controls. Spell and feature
-lists offer details, native use actions, sorting, and contextual menus.
-
-NPCs show their own identity and challenge information. Character artwork and
-class accents personalize the sheet; automatic banners have fallback artwork,
-with explicit banner choices and an Off option in Settings.
+Native activity dialogs and follow-up controls remain available above VE Mobile.
+Behavior depends on D&D5e and any automation modules involved.
 
 <p align="center">
-  <img src="docs/screenshots/phone-spells.png" alt="Orna's phone spell list with expanded cantrips and spell-slot controls" width="300">
-  <img src="docs/screenshots/npc-sheet.png" alt="SRD Hydra NPC overview with challenge rating, health, defenses and abilities" width="300">
+  <img src="docs/screenshots/phone-spells.png" alt="D&D5e spell list with expanded cantrips and spell-slot controls" width="300">
+  <img src="docs/screenshots/npc-sheet.png" alt="D&D5e Hydra NPC sheet with challenge rating, health, and defenses" width="300">
 </p>
 
-### Groups and Vehicles
+### Groups and vehicles
 
-Groups organize **Members**, **Supplies**, and **About**. Review permitted
-member summaries, open available member sheets, and return to the Group.
-Travel information, shared inventory, and descriptions appear where available.
+**Groups** organize **Members, Supplies, and About**. Review permitted member
+summaries, open their sheets, and return to the group. Shared inventory and
+travel information appear where available.
 
-Vehicles organize **Status**, **Actions**, **Cargo**, and **Details**. Review
-condition and defenses, movement and travel, components and stations, cargo,
-capacities, and permitted crew references. Supported component and activity
-actions use the same native action workflow as other sheets.
+**Vehicles** organize **Status, Actions, Cargo, and Details**: defenses, movement,
+components, stations, cargo, capacities, and permitted crew references.
+Supported component and activity actions use native workflows.
 
-The **Native configuration & edit** control opens the assigned native sheet
-for broader Group operations and Vehicle configuration. VE does not provide a
-mobile editor for every system field.
+**Native configuration & edit** opens the assigned sheet for broader operations;
+VE Mobile does not provide an editor for every field. See the
+[Group](docs/screenshots/group-sheet.png) and
+[Vehicle](docs/screenshots/vehicle-sheet.png) examples.
+
+## Pathfinder Second Edition
+
+> **PF2e in 1.1.0 is a community test build — constructive feedback welcome.**
+>
+> I'm primarily a D&D player. I can test the controls in Foundry, but need
+> experienced PF2e players to explain the expected results and help fine-tune
+> the sheet and fix bugs.
+>
+> In [GitHub Issues](https://github.com/Silvestrae/ve-mobile/issues), include
+> **what you did, what should happen, and what actually happened**, plus the
+> relevant class, item/spell, and setup. Expected rolls, resource costs and
+> condition changes—or a comparison with the standard PF2e sheet—are especially
+> helpful.
+
+PF2e supports **player characters on Foundry v14+**. Other actor types, including
+NPCs, familiars and companions, are excluded from its actor chooser.
+
+### PF2e phone screenshots
 
 <p align="center">
-  <img src="docs/screenshots/group-sheet.png" alt="Group sheet showing travel information and a member summary" width="300">
-  <img src="docs/screenshots/vehicle-sheet.png" alt="Keelboat Actions tab showing helm and oars with component statistics" width="300">
+  <img src="docs/screenshots/pf2e/character-dark.jpg" alt="Seelah's PF2e Character tab in dark mode" width="240">
+  <img src="docs/screenshots/pf2e/inventory-light.jpg" alt="Seelah's PF2e Inventory tab in light mode" width="240">
+  <img src="docs/screenshots/pf2e/spellcasting-dark.jpg" alt="Kyra's PF2e Spellcasting tab in dark mode" width="240">
 </p>
 
-## Scene and Touch Controls
+Seelah (Level 5) and Kyra (Level 7), shown in the running PF2e sheet at phone
+viewport size. [View all ten light/dark screenshots](docs/screenshots/pf2e/README.md),
+including Actions and spell preparation.
 
-Use Foundry's live Scene with one-finger panning, two-finger pinch zoom, and
-token controls. Tap a token you control to select it; quickly double-tap the
-same visible token to toggle targeting. Hold an owned token, then release to
-open its native controls, or drag after the hold activates to move it.
+### Character sheet
 
-To deselect the controlled token, tap **×** beside its name above the movement
-control. A normal tap on an already selected token keeps it selected. Targeting
-is separate from selection: double-tap a target again to clear that target.
+The header brings together identity, traits, level/XP, HP/temp HP and Hero Points.
+All 29 PF2e 8.6.1 classes have artwork and colours, adjustable in Appearance.
+Expand **AC, Speed, Perception or Class DC** for more controls; initiative is
+under Perception. Dying/Wounded indicators and Recovery appear when needed.
+Tap the portrait to view it full-screen.
 
-To move with the joystick, touch its centre knob first, then swipe beyond the
-minimum distance. Touching its outer edge does not start movement. Choose
-**D-pad** in Scene & Controls for one-step directional taps with a brief glow
-on the pressed direction. Its centre image stays still. Hex scenes use a
-matching hex-shaped control with six native directions; square and gridless
-scenes have eight directions. The compact D-pad fits around the token portrait
-and takes up the same space as the joystick. Native movement, walls, pause
-rules, visibility, and ownership still apply. Doors and supported interactive
-scenery retain their configured native interactions.
+| Tab | What it contains |
+| --- | --- |
+| **Character** | Fortitude, Reflex, Will, attributes, defenses, background, deity, languages, senses, and Rest overnight. Background/deity cells open item details. |
+| **Actions** | Encounter, Exploration, and Downtime views; Attacks with MAP variants, damage and critical damage; abilities, reactions, and supported resources. |
+| **Inventory** | Currency/wealth, Bulk, investment, equipment, quantity, containers, carry state, and supported charges. |
+| **Spellcasting** | Casting entries, spell attacks/DCs, spells by rank, Focus, preparation, rituals, and item activations. |
+| **Proficiencies** | Core/lore skills, attack and defense proficiencies, and class DC entries. |
+| **Feats** | Grouped class features and feats with expandable descriptions. |
+| **Effects** | Conditions, effects, counters, durations, and available divine intercessions. |
+| **Biography** | Appearance, backstory, personality, and campaign text with mobile editing. |
 
-From left to right: the eight-direction D-pad on a square grid, then the
-six-direction controls for row-oriented and column-oriented hex grids.
-The joystick also changes shape to match either hex orientation.
+Category headers collapse and remember their state between tab changes. Sort
+and expand/collapse-all controls appear where useful.
+
+### Actions, conditions, and resources
+
+Expand an Attack for available draw, grip, sheathe, drop, ammunition and
+versatile damage controls. Action costs and multiple attack penalties (MAP)
+are shown separately. Elemental Blasts are supported.
+
+**Conditions → View All** lets you toggle conditions or adjust their values.
+Persistent damage has a formula/type editor and recovery controls. The Shield
+editor offers HP adjustment and Repair.
+
+Hero Points, Focus, available class resources, ability uses and item charges
+have controls where supported by the system. Active Mythic Points replace
+Hero Points. Class-specific replenishment rules still apply.
+
+Item-specific toggles appear in that item's details; other toggles appear in
+**Options** at the bottom of Actions. **Post to chat** shares a card without
+automatically spending an action. VE does not track a three-action turn budget.
+
+### Spellcasting and preparation
+
+Use **Prepare spells** to manage prepared slots, including multiple copies of
+the same spell, or add spells from installed compendiums. Signature, flexible,
+innate, spontaneous and Focus casting follow the system's rules where available.
+
+Rituals, scrolls and wands use the system's casting and consumption controls.
+Unavailable or expended options cannot be used.
+
+### Current boundaries
+
+Character creation, advancement/feat acquisition, crafting/formula management,
+and Pathfinder Society administration are outside the mobile sheet's current
+scope. Staff preparation/charges remain deferred pending a supported native or
+module-specific path. Ritual casting does not automate the entire procedure.
+
+Not every specialist class or module mechanic has a dedicated control; coverage
+needs representative class-by-class testing. Mythic resource display also needs
+further testing in an actual Mythic campaign.
+
+## Controls and shortcuts
+
+- **Rows and icons:** rows expand details. Where an icon is an action control,
+  tapping it uses the indicated native action or posts the card. Explicit
+  **Cast**, roll, and resource controls identify the action being taken.
+- **Hold actions:** D&D5e rows offer contextual menus. In PF2e, hold an eligible
+  item or skill icon/control for Quickbar/Hotbar assignment. Actions vary with
+  the surface and your permissions.
+- **Action bars:** **Character Quickbar** keeps shortcuts for the selected actor
+  view; **Foundry Hotbar** uses existing per-user macros. Both offer ten slots
+  per page across five pages, with editing and arrangement controls.
+- **Back/Escape:** closes topmost surfaces first. Navigation returns to Character
+  before Back can leave the game, with the exit warning retained at that point.
+- **Placement:** finish previews with **Place** or **Cancel**. Opening one alone
+  does not place it.
+
+The in-app **Controls & Gestures** guide explains contextual holds, dragging,
+targeting, and placement. A dismissible first-use invitation links to it.
+
+## Scene and token movement
+
+| Gesture | Action |
+| --- | --- |
+| Drag with one finger | Pan the map. |
+| Pinch with two fingers | Zoom. |
+| Double-tap the **Scene navigation tab** | Pause or unpause the game (GM permission required; D&D5e and PF2e). |
+| Tap an owned token | Select it; tapping again keeps it selected. |
+| Quickly double-tap a visible token | Toggle targeting. |
+| Hold an owned token, then release | Open its controls. |
+| Hold, then drag | Move the token after the hold activates. |
+| Tap **×** beside the movement control's token name | Deselect. |
+
+Start the **Joystick** from its centre knob and swipe beyond the minimum distance.
+Its outer edge does not start movement. The **D-pad** offers one-step taps:
+six directions on hex grids, eight on square/gridless scenes. Native walls,
+pause state, visibility, movement rules, and ownership still apply.
 
 <p align="center">
-  <img src="docs/screenshots/scene-dpad-square.jpg" alt="Compact eight-direction D-pad surrounding the selected token portrait on a square-grid Scene" width="30%">
-  <img src="docs/screenshots/scene-dpad-hex-rows.jpg" alt="Six-direction D-pad with a point-topped hexagonal outline on a row-oriented hex Scene" width="30%">
-  <img src="docs/screenshots/scene-dpad-hex-columns.jpg" alt="Six-direction D-pad with a flat-topped hexagonal outline on a column-oriented hex Scene" width="30%">
+  <img src="docs/screenshots/scene-dpad-square.jpg" alt="Eight-direction D-pad on a square grid" width="30%">
+  <img src="docs/screenshots/scene-dpad-hex-rows.jpg" alt="Six-direction D-pad on a row-oriented hex grid" width="30%">
+  <img src="docs/screenshots/scene-dpad-hex-columns.jpg" alt="Six-direction D-pad on a column-oriented hex grid" width="30%">
 </p>
 
-Eligible Actor portraits and chooser rows offer contextual token placement;
-Tablet Split also supports portrait placement onto the Scene. Native measured
-templates and supported summon placement have touch controls with explicit
-confirmation and cancellation. Availability depends on the action and your
-permissions.
+Eligible portraits and actor chooser rows offer token placement; Tablet Split
+also supports portrait placement onto the Scene. Supported native area and
+summon previews have touch controls. Foundry v14's Scene chooser offers level
+selection for scenes that provide levels.
 
-The Scene requires an enabled Canvas and live map access. Tablet Split keeps
-that Scene alongside the sheet or chat shown in the opening screenshot.
+**Return to Scene after actions** defaults to **Off**. Choose **Always** or
+**During combat only** to return Phone and Tablet Full after supported native
+actions, keeping prompts and enabled summaries above the map. Tablet Split keeps
+both panes visible. Resource edits and cancelled actions do not trigger a return.
 
-On Foundry v14, expand a Scene's level button in the Scene chooser to see and
-select its available levels. Scenes without levels have no level button.
-The three-dot menu provides the Scene actions available to you.
+## Chat, journals, and combat
 
-**Return to Scene after actions** can return Phone and full-screen Tablet to
-the map when a native action starts: **Always**, **During combat only**, or
-**Off** (default). It applies to item, spell, feature and activity use, ability
-checks, saves, skills, tools, initiative and death saves started through VE.
-Native prompts and enabled action summaries remain available above Scene.
-Cancelled actions, resource edits and other users' actions do not trigger a
-return. Tablet Split keeps both panes visible; an unavailable or disabled
-Canvas leaves the current sheet visible.
+**Chat** shows an unread-count badge while messages await reading. It clears when
+you reach the newest message and remembers your read position per world and user
+in this browser. It counts only messages you can see, including rolls.
 
-## Quickbar, Actions, and Gameplay
+Chat retains native messages, roll cards, interactive content, and the
+composer. Supported Dice Tray controls and Polyglot language selection stay
+with it. Optional action summaries collect available results without replacing
+system cards or revealing hidden rolls.
 
-Choose **Character Quickbar** for the selected character's shortcuts or
-**Foundry Hotbar** for your existing per-user macro assignments. Both provide
-ten slots per page, five pages, page selection, and a collapse control.
+**Journals** provide folders, pages, headings, and wrapped text. Pinch with two
+fingers to adjust the reading font size, remembered in this browser. Images
+open with zoom and pan. Authorized users can open the native journal editor,
+although desktop editing screens may need more space.
 
-Hold an item, spell, feature, or favorite to see its available actions,
-including adding it to the selected action bar. Browse macro folders and use
-native macro editing, assignment, movement, and removal controls where allowed.
+**Combat** shows permitted turn order, targeting/focus controls, and native turn
+controls appropriate to your role. GM controls sit on a solid panel: Roll All and
+Roll NPCs before combat starts, then Previous and Next turns once it has started.
+An optional Scene carousel keeps turn order
+and **End Turn** above the map. Hidden information follows Foundry permissions.
 
-<p align="center">
-  <img src="docs/screenshots/scene-quickbar.png" alt="Scene detail with the selected token's joystick and a ten-slot Character Quickbar" width="960">
-</p>
+## Appearance and performance
 
-D&D5e activities, rolls, item use, and spell use go through the normal system
-workflow. Native dialogs and follow-up controls remain accessible above VE.
-Optional compact action summaries collect available rolls, details, and
-permitted target outcomes without replacing the underlying chat cards.
+Choose light, dark or system appearance, class/custom colours, and header
+artwork in **Settings → Appearance**.
 
-## Chat, Journals, and Combat
+For demanding maps, use the **Normal, Balanced, Strong or Maximum** graphics
+profiles under **Performance & Memory**. Effects and 3D dice have separate controls.
+GMs can use the **Mobile Asset Optimizer** to prepare smaller image copies
+without replacing the originals.
 
-**Chat** keeps Foundry's native messages, roll cards, composer, and interactive
-content in a contained mobile pane. Supported chat controls, including Dice
-Tray and Polyglot's language selector when enabled, travel with that pane.
+**Disable game canvas** keeps sheets, chat, and journal reading available without
+the live map. Map-dependent actions and some automation still require Canvas.
+Accept any required reload after a change. **Keep Screen Awake** requires HTTPS
+and a compatible browser; localhost is an exception.
 
-**Journals** support nested folders, rich pages, heading navigation, and image
-viewing. Open the native journal editor when your permissions allow it. Images
-can be inspected with touch zoom and pan.
+<details>
+<summary>Advanced recovery and module integrations</summary>
 
-**Combat** shows permitted turn order and role-appropriate controls, including
-native End Turn. The optional Scene turn carousel keeps turn order and End Turn
-visible at the top of the map during play. Hidden information and GM controls
-remain permission-dependent.
+Scene memory warnings and optional automatic profile changes help with demanding
+maps. Reconnect/resync and graphics recovery handle interrupted sessions.
 
-<p align="center">
-  <img src="docs/screenshots/combat-tracker.png" alt="Mobile Combat Tracker waiting to begin, with initiative order, targeting and focus controls" width="360">
-</p>
+Maintained integration paths include Midi-QOL for D&D5e activities/outcomes,
+Dice So Nice roll hooks, Dice Tray, Polyglot, Monk's Active Tile Triggers, and
+Force Client Settings. World settings policy and GM authority are respected.
+These paths do not certify every version or combination. **Module Overlays
+(Experimental)** exposes recognized controls, including supported Simple Calendar
+and Monk's TokenBar patterns, on an opt-in, best-effort basis.
 
-<p align="center">
-  <img src="docs/screenshots/combat-carousel.png" alt="Tablet Split during active combat, with turn order and End Turn at the top of the Scene beside the expanded Character header" width="960">
-</p>
+</details>
 
-## Performance and Mobile Graphics
+VE's interface supports **US English, Australian English, Spanish, German,
+French, and Italian**. Foundry, systems, modules, and campaign content use their
+own translations.
 
-Choose **Normal**, **Balanced**, **Strong**, or **Maximum** graphics profiles
-to adjust the amount of graphics work in this browser. Scene memory warnings
-and preflight recommendations help identify demanding Scenes; automatic
-escalation is optional. These are practical controls, not a guarantee that
-every Scene will fit every device.
+## Troubleshooting
 
-The **Mobile Asset Optimizer** lets authorized GMs prepare smaller image copies
-for mobile use while preserving original files and Scene image paths. Separate
-controls cover animated effects and 3D dice. Force Client Settings integration
-respects world policy, with a GM-controlled policy for mobile graphics profiles.
+| Problem | What to check |
+| --- | --- |
+| Updates or changes are missing | Fully reload Foundry and check the installed module version. |
+| An actor/action is missing | Check ownership, the selected actor/token, and system support. PF2e lists character actors only. |
+| Session looks stale | Let loading finish, use reconnect/resync, then **Reload Foundry** if recovery cannot complete. |
+| Graphics fail or memory runs out | Try a lighter graphics profile or no-Canvas mode; follow graphics recovery prompts. |
+| Item use fails without Canvas | Re-enable Canvas for automation that depends on it and accept the reload. |
+| A native screen does not fit | Use the desktop-return control or a larger screen for that workflow. |
+| Keep Screen Awake is unavailable | Use HTTPS and a browser supporting screen wake lock. |
 
-**Disable game canvas** offers a no-Canvas option for users who do not need the
-Scene or want less graphics work and battery use. Sheets, chat, and journal
-reading remain available; map-dependent actions require Canvas. Accept
-Foundry's reload flow before assessing a Canvas or graphics change.
+Desktop-return leaves VE for the current page without changing saved Mobile
+Mode. Choose **Desktop** in Mobile Mode to keep it off after reloading. **Open
+Foundry Settings** provides access to core and other module settings.
 
-Some third-party automation needs the Canvas even for item or spell use.
-In the tested v14 module setup, item use with Canvas disabled could fail in
-Foundry's desktop interface as well as VE Mobile. Keep **Disable game canvas**
-off when using those workflows.
+## Feedback and support
 
-<p align="center">
-  <img src="docs/screenshots/settings-performance.png" alt="Scene memory warnings and mobile graphics profile controls in Settings" width="300">
-</p>
-
-Loading checkpoints, connection status, reconnect/resync, and graphics recovery
-controls make interruptions visible and provide a way to recover. Keep Screen
-Awake requests a screen wake lock while VE is active, when the browser supports
-it. Temporary graphics changes have restoration and recovery controls.
-
-## Compatibility and Requirements
-
-| Package | Declared minimum | Verified version |
-| --- | --- | --- |
-| Foundry Virtual Tabletop | 13 | 14.369 |
-| Dungeons & Dragons Fifth Edition (`dnd5e`) | 5.3.2 | 6.0.6 |
-
-Declared minimums describe compatibility policy; they do not mean every version
-in that range has been tested. Live checks covered Foundry 13.351 with D&D5e
-5.3.3 and Foundry 14.369 with D&D5e 6.0.6. Tested workflows include Chat,
-Scene menus, joystick and D-pad movement on square, hex and gridless maps,
-automatic return to Scene with action summaries, and Foundry v14's native
-Scene level selection. The 1.0.5 candidate was also accepted after physical
-device testing and includes the compact D-pad and Scene visibility fix.
-This does not certify every multilevel-map or third-party module
-combination. Other game systems are not advertised as supported here.
-
-You need access to a running Foundry world, an authenticated user account, and
-a browser that can run that world. Live Scene use also needs working Canvas
-graphics. Device memory, browser capabilities, Scene size, and enabled modules
-can affect the experience.
-
-Deliberately maintained interoperability includes:
-
-- **Midi-QOL:** native activity workflows and visible hit/save outcomes in
-  action summaries.
-- **Dice So Nice:** the normal roll hooks, with mobile dice safety controls.
-- **Dice Tray and Polyglot:** native chat input and language controls.
-- **Monk's Active Tile Triggers:** supported native scenery interaction paths.
-- **Force Client Settings:** authority-aware settings and graphics handling.
-- **Simple Calendar and Monk's TokenBar:** recognized overlay patterns in the
-  experimental, opt-in Module Overlays controls.
-
-Foundry's module ecosystem is large. These pathways do not promise compatibility
-with every version or combination, and experimental overlays are best effort.
-Community reports are welcome when a combination reveals an issue.
-
-## Languages
-
-- English (US) — default/base
-- English (Australia)
-- Spanish
-- German
-- French
-- Italian
-
-VE translates its own interface through Foundry's language loader, including
-settings, guides, and recovery messages. Game content, D&D5e, Foundry core, and
-other modules use their own translations; VE does not translate campaign text.
-
-## Controls and Gestures
-
-Open **Settings → Support → Controls & Gestures** for the contextual guide.
-A dismissible first-use invitation also points to it, and the guide is
-available from VE's desktop settings.
-
-Gestures depend on the surface: a list, portrait, token, or piece of scenery
-can offer different actions. Moving before a hold activates generally scrolls
-or pans. Back or Escape closes the topmost surface first; use the visible
-Confirm or Cancel control when a placement asks for a decision.
-
-<p align="center">
-  <img src="docs/screenshots/gesture-guide.png" alt="Built-in Controls and Gestures guide explaining common controls and token interaction" width="300">
-</p>
-
-## Installation
-
-Install VE Mobile using the [module installation manifest](https://github.com/Silvestrae/ve-mobile/releases/latest/download/module.json).
-Copy that link's address for Foundry's installer.
-
-1. In Foundry's **Setup** screen, open **Add-on Modules → Install Module**.
-2. Paste the copied link address into **Manifest URL** and select **Install**.
-3. Launch your D&D5e world and enable **VE Mobile** in **Manage Modules**.
-4. Fully reload Foundry, then open the world in your phone or tablet browser.
-
-For a manual installation, download the module ZIP from the
-[latest release](https://github.com/Silvestrae/ve-mobile/releases/latest).
-Extract it into
-`Data/modules/ve-mobile`, with `module.json`, `src`, `assets`, and `locales`
-directly inside it. The release ZIP contains the module files at its root.
-A GitHub source archive may have an extra outer folder;
-Foundry needs `ve-mobile/module.json` at the module root. Enable the module in
-the world and fully reload after installation or updates.
-
-## Settings
-
-Use the **Settings** tab for device and power preferences, Scene controls,
-appearance, performance, experimental overlays, and support. Open core Foundry
-or other module settings through **Open Foundry Settings**. Some native
-configuration screens are designed for desktop; Desktop mode remains available
-when a screen needs more space.
-
-Choose light, dark, or system appearance, sheet colors, and header artwork.
-Controls include joystick or D-pad movement, control placement and joystick
-repeat speed, automatic return to Scene after actions, action bar choice,
-action summaries, and the combat carousel. Reload prompts identify changes
-that need a full Foundry reload.
-
-**Module Overlays (Experimental)** lets you show supported third-party controls
-above the mobile interface. Open this section in Settings and enable the
-individual overlays you want. Turn an overlay off there to hide it in mobile
-mode. Availability depends on which modules are installed; complex desktop
-controls may still be awkward on a small screen.
-
-The desktop-return control leaves VE for the current page without changing the
-saved Mobile Mode. Select **Desktop** in Mobile Mode when you want it to remain
-off after a reload.
-
-## Getting Unstuck
-
-- If the Scene or session looks out of date, use the reconnect/resync controls
-  and let the loading steps finish. If recovery cannot complete, use
-  **Reload Foundry** when offered.
-- If graphics stop working, follow the **Graphics recovery** prompt. A lighter
-  graphics profile may help on a device struggling with a demanding Scene.
-  Accept any required reload before checking the result.
-- To use a native screen that needs more space, use the desktop-return control.
-  This lasts for the current page. Choose **Desktop** in Mobile Mode to keep
-  VE off after reloading.
-- If a character, token or action is missing, check with your GM about
-  permissions, the viewed Scene and level, and whether the Canvas is enabled.
-  See [Reporting Bugs](#reporting-bugs) if the problem continues.
-
-## Reporting Bugs
-
-Please report reproducible bugs through
+Report reproducible problems through
 [GitHub Issues](https://github.com/Silvestrae/ve-mobile/issues), using the bug
-report template. Use the separate feature request template for suggestions.
+report template. Use the feature request template for suggestions. Include:
 
-Include relevant details:
+- VE Mobile, Foundry, and system versions.
+- Browser, operating system, and device model.
+- Layout: Phone, Tablet Split, Tablet Full, or Desktop; GM or Player.
+- Reproduction steps, expected/actual behavior, and relevant enabled modules.
+- A screenshot or short video, and any console error.
 
-- VE Mobile, Foundry, and game system versions
-- Browser/version, device/model, and operating system
-- Phone, Tablet Split, Tablet Full, or Desktop; GM or Player
-- Steps to reproduce, expected behavior, and what happened
-- Relevant enabled modules
-- A screenshot or short video, and a console error if available
+Remove passwords, authentication tokens, private campaign content, and personal
+information before sharing a report.
 
-Remove passwords, authentication tokens, personal information, and private
-campaign content before sharing a report. Reports about specific browsers,
-devices, translations, and module combinations help improve the experience.
-
-## Support
-
-If you like VE Mobile and want to say thanks or support its development, you
-can buy me a coffee on Ko-fi.
+If you would like to support development:
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/silvestrae)
 
-## License
+## License and credits
 
-VE Mobile is released under the [MIT License](LICENSE).
-Bundled third-party font and adapted badge artwork retain their license notices
-in the stylesheet.
-
-## Screenshot Credits
+VE Mobile is released under the [MIT License](LICENSE). Bundled third-party
+fonts and adapted badge artwork retain their license notices in the stylesheet.
 
 Battlemap shown in screenshots:
 [Cropox Battlemaps — The Deepwood Hunting Lodge 45x40](https://www.patreon.com/CropoxBattlemaps/posts/deepwood-hunting-150490629).
-The map is not bundled with VE Mobile and is not covered by VE Mobile's MIT
-license.
+The map is not bundled with VE Mobile and is not covered by its MIT license.
 
-## Disclaimer and Independence
+### Disclaimer
 
-VE Mobile is developed and maintained with AI assistance. The project is guided
-by deliberate design decisions, testing and ongoing refinement.
-
-VE Mobile is an independent module for Foundry Virtual Tabletop. It is not
-affiliated with or endorsed by Foundry Gaming LLC or Wizards of the Coast.
-It interoperates with Foundry VTT and D&D5e through their normal module and
-system ecosystems.
+VE Mobile is developed and maintained with AI assistance, with design, testing,
+and ongoing refinement guiding the project. It is independent and is not
+affiliated with or endorsed by Foundry Gaming LLC, Wizards of the Coast, or Paizo.

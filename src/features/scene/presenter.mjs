@@ -10,6 +10,7 @@ import { sceneCombat } from "../combat/model.mjs";
 import { bindDetailsDisclosure } from "../../ui/disclosure.mjs";
 import { bindLongPress } from "../../ui/long-press.mjs";
 import { createSceneChoiceTransition } from "../../ui/scene-choice-transition.mjs";
+import { fitJoystickPortrait, joystickPortraitStyle } from "../../ui/token-portrait.mjs";
 
 
 export function renderScene({
@@ -60,10 +61,14 @@ export function renderScene({
           : null
     : null;
   const liveStatus = node("div", { className: "ve-scene-live", attrs: { role: "status", "aria-live": "polite" } });
+  const joystickImage = !placementLocked && selectedToken?.img ? node("img", { attrs: { src: selectedToken.img, alt: "", draggable: "false" } }) : null;
+  if (joystickImage) fitJoystickPortrait(joystickImage, selectedToken.portrait, scope);
   const joystickKnob = placementLocked ? null : node("span", {
     className: "ve-joystick-knob",
-    children: selectedToken?.img ? node("img", {
-      attrs: { src: selectedToken.img, alt: "", draggable: "false" }
+    children: selectedToken?.img ? node("span", {
+      className: "ve-token-portrait-footprint",
+      attrs: { style: joystickPortraitStyle(selectedToken.portrait), "data-token-fit": "contain" },
+      children: [joystickImage]
     }) : icon("fa-hand-pointer")
   });
   const releaseLabel = scene?.movement?.releaseLabel ?? localizedText(commands.localize, "VEMOBILE.Interface.Presenter.ReleaseToken", "Release token");

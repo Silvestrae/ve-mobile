@@ -47,6 +47,8 @@ export async function resolveDeviceIdentity(navigatorRef = globalThis.navigator)
 
 function cleanModel(value) {
   const model = String(value ?? "").replace(/[\u0000-\u001F\u007F]/gu, "").trim();
-  if (!model || model.length > 80 || /^(unknown|generic|android)$/iu.test(model)) return "";
+  // Some privacy-reduced browser hints return a placeholder such as "K".
+  // Treat it as unknown instead of presenting it as a detected device model.
+  if (model.length < 2 || model.length > 80 || /^(unknown|generic|android)$/iu.test(model)) return "";
   return model;
 }

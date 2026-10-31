@@ -1,0 +1,829 @@
+/* Focused PF2e list refinements, kept separate from the shared visual system. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-character-screen.ve-pf2e-character-screen {
+    & .ve-pf2e-rule-option { display:flex !important; align-items:center !important; gap:8px !important; padding:7px 10px !important; min-height:40px !important; border-top:1px solid var(--ve-border) !important; }
+    & .ve-pf2e-rule-option label { display:flex !important; align-items:center !important; gap:8px !important; flex:1 !important; min-width:0 !important; font-size:14px !important; }
+    & .ve-pf2e-rule-option input { width:20px !important; height:20px !important; min-width:20px !important; margin:0 !important; accent-color:var(--ve-character-accent); }
+    & .ve-pf2e-rule-option select { width:44% !important; min-width:0 !important; height:32px !important; font-size:12px !important; text-overflow:ellipsis !important; }
+    & .ve-pf2e-item-rule-options {
+      margin:8px 0 !important; padding:3px !important; border:1px solid var(--ve-border) !important; border-radius:6px !important;
+      background:color-mix(in srgb,var(--ve-character-accent) 6%,var(--ve-surface-up)) !important;
+      & .ve-pf2e-rule-option { padding:5px 6px !important; border-top:0 !important; min-height:36px !important; }
+      & .ve-pf2e-rule-option + .ve-pf2e-rule-option { border-top:1px solid var(--ve-border) !important; }
+      & label { font-size:12px !important; }
+    }
+    & .ve-pf2e-inventory-controls { display:grid !important; grid-template-columns: minmax(50px,.5fr) 32px minmax(0,1fr) 32px !important; align-items:center !important; gap:5px !important; width:100% !important; }
+    & .ve-pf2e-inventory-controls :is(input,select,button) { min-width:0 !important; width:100% !important; height:32px !important; min-height:32px !important; padding:3px 5px !important; font-size:12px !important; margin:0 !important; }
+    & .ve-pf2e-effect-controls { display:flex !important; align-items:center !important; gap:6px !important; }
+    & .ve-pf2e-effect-controls button { width:32px !important; height:32px !important; min-height:32px !important; margin:0 !important; padding:3px !important; }
+    & .ve-pf2e-effect-controls button[aria-pressed=true] { background:var(--ve-danger,#a3293e) !important; color:white !important; }
+    & .ve-pf2e-effect-controls button.is-confirming { width:auto !important; max-width:10rem !important; padding:3px 6px !important; height:auto !important; font-size:11px !important; line-height:13px !important; }
+    & :is(.ve-pf2e-inventory-controls,.ve-pf2e-rule-option,.ve-pf2e-ammunition-controls) :is(input,select) { background:var(--ve-surface-up) !important; color:var(--ve-text) !important; border:1px solid var(--ve-border) !important; border-radius:5px !important; }
+    & .ve-pf2e-exploration-active { color:var(--ve-character-accent) !important; font-size:11px !important; }
+    & .ve-pf2e-ammunition-controls { display:flex !important; align-items:center !important; gap:6px !important; grid-column:1/-1 !important; font-size:12px !important; }
+    & .ve-pf2e-ammunition-controls select { flex:1 !important; min-width:0 !important; height:32px !important; font-size:12px !important; }
+    & .ve-pf2e-strike:not(:has(.ve-pf2e-strike-copy[open])) .ve-pf2e-ammunition-controls { display:none !important; }
+    & .ve-pf2e-blast-card { margin:6px !important; padding:6px !important; border:1px solid var(--ve-border) !important; border-radius:8px !important; background:var(--ve-surface) !important; }
+    & .ve-pf2e-blast-card > header { display:flex !important; align-items:center !important; gap:6px !important; min-width:0 !important; padding-bottom:4px !important; }
+    & .ve-pf2e-blast-card > header img { width:32px !important; height:32px !important; border-radius:5px !important; border:0 !important; }
+    & .ve-pf2e-blast-card > header strong { flex:1 !important; font-size:14px !important; }
+    & .ve-pf2e-blast-card > header small { font-size:11px !important; color:var(--ve-subtle) !important; }
+    & .ve-pf2e-blast-card > header select { min-width:0 !important; max-width:32% !important; height:32px !important; font-size:12px !important; }
+    & .ve-pf2e-blast-usage-label { display:flex !important; align-items:center !important; gap:6px !important; padding:4px 0 !important; font-size:12px !important; }
+    & .ve-pf2e-blast-buttons { display:grid !important; grid-template-columns:repeat(5,minmax(0,1fr)) !important; gap:4px !important; }
+    & .ve-pf2e-blast-buttons button { display:flex !important; flex-direction:column !important; justify-content:center !important; gap:0 !important; min-width:0 !important; width:100% !important; min-height:36px !important; height:36px !important; padding:3px 2px !important; margin:0 !important; font-size:11px !important; line-height:13px !important; overflow-wrap:anywhere !important; }
+    & .ve-pf2e-blast-buttons button :is(strong,small) { display:block !important; }
+    & .ve-pf2e-blast-buttons button strong { font-size:15px !important; line-height:17px !important; }
+    & .ve-pf2e-blast-buttons button small { font-size:9px !important; line-height:11px !important; white-space:nowrap !important; }
+    & .ve-pf2e-spell-attack-roll { display:block !important; padding:0 !important; margin:0 !important; border:0 !important; border-left:1px solid var(--ve-border) !important; border-radius:0 !important; height:100% !important; min-height:32px !important; background:transparent !important; color:var(--ve-text) !important; }
+    & .ve-pf2e-spell-attack-roll > .ve-pf2e-stat-readout { border:0 !important; }
+    & .ve-pf2e-spell-attack-roll:enabled:hover { background:var(--ve-surface-up) !important; }
+  }
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-preparation-dialog {
+    & .ve-pf2e-spell-management-owned > h3, & .ve-pf2e-spell-management-catalog > h3 { font-size:16px !important; margin:12px 0 6px !important; color:var(--ve-text) !important; }
+    & .ve-pf2e-spell-management-catalog { margin-top:12px !important; }
+    & .ve-pf2e-spell-management-catalog > input { width:calc(100% - 78px) !important; display:inline-block !important; margin-right:6px !important; }
+    & .ve-pf2e-spell-management-catalog > button { width:70px !important; display:inline-block !important; }
+    & .ve-pf2e-spell-catalog .ve-pf2e-preparation-choice { grid-template-columns:32px minmax(0,1fr) auto !important; }
+    & .ve-pf2e-spell-catalog .ve-pf2e-preparation-choice > select { grid-column:2 !important; height:32px !important; min-width:0 !important; }
+    & .ve-pf2e-spell-catalog .ve-pf2e-preparation-choice > button { grid-column:3 !important; grid-row:1 / span 2 !important; }
+    & .ve-pf2e-spell-catalog .ve-pf2e-preparation-choice > div:last-child { display:grid !important; gap:4px !important; max-width:85px !important; }
+    & .ve-pf2e-spell-catalog .ve-pf2e-preparation-choice > div:last-child :is(button,select) { width:100% !important; height:32px !important; min-height:32px !important; padding:3px 6px !important; font-size:12px !important; margin:0 !important; }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-character-screen.ve-pf2e-character-screen .ve-pf2e-spells .ve-pf2e-casting-summary:has(.ve-pf2e-prepare-button) {
+    grid-template-columns: minmax(0,1fr) auto auto auto !important;
+    & .ve-pf2e-prepare-button { align-self:center !important; display:grid !important; justify-items:center !important; gap:1px !important; min-width:42px !important; width:auto !important; min-height:32px !important; height:auto !important; margin:3px !important; padding:3px 5px !important; border:1px solid var(--ve-character-accent) !important; border-radius:5px !important; font-size:10px !important; line-height:12px !important; color:var(--ve-text) !important; background:color-mix(in srgb,var(--ve-character-accent) 16%,var(--ve-surface)) !important; }
+    & .ve-pf2e-prepare-button i { font-size:13px !important; }
+    & .ve-pf2e-casting-identity { gap:4px !important; padding-inline:5px !important; }
+    & .ve-pf2e-casting-identity > i { display:none !important; }
+    & .ve-pf2e-stat-readout { padding-inline:4px !important; }
+  }
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-document-dialog.ve-pf2e-preparation-dialog {
+    --ve-border:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 55%,var(--ve-subtle));
+    height:100% !important; width:min(100%,620px) !important;
+    & .ve-pf2e-editor-body { display:block !important; flex:1 !important; overflow-x:hidden !important; }
+    & .ve-pf2e-preparation-intro { margin-bottom:12px !important; }
+    & .ve-pf2e-preparation-intro h3 { margin:0 0 4px !important; color:var(--ve-text) !important; font:700 18px/1.25 Georgia,serif !important; border:0 !important; }
+    & .ve-pf2e-preparation-intro p { margin:0 !important; color:var(--ve-subtle) !important; font-size:12px !important; }
+    & .ve-pf2e-preparation-rank { border:1px solid var(--ve-border) !important; border-radius:7px !important; overflow:hidden !important; margin-bottom:8px !important; }
+    & .ve-pf2e-preparation-rank > summary { display:flex !important; align-items:center !important; justify-content:space-between !important; min-height:40px !important; padding:7px 10px !important; box-sizing:border-box !important; background:var(--ve-surface-up) !important; cursor:pointer !important; }
+    & summary::-webkit-details-marker { display:none !important; }
+    & details[open] > summary > i { transform:rotate(180deg) !important; }
+    & .ve-pf2e-preparation-slot { display:grid !important; grid-template-columns:minmax(0,1fr) auto !important; align-items:center !important; gap:4px 6px !important; padding:7px !important; border-top:1px solid var(--ve-border) !important; }
+    & .ve-pf2e-preparation-slot > small { grid-column:1/-1 !important; color:var(--ve-subtle) !important; font-size:11px !important; }
+    & .ve-pf2e-preparation-selection { display:grid !important; grid-template-columns:28px minmax(0,1fr) !important; align-items:center !important; gap:5px !important; min-width:0 !important; }
+    & .ve-pf2e-preparation-selection > :is(img,i) { width:28px !important; height:28px !important; min-width:28px !important; box-sizing:border-box !important; border:0 !important; border-radius:4px !important; }
+    & .ve-pf2e-preparation-selection > i { display:grid !important; place-items:center !important; color:var(--ve-subtle) !important; font-size:15px !important; }
+    & .ve-pf2e-preparation-selection > [hidden] { display:none !important; }
+    & .ve-pf2e-preparation-selection select { width:100% !important; min-width:0 !important; max-width:100% !important; text-overflow:ellipsis !important; }
+    & .ve-pf2e-preparation-choice { display:grid !important; grid-template-columns:32px minmax(0,1fr) auto !important; gap:7px !important; align-items:center !important; padding:7px !important; border-top:1px solid var(--ve-border) !important; }
+    & .ve-pf2e-preparation-choice img { width:32px !important; height:32px !important; border:0 !important; border-radius:4px !important; }
+    & .ve-pf2e-preparation-choice small { display:block !important; color:var(--ve-subtle) !important; }
+    & button:disabled { opacity:.45 !important; }
+    & > header { background:linear-gradient(110deg,color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 24%,var(--ve-surface-up)),var(--ve-surface-up)) !important; border-bottom-color:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 60%,var(--ve-border)) !important; }
+    & > header > i { color:var(--ve-preparation-accent,var(--ve-red)) !important; }
+    & .ve-pf2e-preparation-intro { border-left:3px solid var(--ve-preparation-accent,var(--ve-red)) !important; padding-left:10px !important; }
+    & .ve-pf2e-preparation-rank { border-color:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 55%,var(--ve-border)) !important; }
+    & .ve-pf2e-preparation-rank > summary { background:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 23%,var(--ve-surface-up)) !important; border-left:4px solid var(--ve-preparation-accent,var(--ve-red)) !important; padding-left:8px !important; }
+    & .ve-pf2e-preparation-rank > summary > i { color:var(--ve-preparation-accent,var(--ve-red)) !important; }
+    & .ve-pf2e-preparation-slot { background:var(--ve-surface) !important; border-top-color:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 24%,var(--ve-border)) !important; }
+    & .ve-pf2e-preparation-slot:nth-child(odd) { background:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 5%,var(--ve-surface)) !important; }
+    & .ve-pf2e-preparation-slot > small { width:fit-content !important; padding:1px 7px !important; border-radius:4px !important; background:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 24%,var(--ve-surface)) !important; color:var(--ve-text) !important; font-weight:700 !important; }
+    & .ve-pf2e-preparation-slot select { background:var(--ve-surface-up) !important; border-color:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 45%,var(--ve-border)) !important; }
+    & .ve-pf2e-preparation-slot > button:enabled, & .ve-pf2e-spell-management-catalog > button, & .ve-pf2e-spell-catalog button { background:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 35%,var(--ve-surface-up)) !important; border-color:var(--ve-preparation-accent,var(--ve-red)) !important; font-weight:700 !important; }
+    & .ve-pf2e-preparation-slot > button:disabled { background:var(--ve-surface) !important; color:var(--ve-subtle) !important; opacity:.7 !important; }
+    & .ve-pf2e-spell-management-catalog { border-top:2px solid color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 55%,var(--ve-border)) !important; }
+    & > footer > button { border-color:var(--ve-preparation-accent,var(--ve-red)) !important; background:color-mix(in srgb,var(--ve-preparation-accent,var(--ve-red)) 16%,var(--ve-surface-up)) !important; }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-character-screen.ve-pf2e-character-screen {
+    & .ve-pf2e-save > .ve-pf2e-save-content {
+      grid-template-columns: 30px 3.2ch minmax(0, 1fr) !important;
+    }
+    & .ve-pf2e-save-content > strong {
+      min-width: 3.2ch !important;
+      font-size: 23px !important;
+      text-align: right !important;
+    }
+    & .ve-pf2e-overview .ve-pf2e-save > .ve-pf2e-save-content {
+      grid-template-columns: 30px 44px minmax(0, 1fr) !important;
+      gap: 4px !important;
+    }
+    &.ve-pf2e-character-screen .ve-pf2e-overview .ve-pf2e-save > .ve-pf2e-save-content {
+      grid-template-columns: 30px 44px minmax(0, 1fr) !important;
+      gap: 4px !important;
+    }
+    & .ve-pf2e-overview .ve-pf2e-save-content > strong {
+      min-width: 44px !important;
+      font-size: 23px !important;
+    }
+    & .ve-pf2e-save-labels {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-template-rows: auto auto !important;
+      align-content: center !important;
+      gap: 1px !important;
+      min-width: 0 !important;
+    }
+    & .ve-pf2e-save-labels > span:first-child {
+      min-width: 0 !important;
+      white-space: normal !important;
+      overflow-wrap: anywhere !important;
+      font-size: 12px !important;
+      line-height: 1.1 !important;
+    }
+    & .ve-pf2e-save-labels > .ve-pf2e-rank-badge {
+      justify-self: start !important;
+      white-space: nowrap !important;
+      font-size: 9px !important;
+    }
+
+    & .ve-pf2e-header-perception:not([hidden]) {
+      display:grid !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      grid-template-rows:minmax(0,1fr) !important;
+      align-items:stretch !important;
+      gap:0 !important;
+      box-sizing:border-box !important;
+      height:46px !important;
+      min-height:46px !important;
+      padding:0 !important;
+    }
+    & .ve-pf2e-perception-stat {
+      display:grid !important;
+      grid-template-rows:12px 24px !important;
+      align-content:center !important;
+      justify-items:center !important;
+      align-items:center !important;
+      min-width:0 !important;
+      padding:2px !important;
+      text-align:center !important;
+      & + .ve-pf2e-perception-stat { border-left:1px solid var(--ve-border) !important; }
+      & > small { font-size:10px !important; line-height:12px !important; color:var(--ve-subtle) !important; }
+      & > strong { font-size:13px !important; line-height:16px !important; overflow-wrap:anywhere !important; }
+      & button.ve-pf2e-action-button {
+        display:grid !important;
+        place-items:center !important;
+        width:28px !important;
+        min-width:28px !important;
+        min-height:22px !important;
+        height:22px !important;
+        margin:0 !important;
+        padding:0 !important;
+        background:transparent !important;
+        border:0 !important;
+        border-radius:0 !important;
+        box-shadow:none !important;
+        color:var(--ve-character-accent) !important;
+        font-size:15px !important;
+      }
+    }
+    & .ve-pf2e-perception-senses {
+      display:block !important;
+      box-sizing:border-box !important;
+      width:100% !important;
+      min-width:0 !important;
+      height:24px !important;
+      margin:0 !important;
+      padding:0 2px !important;
+      list-style:none !important;
+      white-space:normal !important;
+      overflow:hidden auto !important;
+      overflow-wrap:anywhere !important;
+      font-size:11px !important;
+      line-height:12px !important;
+      color:var(--ve-text) !important;
+      scrollbar-width:none !important;
+      overscroll-behavior:contain !important;
+      & > li { margin:0 !important; padding:0 !important; list-style:none !important; }
+      &::-webkit-scrollbar { display:none !important; }
+    }
+
+    & .ve-pf2e-action-tools {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 5px !important;
+      min-width: 0 !important;
+    }
+    & .ve-pf2e-action-tools > .ve-pf2e-action-modes,
+    & .ve-pf2e-spell-modes {
+      display: flex !important;
+      flex: 1 1 auto !important;
+      align-items: center !important;
+      flex-wrap: nowrap !important;
+      gap: 3px !important;
+      min-width: 0 !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+    & :is(.ve-pf2e-action-modes, .ve-pf2e-spell-modes) > button {
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      min-height: 32px !important;
+      height: 32px !important;
+      padding: 3px 4px !important;
+      font-size: 10px !important;
+      line-height: 1.1 !important;
+      white-space: normal !important;
+    }
+    & :is(.ve-pf2e-action-tools, .ve-pf2e-spell-modes) > .ve-pf2e-inventory-toolbar {
+      min-height: 32px !important;
+      margin-left: 0 !important;
+    }
+    & :is(.ve-pf2e-action-tools, .ve-pf2e-spell-modes) .ve-collection-controls {
+      flex: none !important;
+      gap: 3px !important;
+    }
+    & :is(.ve-pf2e-action-tools, .ve-pf2e-spell-modes) .ve-collection-controls > button {
+      width: 32px !important;
+      min-width: 32px !important;
+      height: 32px !important;
+      min-height: 32px !important;
+      padding: 3px !important;
+    }
+
+    & .ve-pf2e-strike-copy:not([open]) + .ve-pf2e-actions {
+      display: none !important;
+    }
+    & .ve-pf2e-strike-copy[open] + .ve-pf2e-actions {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto !important;
+      align-items: center !important;
+      gap: 5px !important;
+      grid-column: 1 / -1 !important;
+      width: 100% !important;
+    }
+    & .ve-pf2e-strike-copy[open] + .ve-pf2e-actions .ve-pf2e-carry-control {
+      display: grid !important;
+      grid-template-columns: auto minmax(0, 1fr) !important;
+      align-items: center !important;
+      gap: 5px !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+    }
+    & .ve-pf2e-strike-copy[open] + .ve-pf2e-actions .ve-pf2e-carry-control select,
+    & .ve-pf2e-strike-copy[open] + .ve-pf2e-actions > button {
+      box-sizing: border-box !important;
+      min-width: 0 !important;
+      min-height: 32px !important;
+      height: 32px !important;
+      padding: 3px 6px !important;
+      font-size: 11px !important;
+    }
+
+    & .ve-pf2e-gear-view .ve-pf2e-item {
+      padding-top: 1px !important;
+      padding-bottom: 1px !important;
+    }
+    & .ve-pf2e-gear-view .ve-pf2e-item.ve-pf2e-item {
+      padding-top: 1px !important;
+      padding-bottom: 1px !important;
+    }
+
+    & .ve-pf2e-resource-row {
+      min-height: 32px !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+    }
+    & .ve-pf2e-spells .ve-pf2e-resource-row > button {
+      width: 32px !important;
+      min-width: 32px !important;
+      height: 32px !important;
+      min-height: 32px !important;
+    }
+    & .ve-pf2e-spells .ve-pf2e-focus-pips {
+      display: flex !important;
+      gap: 3px !important;
+    }
+    & .ve-pf2e-spells .ve-pf2e-resource-row > strong {
+      font-size: 14px !important;
+    }
+
+    & .ve-pf2e-feats-heading > .ve-pf2e-collection-heading {
+      display: flex !important;
+      align-items: center !important;
+      gap: 7px !important;
+      min-height: 40px !important;
+      padding: 5px 8px !important;
+    }
+    & .ve-pf2e-feats-heading > .ve-pf2e-collection-heading h3 {
+      flex: 1 !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+      font-size: 14px !important;
+    }
+    & .ve-pf2e-feat-row {
+      padding-top: 1px !important;
+      padding-bottom: 1px !important;
+    }
+
+    & .ve-pf2e-effects > .ve-pf2e-conditions,
+    & .ve-pf2e-effects > .ve-pf2e-effects-list {
+      margin: 0 !important;
+    }
+    & .ve-pf2e-effects > .ve-pf2e-conditions > .ve-sheet-card-heading,
+    & .ve-pf2e-effects > .ve-pf2e-effects-list > .ve-pf2e-group-heading {
+      box-sizing: border-box !important;
+      min-height: 36px !important;
+      padding: 4px 8px !important;
+    }
+    & .ve-pf2e-effects > .ve-pf2e-conditions > .ve-sheet-card-heading h3,
+    & .ve-pf2e-effects > .ve-pf2e-effects-list > .ve-pf2e-group-heading h3 {
+      font-size: 12px !important;
+    }
+  }
+}
+
+/* Final compact sizing, above the older general sheet-control rules. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen {
+    & :is(.ve-pf2e-gear-view .ve-pf2e-item, .ve-pf2e-feat-row) { padding-block: 0 !important; min-height: 0 !important; }
+    & :is(.ve-pf2e-gear-view .ve-pf2e-item,.ve-pf2e-feat-row) > .ve-pf2e-item-heading { min-height: 34px !important; padding-block: 1px !important; align-items: center !important; }
+    & :is(.ve-pf2e-gear-view .ve-pf2e-item,.ve-pf2e-feat-row) > .ve-pf2e-item-heading > .ve-pf2e-row-primary { height: 30px !important; min-height: 30px !important; }
+    & .ve-pf2e-spells :is(.ve-pf2e-spell-modes,.ve-pf2e-spell-filter-label) > button { height: 32px !important; min-height: 32px !important; padding: 3px 4px !important; font-size: 11px !important; }
+    & .ve-pf2e-spells .ve-pf2e-resource-row { box-sizing: border-box !important; height: 32px !important; padding: 0 6px !important; }
+    & .ve-pf2e-spells :is(.ve-pf2e-casting-summary,.ve-pf2e-group-heading) { box-sizing: border-box !important; min-height: 32px !important; padding-block: 2px !important; }
+    & .ve-pf2e-spells .ve-pf2e-casting-identity { padding-block: 0 !important; }
+    & .ve-pf2e-spells .ve-pf2e-casting-summary :is(strong,small) { font-size: 11px !important; line-height: 13px !important; }
+    & .ve-pf2e-spells .ve-pf2e-item-heading { min-height: 32px !important; padding: 1px 6px !important; }
+    & .ve-pf2e-spells .ve-pf2e-item-heading > .ve-pf2e-row-primary { height: 32px !important; min-height: 32px !important; }
+    & .ve-pf2e-spells .ve-pf2e-row-primary > :is(img,i) { height: 32px !important; width: 32px !important; }
+    & .ve-pf2e-spells .ve-pf2e-spell-copy > strong { font-size: 14px !important; line-height: 1.2 !important; }
+    & .ve-pf2e-spells .ve-pf2e-spell-meta { margin: 0 !important; font-size: 11px !important; line-height: 12px !important; }
+    & .ve-pf2e-spells .ve-pf2e-item-heading .action-glyph { font-size: 13px !important; }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen {
+    & .ve-pf2e-feat-name { min-height: 0 !important; height: auto !important; align-self: center !important; }
+    & .ve-pf2e-spells .ve-pf2e-resource-row { min-height: 32px !important; }
+    & .ve-pf2e-spells .ve-pf2e-spell-copy { gap: 0 !important; min-height: 0 !important; }
+    & .ve-pf2e-spells .ve-pf2e-spell-meta { line-height: 12px !important; min-height: 0 !important; gap: 3px !important; }
+    & .ve-pf2e-spells .ve-pf2e-spell-meta .action-glyph { font-size: 13px !important; line-height: 12px !important; min-height: 0 !important; height: auto !important; }
+    & .ve-pf2e-spells .ve-pf2e-casting-summary > * { min-height: 0 !important; padding-block: 0 !important; }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-feats .ve-pf2e-feat-name { min-height: 0 !important; height: auto !important; padding: 0 !important; align-self: center !important; }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-spells .ve-pf2e-spell-meta .ve-pf2e-native-cost { font-size: 13px !important; line-height: 12px !important; }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen {
+    & .ve-pf2e-spells .ve-pf2e-casting-identity h3 { font-size: 12px !important; line-height: 14px !important; }
+    & .ve-pf2e-spells .ve-pf2e-casting-summary .ve-pf2e-stat-readout > :is(span,strong) { font-size: 11px !important; line-height: 12px !important; }
+    & .ve-pf2e-effects > .ve-pf2e-collection-toolbar { min-height: 42px !important; }
+    & .ve-pf2e-effects .ve-pf2e-conditions > header.ve-sheet-card-heading,
+    & .ve-pf2e-effects .ve-pf2e-effects-list > summary.ve-pf2e-group-heading { box-sizing: border-box !important; min-height: 36px !important; height: 36px !important; padding: 4px 8px !important; }
+    & .ve-pf2e-effects .ve-pf2e-conditions > header.ve-sheet-card-heading h3 { font-size: 12px !important; line-height: 18px !important; }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-spells .ve-pf2e-expandable-item.ve-pf2e-spell { display: block !important; min-height: 0 !important; padding: 0 !important; }
+}
+
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-actions-view {
+    & .ve-pf2e-map-variant button,
+    & .ve-pf2e-strike-damage > button { box-sizing: border-box !important; height: 36px !important; min-height: 36px !important; padding: 2px 3px !important; }
+    & .ve-pf2e-map-variant button { grid-template-rows: 18px 10px !important; align-content: center !important; }
+    & .ve-pf2e-map-variant span { font-size: 17px !important; line-height: 18px !important; }
+    & .ve-pf2e-map-note { font-size: 9px !important; line-height: 10px !important; }
+    & .ve-pf2e-strike-damage > button { font-size: 11px !important; line-height: 12px !important; }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-actions-view {
+    & .ve-pf2e-strike-copy[open] + .ve-pf2e-native-strike-controls { display: flex !important; flex-wrap: wrap !important; align-items: center !important; gap: 5px !important; padding-top: 5px !important; }
+    & .ve-pf2e-strike-copy[open] + .ve-pf2e-native-strike-controls:empty { display: none !important; }
+    & :is(.ve-pf2e-auxiliary-action,.ve-pf2e-versatile-options) { display: flex !important; flex-wrap: wrap !important; align-items: center !important; gap: 4px !important; }
+    & .ve-pf2e-native-strike-controls :is(button,select) { min-height: 30px !important; height: 30px !important; padding: 3px 7px !important; font-size: 11px !important; line-height: 14px !important; min-width: 0 !important; max-width: 100% !important; }
+    & .ve-pf2e-native-strike-controls button .ve-pf2e-native-cost { font-size: 16px !important; line-height: 16px !important; }
+    & .ve-pf2e-versatile-options { margin-left: auto !important; }
+    & .ve-pf2e-versatile-options button[aria-pressed="true"] { opacity: 1 !important; color: var(--ve-text) !important; background: color-mix(in srgb,var(--ve-character-accent) 24%,var(--ve-surface)) !important; border-color: var(--ve-character-accent) !important; }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen {
+    & .ve-pf2e-defense-heading { display: flex !important; align-items: center !important; gap: 8px !important; padding: 0 0 6px !important; border-bottom: 1px solid var(--ve-border) !important; }
+    & .ve-pf2e-defense-heading > svg { width: 17px !important; height: 17px !important; color: var(--ve-character-accent) !important; }
+    & .ve-pf2e-defense-heading h3 { margin: 0 !important; font: 600 13px/18px "Signika",sans-serif !important; }
+    & .ve-pf2e-defense-row { display: grid !important; grid-template-columns: minmax(80px,.9fr) minmax(0,1.3fr) 30px !important; align-items: center !important; gap: 6px !important; padding: 4px 0 !important; border-bottom: 1px solid var(--ve-border) !important; font-size: 12px !important; line-height: 17px !important; }
+    & .ve-pf2e-defense-row > :is(strong,span) { min-width: 0 !important; overflow-wrap: anywhere !important; }
+    & .ve-pf2e-defense-row > button.ve-pf2e-defense-edit { width: 30px !important; height: 30px !important; min-height: 30px !important; padding: 3px !important; margin: 0 !important; border: 0 !important; background: transparent !important; color: var(--ve-character-accent) !important; font-size: 12px !important; }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-save-labels { padding-inline-start: 6px !important; }
+}
+@layer ve-mobile-style-authority {
+  @media (max-width: 360px) {
+    .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview {
+      & .ve-pf2e-save > .ve-pf2e-save-content { grid-template-columns: 24px 42px minmax(0,1fr) !important; }
+      & .ve-pf2e-save-content > strong { min-width: 42px !important; }
+      & .ve-pf2e-save-content > svg { width: 24px !important; height: 24px !important; }
+    }
+  }
+}
+/* Adapt to the save column itself, including narrow tablet split panes. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-saves {
+    container: ve-pf2e-saves / inline-size;
+  }
+  @container ve-pf2e-saves (max-width: 160px) {
+    .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview {
+      & .ve-pf2e-save > .ve-pf2e-save-content { grid-template-columns: auto auto !important; grid-template-rows: auto auto !important; justify-content: center !important; gap: 2px 6px !important; }
+      & .ve-pf2e-save-content > svg { grid-column: 1 !important; grid-row: 2 !important; justify-self: end !important; width: 24px !important; height: 24px !important; }
+      & .ve-pf2e-save-content > strong { grid-column: 2 !important; grid-row: 2 !important; justify-self: start !important; min-width: 0 !important; line-height: 28px !important; text-align: left !important; }
+      & .ve-pf2e-save-labels { grid-column: 1 / -1 !important; grid-row: 1 !important; display: flex !important; flex-direction: row !important; align-items: baseline !important; justify-content: center !important; flex-wrap: wrap !important; gap: 0 4px !important; padding-inline-start: 0 !important; font-size: 11px !important; line-height: 14px !important; text-align: center !important; }
+      & .ve-pf2e-save-labels > span:first-child { white-space: nowrap !important; overflow-wrap: normal !important; font-size: 11px !important; line-height: 14px !important; }
+      & .ve-pf2e-save-labels > .ve-pf2e-rank-badge { white-space: nowrap !important; font-size: 10px !important; line-height: 14px !important; }
+      & .ve-pf2e-save-labels > .ve-pf2e-rank-badge::before { content: "•"; margin-inline-end: 4px; }
+    }
+  }
+}
+/* Origins use typography, a native deity image and small personal-detail tiles. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview {
+    & .ve-pf2e-origins { border: 1px solid var(--ve-border) !important; border-radius: 10px !important; overflow: hidden !important; background: linear-gradient(135deg,color-mix(in srgb,var(--ve-character-accent) 9%,var(--ve-surface)),var(--ve-surface)) !important; }
+    & .ve-pf2e-origin-highlights { display: grid !important; grid-template-columns: minmax(0,1fr) !important; padding: 0 !important; gap: 0 !important; align-items: stretch !important; }
+    & .ve-pf2e-origin-highlights.has-deity { grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important; }
+    & .ve-pf2e-background-highlight { display: grid !important; grid-template-columns: minmax(0,1fr) !important; gap: 6px !important; min-width: 0 !important; padding: 16px !important; align-content: center !important; }
+    & .ve-pf2e-background-highlight > i { font-size: 20px !important; color: var(--ve-character-accent) !important; margin-bottom: 2px !important; }
+    & .ve-pf2e-origin-label { display: block !important; color: var(--ve-subtle) !important; font: 600 10px/1.3 "Signika",sans-serif !important; letter-spacing: .8px !important; text-transform: uppercase !important; }
+    & .ve-pf2e-background-highlight > strong { font: 24px/1.15 Georgia,serif !important; color: var(--ve-text) !important; overflow-wrap: anywhere !important; }
+    & .ve-pf2e-deity-highlight { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center !important; padding: 12px !important; border-left: 1px solid var(--ve-border) !important; min-width: 0 !important; position: relative !important; isolation: isolate !important; overflow: hidden !important; background: transparent !important; }
+    & .ve-pf2e-deity-highlight.is-illustrated { min-height: 142px !important; }
+    & .ve-pf2e-deity-highlight > img { display: block !important; position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; object-fit: contain !important; border: 0 !important; border-radius: 0 !important; padding: 0 !important; background: none !important; box-shadow: none !important; z-index: -1 !important; }
+    & .ve-pf2e-deity-highlight > div { width: 100% !important; }
+    & .ve-pf2e-deity-highlight strong { display: block !important; margin-top: 3px !important; font: 600 17px/1.2 Georgia,serif !important; color: var(--ve-text) !important; overflow-wrap: anywhere !important; }
+    & .ve-pf2e-deity-highlight.is-illustrated :is(.ve-pf2e-origin-label,strong) { text-shadow: 0 1px 2px #000,0 0 4px #000,0 0 8px #000 !important; }
+    & .ve-pf2e-deity-highlight.is-illustrated .ve-pf2e-origin-label { color: #f3e5bd !important; }
+    & .ve-pf2e-deity-highlight.is-illustrated strong { color: #fff9e8 !important; font-size: 22px !important; }
+    & .ve-pf2e-origins > .ve-pf2e-fold > summary { padding: 6px 12px !important; min-height: 34px !important; }
+    & .ve-pf2e-origins .ve-pf2e-fold-body { padding: 8px 12px 12px !important; }
+    & .ve-pf2e-personal-grid { display: grid !important; grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 8px !important; margin: 0 !important; }
+    & .ve-pf2e-personal-grid > div { min-width: 0 !important; padding: 8px 10px !important; border: 1px solid var(--ve-border) !important; border-radius: 6px !important; background: var(--ve-surface) !important; }
+    & .ve-pf2e-personal-grid dt { color: var(--ve-subtle) !important; font: 400 11px/1.3 "Signika",sans-serif !important; overflow-wrap: anywhere !important; }
+    & .ve-pf2e-personal-grid dd { margin: 4px 0 0 !important; color: var(--ve-text) !important; font: 600 14px/1.3 "Signika",sans-serif !important; overflow-wrap: anywhere !important; }
+  }
+}
+
+/* Save accents and attribute relief retain the compact overview grid. */
+@layer ve-mobile-style-authority {
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-save { --ve-save-accent:#8ab8c6; position:relative!important; background:radial-gradient(ellipse at 0% 50%,color-mix(in srgb,var(--ve-save-accent) 17%,transparent),transparent 80%),linear-gradient(145deg,var(--ve-surface-up),var(--ve-surface))!important; border-color:color-mix(in srgb,var(--ve-save-accent) 45%,var(--ve-border))!important; box-shadow:inset 3px 0 0 var(--ve-save-accent),inset 0 1px 0 #ffffff12,0 2px 4px #0002!important; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-save[data-save=reflex] { --ve-save-accent:#67bfc4; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-save[data-save=will] { --ve-save-accent:#b89bcd; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-save-content > svg { filter:drop-shadow(0 0 5px color-mix(in srgb,var(--ve-save-accent) 30%,transparent))!important; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-save-content > strong { text-shadow:0 2px 3px #0003!important; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-save .ve-pf2e-rank-badge { color:var(--ve-save-accent)!important; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-attribute { position:relative!important; overflow:hidden!important; isolation:isolate!important; background:linear-gradient(145deg,color-mix(in srgb,var(--ve-character-accent) 8%,var(--ve-surface)),var(--ve-surface))!important; box-shadow:inset 0 1px 0 #ffffff17,0 2px 4px #0002!important; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-attribute > i { display:block!important;position:absolute!important;right:-5px!important;bottom:-5px!important;font-size:42px!important;width:auto!important;height:auto!important;opacity:.10!important;color:var(--ve-character-accent)!important;transform:rotate(-12deg)!important;z-index:-1!important; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-attribute > span { letter-spacing:1px!important;font-size:10px!important; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-attribute > strong { font-family:Georgia,serif!important; font-size:24px!important; line-height:1!important;text-shadow:0 2px 3px #0002!important; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-attribute.is-key { background:radial-gradient(ellipse at top,color-mix(in srgb,var(--ve-character-accent) 25%,var(--ve-surface)),var(--ve-surface))!important;box-shadow:inset 0 2px 0 var(--ve-character-accent),0 0 10px color-mix(in srgb,var(--ve-character-accent) 12%,transparent)!important; }
+.ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview .ve-pf2e-attribute.is-key::after { content:'';position:absolute;bottom:4px;left:calc(50% - 10px);width:20px;height:1px;background:var(--ve-character-accent);opacity:.65; }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor][data-theme="light"] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-overview {
+    & .ve-pf2e-save .ve-pf2e-rank-badge { color: color-mix(in srgb,var(--ve-save-accent) 35%,var(--ve-text)) !important; }
+    & :is(.ve-pf2e-save-content,.ve-pf2e-attribute) > strong { text-shadow: none !important; }
+  }
+}
+/* Category fills distinguish disclosures from their expanded item rows. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen {
+    & .ve-pf2e-collection-group > summary.ve-pf2e-group-heading,
+    & .ve-pf2e-container-contents > summary,
+    & .ve-pf2e-fold > summary {
+      background: color-mix(in srgb,var(--ve-character-accent) 10%,var(--ve-surface)) !important;
+    }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-origin-highlights > button {
+    appearance: none !important; width: 100% !important; height: auto !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: transparent !important; color: var(--ve-text) !important; white-space: normal !important; opacity: 1 !important;
+    &.ve-pf2e-background-highlight { text-align: left !important; }
+    &.ve-pf2e-deity-highlight { border-left: 1px solid var(--ve-border) !important; }
+    &:not(:disabled) { cursor: pointer !important; }
+    &:focus-visible { outline: 2px solid var(--ve-character-accent) !important; outline-offset: -3px !important; }
+  }
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-item-layer.is-full-page {
+    padding: 0 !important;
+    & .ve-pf2e-item-dialog { width: 100% !important; height: 100% !important; max-height: 100% !important; min-height: 0 !important; border: 0 !important; border-radius: 0 !important; }
+    & .ve-pf2e-item-dialog > header { padding-top: max(10px,env(safe-area-inset-top)) !important; padding-inline: max(10px,env(safe-area-inset-left)) max(10px,env(safe-area-inset-right)) !important; }
+    & .ve-pf2e-item-body { flex: 1 !important; padding-bottom: max(12px,env(safe-area-inset-bottom)) !important; }
+  }
+}
+
+/* Match the established 5e list rhythm across PF2e character tabs. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen {
+    & .ve-pf2e-collection-group > .ve-pf2e-group-heading,
+    & .ve-pf2e-biography-section > summary,
+    & .ve-pf2e-container-contents > summary,
+    & .ve-pf2e-feats-heading > .ve-pf2e-collection-heading,
+    & .ve-pf2e-inventory-heading > .ve-pf2e-collection-heading,
+    & .ve-pf2e-effects-heading > .ve-pf2e-collection-heading {
+      box-sizing: border-box !important;
+      min-height: 51px !important;
+      height: auto !important;
+      padding-block: 9px !important;
+      align-items: center !important;
+      white-space: normal !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    & :is(.ve-pf2e-item, .ve-pf2e-feat-row, .ve-pf2e-spell, .ve-pf2e-spell-reference, .ve-pf2e-effect-row) > .ve-pf2e-item-heading,
+    & .ve-pf2e-strike-copy > summary,
+    & .ve-pf2e-compact-action,
+    & .ve-pf2e-statistics .ve-pf2e-proficiency-skill,
+    & .ve-pf2e-combat-proficiencies .ve-pf2e-proficiency-readout {
+      box-sizing: border-box !important;
+      min-height: 48px !important;
+      height: auto !important;
+      padding-block: 5px !important;
+      align-items: center !important;
+    }
+
+    & :is(.ve-pf2e-group-heading, .ve-pf2e-container-contents > summary, .ve-pf2e-collection-heading) :is(h3, span, small) {
+      min-width: 0 !important;
+      white-space: normal !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    & :is(.ve-pf2e-item-heading, .ve-pf2e-feat-name, .ve-pf2e-spell-copy, .ve-pf2e-item-copy, .ve-pf2e-proficiency-skill) :is(h3, strong, span, small, p) {
+      min-width: 0 !important;
+      white-space: normal !important;
+      overflow-wrap: anywhere !important;
+    }
+    & .ve-pf2e-combat-proficiencies .ve-pf2e-proficiency-readout :is(span, strong, small) {
+      min-width: 0 !important;
+      white-space: normal !important;
+      overflow-wrap: anywhere !important;
+    }
+  }
+}
+
+/* PF2e Dying/Wounded tracks and Recovery stay attached to the portrait. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen {
+    & .ve-pf2e-portrait.is-dying > .ve-character-portrait-button > img {
+      filter: grayscale(1) !important;
+      opacity: 0.55 !important;
+    }
+
+    & .ve-pf2e-portrait > .ve-pf2e-portrait-condition {
+      position: absolute !important;
+      top: 2px !important;
+      left: 1px !important;
+      z-index: 2 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 5px !important;
+      box-sizing: border-box !important;
+      width: 19px !important;
+      min-width: 19px !important;
+      max-width: 19px !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      color: var(--ve-text) !important;
+      line-height: 1 !important;
+      touch-action: manipulation !important;
+    }
+    & .ve-pf2e-portrait > .ve-pf2e-portrait-condition[data-condition="wounded"] {
+      right: 1px !important;
+      left: auto !important;
+    }
+    & .ve-pf2e-portrait > .ve-pf2e-portrait-condition[hidden],
+    & .ve-pf2e-portrait > .ve-pf2e-portrait-recovery[hidden] {
+      display: none !important;
+    }
+    & .ve-pf2e-portrait > .ve-pf2e-portrait-condition:focus-visible,
+    & .ve-pf2e-portrait > .ve-pf2e-portrait-recovery:focus-visible {
+      outline: 2px solid var(--ve-character-accent) !important;
+      outline-offset: 1px !important;
+    }
+    & .ve-pf2e-portrait > .ve-pf2e-portrait-condition > img {
+      position: relative !important;
+      z-index: 1 !important;
+      display: block !important;
+      box-sizing: border-box !important;
+      width: 19px !important;
+      min-width: 19px !important;
+      height: 19px !important;
+      min-height: 19px !important;
+      max-width: 19px !important;
+      max-height: 19px !important;
+      object-fit: contain !important;
+      border: 1px solid var(--ve-border) !important;
+      border-radius: 4px !important;
+      box-shadow: 0 1px 4px #0008 !important;
+    }
+    & .ve-pf2e-portrait-pips {
+      position: relative !important;
+      isolation: isolate !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 5px !important;
+      box-sizing: border-box !important;
+      max-width: 100% !important;
+      padding: 3px !important;
+      border-radius: 10px !important;
+      background: transparent !important;
+    }
+    & .ve-pf2e-portrait-pips::before {
+      content: "" !important;
+      position: absolute !important;
+      z-index: -1 !important;
+      inset: -14.5px 0 0 !important;
+      border-radius: 10px !important;
+      background: #12120ecc !important;
+    }
+    & .ve-pf2e-portrait-pips > .ve-pf2e-portrait-pip {
+      display: block !important;
+      flex: 0 0 7px !important;
+      box-sizing: border-box !important;
+      width: 7px !important;
+      min-width: 7px !important;
+      height: 7px !important;
+      min-height: 7px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 1px solid #df6b75 !important;
+      border-radius: 50% !important;
+      background: transparent !important;
+      font-size: 0 !important;
+      line-height: 0 !important;
+    }
+    & .ve-pf2e-portrait-condition[data-condition="dying"] .ve-pf2e-portrait-pip.is-active {
+      background: #df6b75 !important;
+    }
+    & .ve-pf2e-portrait-condition[data-condition="wounded"] .ve-pf2e-portrait-pip {
+      border-color: var(--ve-character-accent) !important;
+    }
+    & .ve-pf2e-portrait-condition[data-condition="wounded"] .ve-pf2e-portrait-pip.is-active {
+      background: var(--ve-character-accent) !important;
+    }
+
+    & .ve-pf2e-portrait > .ve-pf2e-portrait-recovery {
+      position: absolute !important;
+      z-index: 3 !important;
+      right: 2px !important;
+      bottom: 2px !important;
+      left: 2px !important;
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 2px !important;
+      box-sizing: border-box !important;
+      width: calc(100% - 4px) !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      height: 28px !important;
+      min-height: 28px !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 4px !important;
+      border: 1px solid var(--ve-character-accent) !important;
+      border-radius: 4px !important;
+      background: color-mix(in srgb,var(--ve-character-accent) 13%,var(--ve-surface)) !important;
+      color: var(--ve-text) !important;
+      box-shadow: none !important;
+      font: 600 10px/1.1 Signika,sans-serif !important;
+      touch-action: manipulation !important;
+    }
+    & .ve-pf2e-portrait > .ve-pf2e-portrait-recovery > i {
+      flex: 0 0 auto !important;
+      font-size: 14px !important;
+    }
+  }
+}
+
+/* Currency and wealth lead Inventory as a compact, attached three-row card. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen {
+    & .ve-pf2e-inventory-heading > .ve-pf2e-equipment-summary {
+      display: block !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
+    & .ve-pf2e-equipment-summary > .ve-pf2e-currency-strip {
+      border-top: 1px solid var(--ve-border) !important;
+      border-radius: 0 !important;
+    }
+    & .ve-pf2e-equipment-summary > .ve-pf2e-wealth {
+      display: grid !important;
+      grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+      align-items: center !important;
+      gap: 0 !important;
+      min-height: 44px !important;
+      padding: 0 !important;
+      border-top: 1px solid var(--ve-border) !important;
+      font-size: 10px !important;
+      line-height: 1.2 !important;
+    }
+    & .ve-pf2e-equipment-summary > .ve-pf2e-wealth > span {
+      display:grid !important;
+      align-content:center !important;
+      justify-items:center !important;
+      gap:2px !important;
+      padding:7px 5px !important;
+      text-align:center !important;
+      min-width: 0 !important;
+      overflow-wrap: anywhere !important;
+      & + span { border-left:1px solid var(--ve-border) !important; }
+      & small { font-size:10px !important; color:var(--ve-subtle) !important; }
+      & strong { font-size:15px !important; line-height:1.15 !important; color:var(--ve-text) !important; }
+    }
+    & .ve-pf2e-gear-view > .ve-pf2e-inventory-heading {
+      margin-top: 0 !important;
+    }
+    & .ve-pf2e-inventory-heading > .ve-pf2e-bulk-summary {
+      margin: 0 !important;
+      border: 0 !important;
+      border-top: 1px solid var(--ve-border) !important;
+      border-radius: 0 !important;
+      background:color-mix(in srgb,var(--ve-character-accent) 8%,var(--ve-surface)) !important;
+    }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-condition-options > .ve-pf2e-condition-divider { height: 0 !important; margin: 9px 6px !important; border-top: 1px solid var(--ve-character-accent) !important; opacity: .55 !important; }
+}
+
+/* Effects use the same category heading rhythm as Inventory and Feats. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-pf2e-character-screen.ve-pf2e-character-screen.ve-pf2e-character-screen.ve-character-screen .ve-pf2e-effects {
+    & .ve-pf2e-conditions > header.ve-sheet-card-heading,
+    & .ve-pf2e-effects-list > summary.ve-pf2e-group-heading { min-height: 51px !important; height: auto !important; padding: 9px 8px !important; }
+    & .ve-pf2e-conditions > header.ve-sheet-card-heading h3 { font: 600 13px/1.2 Signika,sans-serif !important; }
+    & .ve-pf2e-conditions > header.ve-sheet-card-heading > i { font-size: 16px !important; }
+    & .ve-pf2e-conditions > header.ve-sheet-card-heading > button { height: 32px !important; min-height: 32px !important; padding-block: 0 !important; }
+  }
+}
+
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-document-dialog.ve-pf2e-ac-dialog {
+    & .ve-pf2e-shield-panel { display:grid !important; gap:10px !important; min-width:0 !important; }
+    & .ve-pf2e-shield-panel[hidden], & .ve-pf2e-shield-save[hidden] { display:none !important; }
+    & .ve-pf2e-shield-card {
+      min-width:0 !important;
+      overflow:hidden !important;
+      border:1px solid color-mix(in srgb,var(--ve-character-accent) 50%,var(--ve-border)) !important;
+      border-radius:8px !important;
+      background:var(--ve-surface) !important;
+    }
+    & .ve-pf2e-shield-identity {
+      display:grid !important; grid-template-columns:40px minmax(0,1fr) !important;
+      align-items:center !important; gap:10px !important; padding:12px !important;
+      background:color-mix(in srgb,var(--ve-character-accent) 12%,var(--ve-surface-up)) !important;
+      & > i { display:grid !important; place-items:center !important; width:40px !important; height:40px !important; border-radius:8px !important; background:color-mix(in srgb,var(--ve-character-accent) 16%,var(--ve-surface)) !important; color:var(--ve-character-accent) !important; font-size:24px !important; }
+      & > div { min-width:0 !important; }
+      & h3 { margin:0 0 3px !important; font:700 20px/1.15 Georgia,serif !important; color:var(--ve-text) !important; overflow-wrap:anywhere !important; }
+    }
+    & .ve-pf2e-shield-state { display:inline-block !important; padding:1px 7px !important; border:1px solid var(--ve-border) !important; border-radius:4px !important; color:var(--ve-subtle) !important; font-size:10px !important; letter-spacing:.04em !important; text-transform:uppercase !important; }
+    & .ve-pf2e-shield-state.is-damaged { color:var(--ve-error) !important; border-color:color-mix(in srgb,var(--ve-error) 65%,var(--ve-border)) !important; }
+    & .ve-pf2e-shield-health { display:grid !important; gap:6px !important; padding:10px 12px 12px !important; }
+    & .ve-pf2e-shield-hp-label { color:var(--ve-subtle) !important; text-align:center !important; font-size:11px !important; font-weight:600 !important; text-transform:uppercase !important; letter-spacing:.04em !important; }
+    & .ve-pf2e-shield-hp-controls { display:grid !important; grid-template-columns:36px minmax(0,1fr) 36px !important; gap:6px !important; align-items:center !important; }
+    & .ve-pf2e-shield-step { padding:0 !important; min-height:36px !important; height:36px !important; color:var(--ve-character-accent) !important; }
+    & .ve-pf2e-shield-hp-editor {
+      display:flex !important; align-items:center !important; justify-content:center !important; gap:6px !important; min-width:0 !important; margin:0 !important;
+      & input { flex:0 1 76px !important; width:76px !important; min-width:0 !important; height:46px !important; padding:0 !important; text-align:center !important; font-size:32px !important; line-height:1 !important; font-weight:700 !important; background:transparent !important; border:0 !important; border-bottom:1px solid var(--ve-border) !important; border-radius:0 !important; appearance:textfield !important; box-shadow:none !important; }
+      & input::-webkit-inner-spin-button, & input::-webkit-outer-spin-button { appearance:none !important; margin:0 !important; }
+      & > span { color:var(--ve-subtle) !important; font-size:18px !important; white-space:nowrap !important; }
+    }
+    & .ve-pf2e-shield-hp-track { height:6px !important; overflow:hidden !important; border-radius:3px !important; background:var(--ve-surface-up) !important; border:1px solid var(--ve-border) !important;
+      & > span { display:block !important; height:100% !important; border-radius:inherit !important; background:var(--ve-character-accent) !important; }
+    }
+    & .ve-pf2e-shield-editor-stats { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; border-top:1px solid var(--ve-border) !important; background:var(--ve-surface-up) !important;
+      & > div { display:grid !important; align-content:center !important; justify-items:center !important; gap:1px !important; padding:7px !important; min-width:0 !important; }
+      & > div + div { border-left:1px solid var(--ve-border) !important; }
+      & small { font-size:11px !important; color:var(--ve-subtle) !important; text-align:center !important; }
+      & strong { font-size:20px !important; line-height:1.1 !important; color:var(--ve-text) !important; }
+    }
+    & .ve-pf2e-shield-repair, & .ve-pf2e-shield-save { display:flex !important; align-items:center !important; justify-content:center !important; gap:7px !important; }
+    & .ve-pf2e-shield-repair { width:100% !important; border-color:color-mix(in srgb,var(--ve-character-accent) 40%,var(--ve-border)) !important;
+      & > i { color:var(--ve-character-accent) !important; }
+    }
+    & button:disabled, & input:disabled { opacity:.45 !important; }
+  }
+}

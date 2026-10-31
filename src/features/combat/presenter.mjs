@@ -3,6 +3,7 @@ import { icon, node } from "../../ui/dom.mjs";
 import { LONG_PRESS_DURATION_MS, LONG_PRESS_MOVEMENT_THRESHOLD } from "../../ui/long-press.mjs";
 import { pulseHoldHaptic } from "../../ui/haptics.mjs";
 import { currentFirstCombatants } from "./model.mjs";
+import { tokenPortraitFit, tokenPortraitStyle } from "../../ui/token-portrait.mjs";
 
 export function renderCombat({ state, commands, scope }) {
   const combat = state.snapshot?.combat;
@@ -85,7 +86,15 @@ export function renderGmCombatControls({ controls, commands, scope }) {
   const noCombat = localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.NoActiveCombatForProgression", "No active combat");
   const waiting = localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.StartCombatBeforeProgressing", "Start combat before changing turns");
   const noTurn = localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.NoAppropriateCombatTurn", "No appropriate combat turn");
-  const previous = button({
+  const previous = !controls.started ? button({
+    className: "ve-gm-combat-control ve-gm-combat-roll-all",
+    visible: localizedText(commands.localize, "VEMOBILE.Combat.RollAll", "Roll All"),
+    accessible: localizedText(commands.localize, "VEMOBILE.Combat.RollAll", "Roll All"),
+    enabled: Boolean(combatExists && controls.canRollAll),
+    iconName: "fa-dice-d20",
+    reason: !combatExists ? noCombat : localizedText(commands.localize, "VEMOBILE.Combat.NoInitiativeAvailable", "No initiative rolls available"),
+    invoke: commands.rollAllCombatInitiative
+  }) : button({
     className: "ve-gm-combat-control ve-gm-combat-previous",
     visible: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.PreviousShort", "Previous"),
     accessible: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.PreviousTurn", "Previous Turn"),
@@ -104,7 +113,15 @@ export function renderGmCombatControls({ controls, commands, scope }) {
     reason: !combatExists ? noCombat : noTurn,
     invoke: controls.started ? commands.endCombat : commands.startCombat
   });
-  const next = button({
+  const next = !controls.started ? button({
+    className: "ve-gm-combat-control ve-gm-combat-roll-npcs",
+    visible: localizedText(commands.localize, "VEMOBILE.Combat.RollNPCs", "Roll NPCs"),
+    accessible: localizedText(commands.localize, "VEMOBILE.Combat.RollNPCs", "Roll NPCs"),
+    enabled: Boolean(combatExists && controls.canRollNPCs),
+    iconName: "fa-dice-d20",
+    reason: !combatExists ? noCombat : localizedText(commands.localize, "VEMOBILE.Combat.NoInitiativeAvailable", "No initiative rolls available"),
+    invoke: commands.rollNPCCombatInitiative
+  }) : button({
     className: "ve-gm-combat-control ve-gm-combat-next",
     visible: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.NextShort", "Next"),
     accessible: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.NextTurn", "Next Turn"),
@@ -137,7 +154,11 @@ export function renderSceneCombatCarousel({ combat, commands, scope, carouselSta
         "data-ve-scene-control": true
       },
       children: [
-        entry.img ? node("img", { attrs: { src: entry.img, alt: "", draggable: "false" } }) : icon("fa-user"),
+        entry.tokenImg || entry.img ? node("span", {
+          className: "ve-combat-portrait ve-scene-combatant-portrait",
+          attrs: { style: tokenPortraitStyle(entry.portrait), "data-token-fit": tokenPortraitFit(entry.portrait) },
+          children: [node("img", { attrs: { src: entry.tokenImg || entry.img, alt: "", draggable: "false" } })]
+        }) : icon("fa-user"),
         entry.initiative === null ? null : node("strong", { text: formatInitiative(entry.initiative, combat.initiativeDecimals, commands.readLocale?.() ?? "en") }),
         entry.defeated ? node("i", { className: "fa-solid fa-skull ve-scene-combatant-defeated", attrs: { "aria-hidden": "true" } }) : null
       ].filter(Boolean)
@@ -416,7 +437,11 @@ function combatantRow(combat, combatant, commands, status, scope) {
     className: `${combatant.current ? "is-current" : ""}${combatant.defeated ? " is-defeated" : ""}`,
     attrs: { "aria-current": combatant.current ? "step" : undefined },
     children: [
-      node("span", { className: "ve-combat-portrait", children: [combatant.img ? node("img", { attrs: { src: combatant.img, alt: "" } }) : icon("fa-user")] }),
+      node("span", { className: "ve-combat-portrait", children: [combatant.tokenImg || combatant.img ? node("span", {
+        className: "ve-token-portrait-footprint",
+        attrs: { style: tokenPortraitStyle(combatant.portrait), "data-token-fit": tokenPortraitFit(combatant.portrait) },
+        children: [node("img", { attrs: { src: combatant.tokenImg || combatant.img, alt: "" } })]
+      }) : icon("fa-user")] }),
       node("div", { className: "ve-combat-name", children: [node("strong", { text: combatant.name }), combatant.defeated ? node("small", { text: localizedText(commands.localize, "VEMOBILE.Interface.Presenter.Defeated", "Defeated") }) : null].filter(Boolean) }),
       combatant.initiative === null ? node("span", { className: "ve-combat-initiative is-empty", text: "—" }) : node("span", { className: "ve-combat-initiative", text: formatInitiative(combatant.initiative, combat.initiativeDecimals, commands.readLocale?.() ?? "en") }),
       controls.length ? node("div", { className: "ve-combat-row-controls", children: controls }) : null

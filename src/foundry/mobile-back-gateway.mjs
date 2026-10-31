@@ -4,7 +4,13 @@ const MARKER_KIND = "ve-mobile-back";
 /** Install during Foundry's init hook, before its own Window popstate listener. */
 export function createFoundryMobileBackGateway({
   getWindow = () => globalThis.window,
-  getFoundryBackPrompt = () => globalThis.game?.i18n?.localize?.("APP.NavigateBackConfirm"),
+  getFoundryBackPrompt = () => {
+    for (const key of ["APPLICATION.NavigateBackConfirm", "APP.NavigateBackConfirm"]) {
+      const value = globalThis.game?.i18n?.localize?.(key);
+      if (typeof value === "string" && value && value !== key) return value;
+    }
+    return "";
+  },
   now = () => Date.now(),
   trace = () => {}
 } = {}) {

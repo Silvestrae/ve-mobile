@@ -2,16 +2,21 @@
  * Colour scheme choices are plain records so renderers can resolve them
  * without reaching into Foundry or a live document.
  */
-export const COLOR_SCHEME_CHOICES = Object.freeze(["class", "red", "neutral", "bestiary"]);
+import { normalizeCustomThemeColors } from "./custom-theme.mjs";
+import { PF2E_CLASS_ACCENTS } from "./pf2e-class-appearance.mjs";
+
+export const COLOR_SCHEME_CHOICES = Object.freeze(["class", "red", "neutral", "bestiary", "custom"]);
 
 const COLOR_SCHEME_THEME_KEYS = Object.freeze({
   class: null,
   red: "red",
   neutral: "neutral",
-  bestiary: "bestiary"
+  bestiary: "bestiary",
+  custom: "custom"
 });
 
 const THEME_ACCENTS = Object.freeze({
+  ...PF2E_CLASS_ACCENTS,
   neutral: Object.freeze({ deep: "#746348", bright: "#bea46f" }),
   red: Object.freeze({ deep: "#a60f2f", bright: "#cf2347" }),
   bestiary: Object.freeze({ deep: "#5b2025", bright: "#c57970" }),
@@ -37,13 +42,15 @@ export function resolveCharacterTheme(classTheme = "neutral", colorScheme = "cla
   return COLOR_SCHEME_THEME_KEYS[key] ?? "neutral";
 }
 
-export function resolveCharacterThemeProfile(classThemes = [], colorScheme = "class") {
+export function resolveCharacterThemeProfile(classThemes = [], colorScheme = "class", customTheme = null) {
   const knownThemes = [...new Set(classThemes
     .map((theme) => String(theme ?? ""))
     .filter((theme) => THEME_ACCENTS[theme]))];
   const primary = resolveCharacterTheme(knownThemes[0] ?? "neutral", colorScheme);
   const blendThemes = colorScheme === "class" ? knownThemes : [primary];
-  const accents = (blendThemes.length ? blendThemes : [primary]).slice(0, 3).map((theme) => THEME_ACCENTS[theme]);
+  const colors = colorScheme === "custom" ? normalizeCustomThemeColors(customTheme) : null;
+  const accents = colors ? [colors.primary, colors.secondary, colors.third ?? colors.primary].map(color => ({ deep: color, bright: color }))
+    : (blendThemes.length ? blendThemes : [primary]).slice(0, 3).map((theme) => THEME_ACCENTS[theme]);
   const fallback = THEME_ACCENTS[primary] ?? THEME_ACCENTS.neutral;
   while (accents.length < 3) accents.push(accents[accents.length - 1] ?? fallback);
   return Object.freeze({

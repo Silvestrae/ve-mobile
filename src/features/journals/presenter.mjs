@@ -2,6 +2,7 @@ import { localizedText, localizedCount } from "../../ui/localized-text.mjs";
 import { icon, node } from "../../ui/dom.mjs";
 import { renderImageViewer } from "../../ui/image-viewer.mjs";
 import { buildJournalTree, journalBranchCount } from "./model.mjs";
+import { bindJournalFontSize } from "./font-size-controller.mjs";
 
 export function renderJournals({ state, commands, scope }) {
   if (state.journal) return journalReader(state, commands, scope);
@@ -75,6 +76,7 @@ function journalPage(page, selectedHeading, commands, scope) {
   if (page.type === "text") {
     const content = node("article", { className: "ve-journal-rich-text" });
     content.innerHTML = String(page.html ?? "");
+    bindJournalFontSize(content, commands, scope);
     if (selectedHeading) queueMicrotask(() => {
       if (scope.disposed || !content.isConnected) return;
       const headings = [...content.querySelectorAll("h1, h2, h3, h4, h5, h6")].filter((heading) => !heading.hasAttribute("data-no-toc"));

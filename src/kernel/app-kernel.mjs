@@ -21,7 +21,7 @@ export function nativeSceneTileTapAllowed({ active, state, presentation }) {
     && sceneInteractionIsReady(presentation));
 }
 
-export function createAppKernel({ store, session, commandGateway, biographyGateway, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
+export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
   const localize = (key, fallback, data) => localizedText((id, _fallback, values) => preferencesGateway?.localize?.(id, values), key, fallback, data);
   let runtimeScope = null;
   let activationCommitted = false;
@@ -306,6 +306,12 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     selectJournalHeading: (pageId, heading) => store.dispatch({ type: "select-journal-heading", pageId, heading }),
     toggleJournalMenu: () => store.dispatch({ type: "toggle-journal-menu" }),
     closeJournalMenu: () => store.dispatch({ type: "close-journal-menu" }),
+    readCharacterDefenseEditor: sourceUuid => {
+      requireCharacterView(sourceUuid);
+      return commandGateway.readDefenseEditor({ actorSourceUuid: sourceUuid }, expectedSession());
+    },
+    readJournalFontSize: () => session.readJournalFontSize?.() ?? 16,
+    setJournalFontSize: value => session.setJournalFontSize?.(value),
     openNativeJournalEditor: (journalId, pageId) => session.openNativeJournalEditor(journalId, pageId, expectedSession()),
     openJournalImage: (image) => store.dispatch({ type: "open-journal-image", image }),
     closeJournalImage: () => store.dispatch({ type: "close-journal-image" }),
@@ -315,6 +321,12 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     setQuickbarCollapsed: (collapsed) => { actionBarPreferences?.setCollapsed(collapsed); store.dispatch({ type: "set-quickbar-collapsed", collapsed }); },
     readActionBarPreferences: (source, actorSourceUuid) => actionBarPreferences?.read(source, actorSourceUuid) ?? {},
     setActionBarPage: (source, actorSourceUuid, page) => actionBarPreferences?.setPage(source, actorSourceUuid, page),
+    toggleGamePause: () => guardConnection((expected) => {
+      if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active
+        || store.state.reconnect || store.state.modeTransition || store.state.templatePlacement
+        || store.state.nativeTokenPlacement || store.state.actorTokenPlacement) return;
+      return session.toggleGamePause(expected);
+    }),
     openFullScene: () => dispatchNavigation({ type: "open-full-scene" }),
     toggleTabletNavSide: () => store.dispatch({ type: "toggle-tablet-nav-side" }),
     watchMetrics: (owner, onUpdate) => metrics?.watch(owner, onUpdate),
@@ -432,6 +444,8 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     startCombat: (request) => guardCombatControl(request, expected => combatGateway.startCombat(expected)),
     endCombat: (request) => guardCombatControl(request, expected => combatGateway.endCombat(expected)),
     previousCombatTurn: (request) => guardCombatControl(request, expected => combatGateway.previousTurn(expected)),
+    rollAllCombatInitiative: (request) => guardCombatControl(request, expected => combatGateway.rollAllInitiative(expected)),
+    rollNPCCombatInitiative: (request) => guardCombatControl(request, expected => combatGateway.rollNPCInitiative(expected)),
     nextCombatTurn: (request) => guardCombatControl(request, expected => combatGateway.nextTurn(expected)),
     rollCombatInitiative: (combatId, combatantId) => guardConnection((expected) => combatGateway.rollInitiative({ combatId, combatantId }, expected)),
     focusCombatant: (combatId, combatantId) => combatSceneActions.focus(combatId, combatantId),
@@ -445,6 +459,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     moveHotbarMacro: (request) => guardActionBar("foundry", async expected => { const result = await hotbarGateway.move(request, expected); if (activationCommitted) loadSnapshot(); return result; }),
     editHotbarMacro: (request) => guardActionBar("foundry", expected => hotbarGateway.edit(request, expected)),
     mountNativeChat: (host, owner) => nativeChatGateway.mount(host, owner),
+    watchUnreadChat: (owner, listener) => nativeChatGateway?.watchUnread?.(owner, listener),
     openActiveEffectContextMenu: (payload) => payload?.actorSourceUuid === store.state.selectedActorSourceUuid
       ? guardConnection((expected) => activeEffectContextGateway.open(payload, expected))
       : Promise.resolve(Object.freeze({ ok: true, action: "stale" })),
@@ -574,6 +589,20 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     logout: () => preferencesGateway.logout(),
     requestScreenWakeLock: () => wakeLockController.requestFromUserGesture(),
     sendChat: (content) => guardConnection(() => session.sendChat(content, store.state.selectedActorSourceUuid)),
+    readCharacterItemDetails: async ({ actorSourceUuid, itemId }) => {
+      const sourceUuid = String(actorSourceUuid ?? "");
+      const assertCurrent = () => {
+        if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active
+          || store.state.reconnect || store.state.modeTransition || store.state.route !== "characters"
+          || store.state.selectedActorSourceUuid !== sourceUuid || !itemDetailsGateway) {
+          throw new Error(localizedText(localize, "VEMOBILE.PF2E.ItemDetailsChanged", "This item is no longer available. Refresh and try again."));
+        }
+      };
+      assertCurrent();
+      const result = await guardConnection(expected => itemDetailsGateway.read({ actorSourceUuid: sourceUuid, itemId }, expected));
+      assertCurrent();
+      return result;
+    },
     readCharacterBiography: async (actorSourceUuid) => {
       const sourceUuid = String(actorSourceUuid ?? "");
       if (store.state.route !== "characters" || store.state.characterTab !== "biography"
@@ -596,7 +625,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       const visibleSource = store.state.route === "characters" ? store.state.selectedActorSourceUuid
         : store.state.route === "scene" ? store.state.snapshot?.scene?.quickbarActorSourceUuid || store.state.selectedActorSourceUuid : "";
       if (sourceUuid && sourceUuid !== visibleSource) return Promise.reject(new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.TheSelectedActorSourceChangedBeforeThisActionCould", "The selected Actor source changed before this action could run.")));
-      if ([ACTOR_COMMANDS.ADD_EXPERIENCE, ACTOR_COMMANDS.UPDATE_CURRENCY, ACTOR_COMMANDS.SET_SPELL_SLOT_VALUE, ACTOR_COMMANDS.SET_ITEM_EQUIPPED, ACTOR_COMMANDS.SET_ITEM_ATTUNED, ACTOR_COMMANDS.SET_ITEM_FAVORITE, ACTOR_COMMANDS.SET_SPELL_PREPARED, ACTOR_COMMANDS.OPEN_ITEM_SHEET].includes(name)
+      if ([ACTOR_COMMANDS.ADD_EXPERIENCE, ACTOR_COMMANDS.UPDATE_CURRENCY, ACTOR_COMMANDS.SET_SPELL_SLOT_VALUE, ACTOR_COMMANDS.SET_ITEM_EQUIPPED, ACTOR_COMMANDS.SET_ITEM_ATTUNED, ACTOR_COMMANDS.SET_ITEM_FAVORITE, ACTOR_COMMANDS.SET_SPELL_PREPARED, ACTOR_COMMANDS.EDIT_PF2E_SPELL_PREPARATION, ACTOR_COMMANDS.EDIT_PF2E_PLAY, ACTOR_COMMANDS.EDIT_PF2E_INVENTORY, ACTOR_COMMANDS.EDIT_PF2E_EFFECT, ACTOR_COMMANDS.EDIT_PF2E_PERSISTENT_DAMAGE, ACTOR_COMMANDS.EDIT_PF2E_SPELLS, ACTOR_COMMANDS.OPEN_ITEM_SHEET].includes(name)
         || name === ACTOR_COMMANDS.UPDATE_BIOGRAPHY_SECTION || name === ACTOR_COMMANDS.SET_EXHAUSTION_LEVEL) {
         const sourceUuid = String(payload?.actorSourceUuid ?? "");
         if (store.state.route !== "characters" || store.state.selectedActorSourceUuid !== sourceUuid

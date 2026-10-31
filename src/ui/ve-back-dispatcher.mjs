@@ -9,8 +9,7 @@ export function createVeBackDispatcher({
   getState,
   commands,
   nativeApplications = null,
-  getRoot = () => null,
-  isSplitActive = () => false
+  getRoot = () => null
 }) {
   const next = () => {
     const state = getState?.() ?? {};
@@ -48,8 +47,8 @@ export function createVeBackDispatcher({
     if (state.sceneChooserOpen) return ["scene-chooser", () => commands.closeSceneChooser?.()];
     if (state.route === "journals" && state.journal) return ["journal-detail", () => commands.closeJournal?.()];
     if (state.route === "characters" && state.characterNavigation?.length) return ["actor-origin", () => commands.returnToActorOrigin?.()];
-    if (isSplitActive()) return ["split-pane", () => commands.openFullScene?.()];
     if (state.route !== "characters") return ["character-home", () => commands.returnToCharacter?.()];
+    if (characterHomeBackTarget(state)) return ["character-overview", () => commands.selectCharacterTab?.("overview")];
     return ["root"];
   };
   return Object.freeze({
@@ -107,4 +106,10 @@ export function pushRouteHistory(history = [], route, limit = ROUTE_HISTORY_LIMI
 export function popRouteHistory(history = []) {
   if (!history.length) return Object.freeze({ route: "", history: Object.freeze([]) });
   return Object.freeze({ route: history.at(-1), history: Object.freeze(history.slice(0, -1)) });
+}
+
+/** PF2e names its overview sub-tab Character; return there before leaving the sheet. */
+export function characterHomeBackTarget(state = {}) {
+  return state.route === "characters" && state.snapshot?.world?.systemId === "pf2e"
+    && Boolean(state.characterTab) && state.characterTab !== "overview";
 }

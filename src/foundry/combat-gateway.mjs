@@ -1,5 +1,6 @@
+import { selectSystemIntegration } from "./system-integration.mjs";
 import { localizeFoundry } from "./localization.mjs";
-import { cameraTargetForToken, tokenCenter, toggleTokenTarget } from "./token-movement-gateway.mjs";
+import { cameraTargetForToken, tokenCenter, tokenPortraitRecord, toggleTokenTarget } from "./token-movement-gateway.mjs";
 
 export class CombatError extends Error {
   constructor(code, message, options = {}) {
@@ -18,7 +19,8 @@ export function createFoundryCombatGateway({
   getLifecycleToken = () => null,
   getConnectionGeneration = () => 0,
   cancelCanvasPan = () => globalThis.foundry?.canvas?.animation?.CanvasAnimation?.terminateAnimation?.("canvas.animatePan"),
-  trace = () => {}
+  trace = () => {},
+  systemIntegration = selectSystemIntegration(getGame()?.system?.id ?? "dnd5e")
 } = {}) {
   let progressionActionBusy = false;
   let observedCombat = null;
@@ -66,7 +68,7 @@ export function createFoundryCombatGateway({
       round: Math.max(0, Number(combat.round) || 0),
       turn: Number.isInteger(Number(combat.turn)) ? Number(combat.turn) : null,
       currentCombatantId: currentId,
-      initiativeDecimals: initiativeDecimals(game),
+      initiativeDecimals: systemIntegration.initiativeDecimals(game),
       canEndTurn: canAdvanceCombatTurn(combat, game?.user),
       combatants: Object.freeze(combatants)
     });
@@ -84,6 +86,8 @@ export function createFoundryCombatGateway({
       && combat.turn < turnCount
       && combat.combatant);
     const combatantCount = Number(combat?.combatants?.size ?? combat?.combatants?.length ?? 0);
+    const pending = Array.from(combat?.combatants ?? []).filter(canRollInitiative);
+    const canPrepare = Boolean(combat && !combat.started && canGmMutateCombat(combat, game?.user, "update", { round: 0 }));
     return Object.freeze({
       isGM: Boolean(game?.user?.isGM),
       combatId: combat ? String(combat.id ?? "") : null,
@@ -94,6 +98,8 @@ export function createFoundryCombatGateway({
       turn: combat && Number.isInteger(combat.turn) ? combat.turn : null,
       currentCombatantId: String(combat?.combatant?.id ?? combat?.turns?.[Number(combat?.turn)]?.id ?? ""),
       canStart: Boolean(combat && !combat.started && combatantCount > 0 && canGmMutateCombat(combat, game?.user, "update", { round: 0 }) && typeof combat.startCombat === "function"),
+      canRollAll: Boolean(canPrepare && pending.length && typeof combat.rollAll === "function"),
+      canRollNPCs: Boolean(canPrepare && pending.some(combatant => combatant.isNPC) && typeof combat.rollNPC === "function"),
       canEnd: Boolean(combat?.started && canGmMutateCombat(combat, game?.user, "delete") && typeof combat.endCombat === "function" && typeof getEndCombatDialog()?.confirm === "function"),
       canPrevious: Boolean(hasTurn && canGmMutateCombat(combat, game?.user, "update", { round: 0, turn: 0 }) && typeof combat?.previousTurn === "function"),
       canNext: Boolean(hasTurn && canGmMutateCombat(combat, game?.user, "update", { round: 0, turn: 0 }) && typeof combat?.nextTurn === "function")
@@ -155,6 +161,24 @@ export function createFoundryCombatGateway({
         if (combat.started || !Array.from(combat.combatants ?? []).length || !canGmMutateCombat(combat, getGame()?.user, "update", { round: 0 })) throw staleCombatAction();
         if (typeof combat.startCombat !== "function") throw unavailableCombatAction();
         await combat.startCombat();
+      }, expected);
+    },
+
+    rollAllInitiative(expected = {}) {
+      return runGmAction(async (combat, game) => {
+        if (combat.started || !canGmMutateCombat(combat, game.user, "update", { round: 0 })) throw staleCombatAction();
+        if (rollingInitiative.size) throw new CombatError("COMMAND_BUSY", localizeFoundry("VEMOBILE.Interface.CombatGateway.InitiativeIsAlreadyBeingRolledForThisCombatant", "Initiative is already being rolled for this combatant."));
+        if (typeof combat.rollAll !== "function") throw unavailableCombatAction();
+        if (Array.from(combat.combatants ?? []).some(canRollInitiative)) await combat.rollAll();
+      }, expected);
+    },
+
+    rollNPCInitiative(expected = {}) {
+      return runGmAction(async (combat, game) => {
+        if (combat.started || !canGmMutateCombat(combat, game.user, "update", { round: 0 })) throw staleCombatAction();
+        if (rollingInitiative.size) throw new CombatError("COMMAND_BUSY", localizeFoundry("VEMOBILE.Interface.CombatGateway.InitiativeIsAlreadyBeingRolledForThisCombatant", "Initiative is already being rolled for this combatant."));
+        if (typeof combat.rollNPC !== "function") throw unavailableCombatAction();
+        if (Array.from(combat.combatants ?? []).some(combatant => canRollInitiative(combatant) && combatant.isNPC)) await combat.rollNPC();
       }, expected);
     },
 
@@ -225,7 +249,7 @@ export function createFoundryCombatGateway({
       if (typeof combat.rollInitiative !== "function") {
         throw new CombatError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.CombatGateway.FoundryCannotRollInitiativeForThisCombatant", "Foundry cannot roll initiative for this combatant."));
       }
-      if (rollingInitiative.has(combatantId)) {
+      if (progressionActionBusy || rollingInitiative.has(combatantId)) {
         throw new CombatError("COMMAND_BUSY", localizeFoundry("VEMOBILE.Interface.CombatGateway.InitiativeIsAlreadyBeingRolledForThisCombatant", "Initiative is already being rolled for this combatant."));
       }
       rollingInitiative.add(combatantId);
@@ -346,7 +370,11 @@ function combatantRecord(combatant, currentId, game, currentSceneId, linkedScene
     actorId: String(combatant.actorId ?? combatant.actor?.id ?? ""),
     tokenId: String(combatant.tokenId ?? token?.id ?? ""),
     name: String(combatant.name ?? token?.name ?? combatant.actor?.name ?? "Combatant"),
-    img: String(combatant.img ?? token?.texture?.src ?? combatant.actor?.img ?? ""),
+    img: String(combatant.img ?? token?._source?.texture?.src ?? token?.texture?.src ?? combatant.actor?.img ?? ""),
+    ...(token ? { portrait: tokenPortraitRecord(token) } : {}),
+    ...(token?._source?.texture?.src ?? token?.texture?.src ? {
+      tokenImg: String(token._source?.texture?.src ?? token.texture.src)
+    } : {}),
     initiative: combatant.initiative !== null && combatant.initiative !== undefined && Number.isFinite(Number(combatant.initiative))
       ? Number(combatant.initiative)
       : null,
@@ -456,14 +484,6 @@ export function canAdvanceCombatTurn(combat, user) {
     return combat.canUserModify?.(user, "update", field) ?? false;
   } catch {
     return false;
-  }
-}
-
-function initiativeDecimals(game) {
-  try {
-    return game?.settings?.get?.("dnd5e", "initiativeDexTiebreaker") === true ? 2 : 0;
-  } catch {
-    return 0;
   }
 }
 

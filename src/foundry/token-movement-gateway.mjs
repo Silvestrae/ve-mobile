@@ -1069,11 +1069,32 @@ function tokenRecord(token, game, config, controlled = []) {
     // frame after updateToken. Read committed source so this serializable HUD
     // record cannot retain old art until another document/control hook occurs.
     img: String(token._source?.texture?.src ?? token.texture?.src ?? token.actor?.img ?? ""),
+    portrait: tokenPortraitRecord(token),
     movementAction: action,
     movementLabel: String(localized || action || "Movement"),
     // TokenDocument.object lazily constructs a Token. Reading a plain record
     // must never construct placeables before Canvas dimensions are available.
     controlled: controlled.some((object) => object.document === token)
+  });
+}
+
+/** Plain texture geometry used to reproduce the native TokenMesh footprint in DOM portraits. */
+export function tokenPortraitRecord(token) {
+  const source = token?._source ?? token ?? {};
+  const texture = source.texture ?? token?.texture ?? {};
+  const number = (value, fallback) => value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const width = number(source.width ?? (source !== token ? token?.width : undefined), 1);
+  const height = number(source.height ?? (source !== token ? token?.height : undefined), 1);
+  return Object.freeze({
+    width: width > 0 ? width : 1,
+    height: height > 0 ? height : 1,
+    fit: ["fill", "cover", "contain", "width", "height"].includes(texture.fit) ? texture.fit : "fill",
+    scaleX: number(texture.scaleX, 1),
+    scaleY: number(texture.scaleY, 1),
+    offsetX: number(texture.offsetX, 0),
+    offsetY: number(texture.offsetY, 0),
+    anchorX: number(texture.anchorX, 0.5),
+    anchorY: number(texture.anchorY, 0.5)
   });
 }
 

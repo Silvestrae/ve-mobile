@@ -57,6 +57,10 @@ export function createScreenWakeLockController({
       })
       .finally(() => {
         pending = null;
+        // A preference or owner can be disabled and re-enabled while the
+        // browser request is still pending. The old request is correctly
+        // discarded above, but its completion must not strand the new owner.
+        if (expectedVersion !== version && shouldHold()) void reconcile();
       });
     return pending;
   };

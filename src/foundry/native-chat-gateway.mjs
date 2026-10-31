@@ -7,14 +7,18 @@ import { localizeFoundry } from "./localization.mjs";
  */
 import { mountChatComposerDock } from "./chat-composer-dock.mjs";
 import { bindChatDiceInteraction } from "./chat-dice-interaction.mjs";
+import { createChatReadTracker } from "./chat-read-tracker.mjs";
 
 export function createFoundryNativeChatGateway({
   readUi = () => globalThis.ui,
   readDocument = () => globalThis.document,
   readGame = () => globalThis.game,
-  chatDomGateway = null
+  chatDomGateway = null,
+  getStorage = () => globalThis.localStorage
 } = {}) {
+  const readTracker = createChatReadTracker({ readGame, readDocument, getStorage });
   return Object.freeze({
+    watchUnread: (scope, listener) => readTracker.watch(scope, listener),
     mount(host, scope) {
       const foundryUi = readUi();
       const documentRef = readDocument();
@@ -86,6 +90,7 @@ export function createFoundryNativeChatGateway({
         host.classList?.add(theme);
         element.classList.add("active", "ve-native-chat");
         host.append(element);
+        readTracker.attach(host, scope);
         chatDomGateway?.activate?.(chat);
         scope.own(() => chatDomGateway?.deactivate?.(chat));
         embedNativeControls();
@@ -99,7 +104,9 @@ export function createFoundryNativeChatGateway({
         bindChatDiceInteraction({ host, input, scope });
         queueMicrotask(() => {
           if (scope.disposed || restored) return;
-          Promise.resolve(chat.scrollBottom?.({ waitImages: true })).catch((error) => {
+          Promise.resolve(chat.scrollBottom?.({ waitImages: true })).then(() => {
+            if (!scope.disposed && !restored) readTracker.checkRead();
+          }).catch((error) => {
             console.warn("VE Mobile | Native chat could not scroll to the newest message", error);
           });
         });

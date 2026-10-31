@@ -1,6 +1,60 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — 2026-10-31
+
+### Pathfinder Second Edition compatibility
+
+Version 1.1.0 introduces PF2e character support on **Foundry v14+**, targeting
+**PF2e 8.6.1**. This first PF2e release is a **community test build**. Constructive
+reports should explain the steps taken, expected outcome, and actual result;
+see the [PF2e community notice](README.md#pathfinder-second-edition).
+
+**What you can do**
+
+- Play existing characters using a dedicated mobile sheet, with class-themed
+  artwork and colours, statistics, saves, skills, feats, and character details.
+- Roll native attacks, checks, saves, initiative, and damage; use available
+  equipment actions, ammunition, Elemental Blasts, and item rule options.
+- Manage HP, XP, Hero/Focus Points, supported class resources, conditions,
+  persistent damage, recovery, and overnight rests.
+- Manage inventory, currency, Bulk, containers, carry state, investment, and
+  supported item quantities, uses, and charges.
+- Prepare and cast spells through supported native entries, including exact
+  prepared slots, spontaneous/flexible/innate casting, Focus, rituals, and
+  scroll/wand activations, with spell artwork in preparation and management.
+- Read and edit biography sections, use character shortcuts, and retain list
+  expansion and scroll state while navigating the sheet.
+
+**Current limits**
+
+- Foundry v13 and non-character actor types are unsupported for PF2e; NPCs,
+  familiars, companions, and other specialist sheets are outside this release.
+- Character creation/advancement, crafting/formula management, Pathfinder Society
+  administration, and staff preparation/charges do not have complete mobile workflows.
+- Specialist class, Mythic, and third-party mechanics need further gameplay
+  testing. Native ritual casting does not automate the entire ritual procedure,
+  and posting an item to chat does not automatically spend actions.
+
+### Dungeons & Dragons Fifth Edition fixes
+
+- Correct saving throw badges to display the full saving throw bonus, including
+  applicable proficiency and other system modifiers.
+- Show full ability-check and skill bonuses, including proficiency and other
+  applicable modifiers, while retaining the base ability modifier separately.
+
+### Shared improvements
+
+- Reduce unnecessary snapshot processing and build PF2e spell views as needed to
+  improve mobile responsiveness.
+- Add custom colour themes with matching light/dark surfaces and readable controls.
+- Improve journal wrapping and add remembered pinch-to-resize text; tap character
+  artwork to open a full-screen image viewer.
+- Improve token artwork sizing in movement and combat controls, mobile navigation,
+  and theme consistency across sheets, chat, and dialogs.
+- Add unread chat badges, permission-aware double-tap Scene pause controls, and
+  encounter indicators that respect reduced motion.
+- Give GM combat controls a solid panel, with native Roll All and Roll NPCs
+  initiative buttons before an encounter starts.
 
 ## 1.0.7 — 2026-10-25
 
@@ -24,7 +78,6 @@
   and give the hotbar/quickbar backing the same translucency without fading icons.
 - Restore older Desktop theme snapshots when newer Foundry versions add UI
   defaults, while preserving all captured preference values.
-- Add a short AI-assistance disclosure under README Disclaimer and Independence.
 
 ## 1.0.5 — 2026-10-19
 

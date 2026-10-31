@@ -1,3 +1,4 @@
+import { selectSystemIntegration } from "./foundry/system-integration.mjs";
 import { localizeFoundry } from "./foundry/localization.mjs";
 import { createControlsGuideGateway } from "./foundry/controls-guide-gateway.mjs";
 import { createControlsGuide } from "./ui/controls-guide.mjs";
@@ -26,17 +27,13 @@ import { createGraphicsSafetyJournal, resolveMobileGraphicsPolicy } from "./foun
 import { createTaskScope } from "./kernel/task-scope.mjs";
 import { createFoundryTokenMovementGateway } from "./foundry/token-movement-gateway.mjs";
 import { createFoundryNativeChatGateway } from "./foundry/native-chat-gateway.mjs";
-import { createFoundryActionSessionGateway } from "./foundry/action-session-gateway.mjs";
 import { createBootstrapWakePreference, createScreenWakeLockController } from "./foundry/screen-wake-lock.mjs";
 import { enableMobileConnectionGrace } from "./foundry/connection-grace.mjs";
 import { createMobileBootstrap, navigationStartAt, suppressBootstrapSoftwareKeyboard } from "./ui/bootstrap-loader.mjs";
 import { createBootstrapWatchdog } from "./kernel/bootstrap-watchdog.mjs";
 import { createMobileDiagnostics } from "./foundry/mobile-diagnostics.mjs";
 import { createDiagnosticsJournalGateway } from "./foundry/diagnostics-journal-gateway.mjs";
-import { createArmorClassGateway } from "./foundry/armor-class-gateway.mjs";
-import { createFoundryHotbarGateway } from "./foundry/hotbar-gateway.mjs";
 import { createActionBarPreferences } from "./foundry/action-bar-preferences.mjs";
-import { createFoundryQuickbarGateway } from "./foundry/quickbar-gateway.mjs";
 import { createMobileMetrics } from "./foundry/mobile-metrics.mjs";
 import { createFoundryCombatGateway } from "./foundry/combat-gateway.mjs";
 import { createFoundryAuthoritativeSessionGateway } from "./foundry/authoritative-session-gateway.mjs";
@@ -47,12 +44,9 @@ import { createConnectionGeneration } from "./kernel/connection-generation.mjs";
 import { createFoundryThemeGateway } from "./foundry/theme-gateway.mjs";
 import { createFoundrySettingsCompatibilityGateway } from "./foundry/settings-compatibility-gateway.mjs";
 import { createFoundryDesktopSettingsVisibilityGateway } from "./foundry/desktop-settings-visibility-gateway.mjs";
-import { createFoundryTemplatePlacementGateway } from "./foundry/template-placement-gateway.mjs";
-import { createNativeTokenPlacementGateway } from "./foundry/native-token-placement-gateway.mjs";
 import { createActorTokenPlacementGateway } from "./foundry/actor-token-placement-gateway.mjs";
 import { createModuleOverlayGateway } from "./foundry/module-overlay-gateway.mjs";
 import { createFoundrySessionStatusGateway } from "./foundry/session-status-gateway.mjs";
-import { createFoundryActiveEffectContextGateway } from "./foundry/active-effect-context-gateway.mjs";
 import { createDeviceIdentityGateway } from "./foundry/device-identity.mjs";
 import { createSceneCameraIntentCoordinator } from "./kernel/scene-interaction-readiness.mjs";
 import { createPerformanceObserver } from "./kernel/performance-observer.mjs";
@@ -60,7 +54,6 @@ import { createMobilePerformanceAuthority, isMobilePerformanceAuthorityActive } 
 import { createMobileStartupGateway } from "./foundry/mobile-startup-gateway.mjs";
 import { showDesktopRestorationRecovery } from "./ui/desktop-restoration-recovery.mjs";
 import { createMobilePerformanceLifecycle } from "./kernel/mobile-performance-lifecycle.mjs";
-import { createFoundryBiographyGateway } from "./foundry/biography-gateway.mjs";
 import { createFoundryMobileAssetGateway } from "./foundry/mobile-asset-gateway.mjs";
 import { createLowMemoryCanvasGateway, memoryProfilePolicy } from "./foundry/low-memory-canvas-gateway.mjs";
 import { createGraphicsRecoveryGateway } from "./foundry/graphics-recovery-gateway.mjs";
@@ -71,7 +64,6 @@ import { createMobileAssetOptimizer } from "./features/settings/presenter.mjs";
 import { createMobileClientCapabilityGateway } from "./foundry/mobile-client-capability-gateway.mjs";
 import { createFoundryMobileBackGateway } from "./foundry/mobile-back-gateway.mjs";
 import { createNativeLightingPrecisionCompatibility } from "./foundry/native-lighting-precision.mjs";
-import { createActorEditorGateway } from "./foundry/actor-editor-gateway.mjs";
 
 const isGamePage = /\/game\/?$/.test(window.location.pathname);
 
@@ -144,7 +136,7 @@ if (isGamePage) {
     readLevel: readLoggingLevel,
     getGraphicsPolicy: () => resolvedGraphicsPolicy(),
     getModuleOverlays: () => moduleOverlayGateway.diagnosticSnapshot(),
-    getMobileMemory: () => mobileMemoryDiagnostics(),
+    getMobileMemory: () => readMobileMemory(),
     getChatDom: () => chatDomGateway?.snapshot?.() ?? null,
     getMobileBack: () => mobileBackGateway?.snapshot?.() ?? null,
     getLightingPrecision: () => lightingPrecision.snapshot(),
@@ -368,15 +360,24 @@ if (isGamePage) {
 
   reconcileBootstrap();
 
+  // The module script runs before Foundry creates game. Keep the loading
+  // surface early, but compose system-dependent services only at native init.
+  let kernel;
+  let readMobileMemory = () => null;
+  Hooks.once("init", function initializeMobileRuntime() {
+  const systemIntegration = selectSystemIntegration(game.system.id);
+  systemIntegration.assertCompatible?.(game);
+  readMobileMemory = mobileMemoryDiagnostics;
   const store = createSignalStore(initialAppState, reduceAppState);
   const connectionGeneration = createConnectionGeneration();
   const cameraIntents = createSceneCameraIntentCoordinator({
     trace: (entry) => diagnostics.record("debug", `Scene camera intent ${JSON.stringify(entry)}`)
   });
-  const commandGateway = createFoundryCommandGateway({ getConnectionGeneration: () => connectionGeneration.current });
-  const actorEditorGateway = createActorEditorGateway({ isActive: () => readPolicy().active && mobileMutationReady,
+  const commandGateway = createFoundryCommandGateway({ systemIntegration, getConnectionGeneration: () => connectionGeneration.current });
+  const actorEditorGateway = systemIntegration.services.actorEditor({ isActive: () => readPolicy().active && mobileMutationReady,
     getConnectionGeneration: () => connectionGeneration.current });
-  const biographyGateway = createFoundryBiographyGateway({ getConnectionGeneration: () => connectionGeneration.current });
+  const biographyGateway = systemIntegration.services.biography({ getConnectionGeneration: () => connectionGeneration.current });
+  const itemDetailsGateway = systemIntegration.services.itemDetails?.({ getConnectionGeneration: () => connectionGeneration.current }) ?? null;
   lowMemoryGateway = createLowMemoryCanvasGateway({ getGraphicsPolicy: baseGraphicsPolicy, mobileAuthority: mobilePerformanceAuthority, diagnostics });
   durableProfileHandoff = createDurableProfileHandoff({ gateway: lowMemoryGateway, mobileAuthority: mobilePerformanceAuthority, diagnostics });
   mobileAssetGateway = createFoundryMobileAssetGateway({
@@ -479,8 +480,8 @@ if (isGamePage) {
     preflightScene: (scene, options) => scenePreflightGateway.preflight(scene, options),
     onOpenMemorySettings: () => kernel?.open?.("settings")
   });
-  const templatePlacementGateway = createFoundryTemplatePlacementGateway();
-  const nativeTokenPlacementGateway = createNativeTokenPlacementGateway();
+  const templatePlacementGateway = systemIntegration.services.templates();
+  const nativeTokenPlacementGateway = systemIntegration.services.tokenPlacement();
   const actorTokenPlacementGateway = createActorTokenPlacementGateway({ getConnectionGeneration: () => connectionGeneration.current });
   const movementGateway = createFoundryTokenMovementGateway({
     getConnectionGeneration: () => connectionGeneration.current,
@@ -489,19 +490,20 @@ if (isGamePage) {
     trace: (entry) => diagnostics.record("debug", `Token touch ${JSON.stringify(entry)}`)
   });
   const nativeChatGateway = createFoundryNativeChatGateway({ chatDomGateway });
-  const armorClassGateway = createArmorClassGateway({
+  const armorClassGateway = systemIntegration.services.armorClass({
     getConnectionGeneration: () => connectionGeneration.current,
     getMode: () => readPolicy().runtimeMode
   });
-  const activeEffectContextGateway = createFoundryActiveEffectContextGateway({ diagnostics });
-  const actionSessionGateway = createFoundryActionSessionGateway();
-  const quickbarGateway = createFoundryQuickbarGateway({ isActive: () => kernel?.active === true && readPolicy().active });
-  const hotbarGateway = createFoundryHotbarGateway({ isActive: () => kernel?.active === true && readPolicy().active });
+  const activeEffectContextGateway = systemIntegration.services.activeEffects({ diagnostics });
+  const actionSessionGateway = systemIntegration.services.actionSession();
+  const quickbarGateway = systemIntegration.services.quickbar({ isActive: () => kernel?.active === true && readPolicy().active });
+  const hotbarGateway = systemIntegration.services.hotbar({ isActive: () => kernel?.active === true && readPolicy().active });
   const actionBarPreferences = createActionBarPreferences();
   const metrics = createMobileMetrics();
   const sessionStatusGateway = createFoundrySessionStatusGateway({ metrics });
   const themeGateway = createFoundryThemeGateway();
   const combatGateway = createFoundryCombatGateway({
+    systemIntegration,
     isMobileActive: () => Boolean(kernel?.active && readPolicy().active && store.state.route === "combat"),
     getLifecycleToken: () => kernel?.combatControlLifecycleToken?.() ?? null,
     getConnectionGeneration: () => connectionGeneration.current,
@@ -510,6 +512,7 @@ if (isGamePage) {
   const authoritativeGateway = createFoundryAuthoritativeSessionGateway({ diagnostics, performanceObserver });
   const canvasRecoveryGateway = createFoundryCanvasRecoveryGateway();
   const session = createFoundrySessionGateway({
+    systemIntegration,
     capabilitiesForActor: commandGateway.capabilitiesForActor,
     quickbarForActor: quickbarGateway.snapshotForActor,
     hotbarForSnapshot: hotbarGateway.snapshot,
@@ -571,13 +574,13 @@ if (isGamePage) {
     mediaPolicyKey = policyKey;
     diagnostics.record("info", `Graphics policy active: effects=${policy.effects}, dice=${policy.dice}, reason=${policy.diceReason}, device=${policy.device.family}/${policy.device.tier}`);
   };
-  let kernel;
   kernel = createAppKernel({
     store,
     session,
     commandGateway,
     actorEditorGateway,
     biographyGateway,
+    itemDetailsGateway,
     combatGateway,
     cameraIntents,
     authoritativeGateway,
@@ -719,7 +722,7 @@ if (isGamePage) {
   };
   let modeTransitionQueue = Promise.resolve();
 
-  Hooks.once("init", () => {
+  (() => {
     const lightingScope = createTaskScope("native-lighting-precision", performanceObserver);
     lightingScope.listen(window, "pagehide", () => lightingScope.dispose(), { once: true, passive: true });
     lightingPrecision.install(lightingScope);
@@ -814,7 +817,7 @@ if (isGamePage) {
     resolveSettingsReady();
     reconcileBootstrap();
     reconcileMediaGuard();
-  });
+  })();
   Hooks.once("setup", () => {
     authoritativeGateway.bindInitialDocuments();
     advanceBootstrap("world");
@@ -953,6 +956,7 @@ if (isGamePage) {
       })
     });
   }
+  });
 }
 
 function readNoCanvas() {

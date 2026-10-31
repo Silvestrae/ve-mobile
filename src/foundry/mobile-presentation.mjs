@@ -157,8 +157,12 @@ export function enableMobileApplications(scope, {
   scope.listen(document, "click", beginLineage, { capture: true, passive: true });
   scope.listen(document, "keydown", beginLineage, { capture: true });
   scope.hook?.("renderApplication", admit);
+  scope.hook?.("renderActorSheet", admit);
+  scope.hook?.("renderItemSheet", admit);
   scope.hook?.("renderApplicationV2", admit);
   scope.hook?.("closeApplication", release);
+  scope.hook?.("closeActorSheet", release);
+  scope.hook?.("closeItemSheet", release);
   scope.hook?.("closeApplicationV2", release);
   for (const application of existingApplications) admit(application, null, { preExisting: true });
   for (const element of mobileDialogElements(document.body)) {
@@ -590,8 +594,21 @@ function interactionControlName(control) {
 
 function applicationElement(application, rendered) {
   const candidates = [rendered, rendered?.[0], application?.element, application?.element?.[0]];
-  return candidates.find(candidate => candidate?.nodeType === 1 && candidate.isConnected !== false)
+  const candidate = candidates.find(candidate => candidate?.nodeType === 1 && candidate.isConnected !== false)
     ?? candidates.find(candidate => candidate?.nodeType === 1) ?? null;
+  return nativeApplicationRoot(candidate);
+}
+
+/** Foundry sheets may expose their inner form as Application.element while the
+ * actual window shell owns sizing, stacking, and the window lifecycle classes. */
+function nativeApplicationRoot(element) {
+  if (!element) return null;
+  let applicationRoot = null;
+  for (let current = element; current; current = current.parentElement) {
+    if (current.matches?.(".app.window-app")) return current;
+    if (!applicationRoot && current.matches?.(".application")) applicationRoot = current;
+  }
+  return applicationRoot ?? element;
 }
 
 function registryValues(registry) {

@@ -1,5 +1,9 @@
 {
   "VEMOBILE": {
+    "System": {
+      "Unsupported": "VE Mobile ne prend pas en charge le système de jeu de ce monde.",
+      "Changed": "Le système de jeu du monde a changé. Rechargez VE Mobile avant de continuer."
+    },
     "Navigation": {
       "Character": "Personnage",
       "Chat": "Discussion",
@@ -7,7 +11,12 @@
       "Scene": "Scène",
       "Combat": "Combat",
       "Settings": "Paramètres",
-      "MoveRight": "Placer la navigation à droite"
+      "MoveRight": "Placer la navigation à droite",
+      "PausedHint": "Partie en pause · Touchez Scène deux fois pour reprendre",
+      "Paused": "Partie en pause",
+      "PauseDenied": "Vous ne pouvez pas mettre la partie en pause.",
+      "ChatUnreadOne": "Discussion · 1 message non lu",
+      "ChatUnreadMany": "Discussion · {count} messages non lus"
     },
     "Scene": {
       "ReleaseToken": "Libérer le jeton",
@@ -35,14 +44,6 @@
         "SourceChanged": "La source de glisser-déposer du personnage a changé.",
         "PrototypeChanged": "Le jeton prototype du personnage a changé pendant le placement.",
         "PlaceFailed": "Impossible de placer le jeton."
-      },
-      "ClearTargets": {
-        "One": "Effacer {count} cible",
-        "Other": "Effacer {count} cibles"
-      },
-      "TargetCount": {
-        "One": "{count} cible",
-        "Other": "{count} cibles"
       },
       "CurrentlyViewed": "Actuellement affichée",
       "WorldActive": "Scène active du monde",
@@ -83,6 +84,14 @@
         "CanvasUnavailable": "Ouvrez la carte et attendez son chargement avant de choisir un niveau.",
         "Unavailable": "Ce niveau de scène n’est plus disponible.",
         "NotViewed": "Foundry n’a pas pu ouvrir le niveau de scène sélectionné."
+      },
+      "ClearTargets": {
+        "One": "Effacer {count} cible",
+        "Other": "Effacer {count} cibles"
+      },
+      "TargetCount": {
+        "One": "{count} cible",
+        "Other": "{count} cibles"
       }
     },
     "Settings": {
@@ -108,7 +117,8 @@
         "Class": "Selon la classe",
         "Red": "Rouge VE",
         "Neutral": "Neutre",
-        "Bestiary": "Bestiaire"
+        "Bestiary": "Bestiaire",
+        "Custom": "Personnalisé"
       },
       "ProtectVeStyling": {
         "Name": "Protéger le style VE",
@@ -219,6 +229,7 @@
         "Name": "Garder l’écran allumé",
         "Hint": "Demander à ce navigateur de garder l’écran allumé pendant l’utilisation de VE Mobile. Le navigateur doit prendre cette fonctionnalité en charge.",
         "Unsupported": "Le verrouillage de veille de l’écran n’est pas disponible dans ce navigateur.",
+        "SecureContextRequired": "Nécessite HTTPS.",
         "Failure": "Le navigateur a refusé le verrouillage de veille de l’écran. Vérifiez le mode économie d’énergie et les autorisations du navigateur, puis réessayez."
       },
       "CharacterFavouritesSource": {
@@ -608,7 +619,8 @@
         "NumberExpected": "Ce paramètre nécessite un nombre.",
         "RangeExceeded": "Cette valeur dépasse la plage autorisée pour ce paramètre.",
         "MobileTypeUnsupported": "Ce type de paramètre n’est pas pris en charge sur mobile.",
-        "VeSettingMissing": "Ce paramètre VE Mobile n’existe pas."
+        "VeSettingMissing": "Ce paramètre VE Mobile n’existe pas.",
+        "ColorExpected": "Choisissez une couleur au format #RRGGBB."
       },
       "LowMemoryCanvas": {
         "Name": "Profil de canevas à faible mémoire actif",
@@ -630,6 +642,22 @@
         "Always": "Toujours",
         "Combat": "Pendant le combat uniquement",
         "Off": "Désactivé"
+      },
+      "CustomThemePrimary": {
+        "Name": "Couleur principale",
+        "Hint": "Utilisée pour les boutons et les commandes sélectionnées."
+      },
+      "CustomThemeSecondary": {
+        "Name": "Couleur secondaire",
+        "Hint": "Utilisée pour teinter les arrière-plans et les panneaux."
+      },
+      "CustomThemeThirdEnabled": {
+        "Name": "Utiliser une troisième couleur",
+        "Hint": "Choisissez une couleur de mise en évidence distincte ; sinon, VE Mobile la déduit de vos deux couleurs."
+      },
+      "CustomThemeThird": {
+        "Name": "Couleur de mise en évidence",
+        "Hint": "Utilisée pour les mises en évidence, les bordures et les détails décoratifs."
       }
     },
     "Character": {
@@ -756,6 +784,10 @@
         "Edit": "Modifier {label}",
         "CloseEditor": "Fermer l’éditeur {label}",
         "TextAndFoundryRichHTML": "Texte et HTML enrichi Foundry",
+        "RichTextToolbar": "Mise en forme du texte",
+        "RichTextBold": "Gras",
+        "RichTextItalic": "Italique",
+        "RichTextBulletedList": "Liste à puces",
         "No": "Aucun(e) {label}.",
         "Conditions": "États",
         "Active": "Actifs : {activeCount}",
@@ -863,7 +895,8 @@
         "SpellAttackBonus": "Attaque de sort {modifier}",
         "SpellSaveDC": "DD de sauvegarde {dc}",
         "SpellcastingClass": "Classe de lanceur de sorts",
-        "DefaultSpellcasting": "Par défaut"
+        "DefaultSpellcasting": "Par défaut",
+        "AddToHotbar": "Ajouter à la barre Foundry"
       },
       "ActorView": {
         "Senses": "Sens",
@@ -1124,14 +1157,14 @@
         "Effectscount": "Effets ({count})",
         "valueofmaximumweight": "{value} sur {maximum} poids",
         "Emptycontainer": "Contenant vide",
-        "ItemCount": {
-          "One": "{count} objet",
-          "Other": "{count} objets"
-        },
         "Effects": "Effets",
         "BonusActionAbbreviation": "AA",
         "ReactionAbbreviation": "R",
-        "ActionAbbreviation": "A"
+        "ActionAbbreviation": "A",
+        "ItemCount": {
+          "One": "{count} article",
+          "Other": "{count} articles"
+        }
       },
       "EffectsEmpty": {
         "temporary": "Aucun effet temporaire.",
@@ -1166,16 +1199,16 @@
       "Next": "Page suivante",
       "Empty": "Ce journal ne contient aucune page visible.",
       "Enlarge": "Agrandir {name}",
-      "PageCount": {
-        "One": "{count} page",
-        "Other": "{count} pages"
-      },
       "PagesAndHeadings": "Pages et titres du journal",
       "ChoosePageOrHeading": "Choisir une page ou un titre du journal",
       "ChoosePage": "Choisir une page",
       "OpenAttachment": "Ouvrir la pièce jointe",
       "UntitledPage": "Page sans titre",
-      "Edit": "Modifier"
+      "Edit": "Modifier",
+      "PageCount": {
+        "One": "{count} page",
+        "Other": "{count} pages"
+      }
     },
     "RestorationRecovery": {
       "title": "Restauration des paramètres du bureau requise",
@@ -1295,7 +1328,8 @@
         "DesktopReview": "Vous consultez les commandes mobiles depuis le bureau. Le mode mobile dans les paramètres Foundry active ou sélectionne l’affichage Téléphone ou Tablette pour ce navigateur et recharge Foundry.",
         "Phone": "Le téléphone affiche un écran à la fois. Le placement d’un personnage utilise un aperçu préparatoire avec les boutons Placer et Annuler.",
         "TabletSplit": "En paysage, l’écran partagé de la tablette affiche le contenu à côté de la scène. Utilisez la commande latérale pour déplacer le panneau. Les dépôts en portrait partagé créent directement les jetons ; les aperçus d’actions natives utilisent Placer et Annuler.",
-        "TabletFull": "Le mode Tablette plein écran affiche l’écran sélectionné sur tout l’espace disponible. Utilisez Écran partagé pour revenir au contenu côte à côte lorsque l’appareil est en paysage et que la carte interactive est disponible."
+        "TabletFull": "Le mode Tablette plein écran affiche l’écran sélectionné sur tout l’espace disponible. Utilisez Écran partagé pour revenir au contenu côte à côte lorsque l’appareil est en paysage et que la carte interactive est disponible.",
+        "ScenePause": "Touchez deux fois l’onglet Scène pour mettre la partie en pause ou la reprendre. Cette action nécessite les droits de MJ. L’avis de pause et l’icône alternant Scène et pause sont visibles par tous."
       },
       "Settings": {
         "preferences": "Préférences Téléphone et tablette",
@@ -1569,7 +1603,8 @@
         "AMacroIDOrNullIsRequired": "Un identifiant de macro ou null est requis.",
         "ChooseADifferentDestinationSlot": "Choisissez un autre emplacement de destination.",
         "YouCanNoLongerEditThatMacro": "Vous ne pouvez plus modifier cette macro.",
-        "ThatMacroHasNoEditableSheet": "Cette macro ne possède aucune fiche modifiable."
+        "ThatMacroHasNoEditableSheet": "Cette macro ne possède aucune fiche modifiable.",
+        "ItemHotbarMacrosUnavailable": "Les macros d’objet de la barre rapide sont indisponibles."
       },
       "LowMemoryCanvasGateway": {
         "GraphicsRestorationLedgerCouldNotBeVerified": "Impossible de vérifier le registre de restauration graphique.",
@@ -1656,7 +1691,9 @@
         "ThisQuickbarChangedWhileYouWereEditingReopenIt": "Cette barre rapide a changé pendant sa modification. Rouvrez-la et réessayez.",
         "ThatActionTypeCannotBePlacedOnTheQuickbar": "Ce type d’action ne peut pas être placé dans la barre rapide.",
         "ThatItemOrActivityIsNoLongerAvailable": "Cet objet ou cette activité n’est plus disponible.",
-        "ThatSkillIsNoLongerAvailable": "Cette compétence n’est plus disponible."
+        "ThatSkillIsNoLongerAvailable": "Cette compétence n’est plus disponible.",
+        "ThatActionTypeIsUnavailable": "Ce type d’action est indisponible.",
+        "ThatItemIsNoLongerAvailable": "Cet objet n’est plus disponible."
       },
       "SceneGateway": {
         "ChooseAValidScene": "Choisissez une scène valide.",
@@ -1830,11 +1867,14 @@
       "CurrentDefeated": "{name}, tour actuel, vaincu",
       "Current": "{name}, tour actuel",
       "DefeatedName": "{name}, vaincu",
+      "TokenUnavailable": "Le jeton de ce combattant n’est plus disponible.",
       "Count": {
         "One": "{count} combattant",
         "Other": "{count} combattants"
       },
-      "TokenUnavailable": "Le jeton de ce combattant n’est plus disponible."
+      "RollAll": "Tout lancer",
+      "RollNPCs": "Lancer PNJ",
+      "NoInitiativeAvailable": "Aucun jet d’initiative disponible"
     },
     "Action": {
       "Close": "Fermer l’action"
@@ -2257,6 +2297,341 @@
       "Mode": {
         "phone": "Téléphone",
         "tablet": "Tablette"
+      }
+    },
+    "PF2E": {
+      "Character": {
+        "Recovery": "Récupération",
+        "Sections": "Sections du personnage",
+        "SelectCharacter": "Choisir un personnage",
+        "Character": "Personnage",
+        "EditorFailed": "Impossible d’ouvrir l’éditeur de l’acteur.",
+        "Edit": "Modifier",
+        "ArmorClass": "Classe d’armure",
+        "Speed": "Vitesse",
+        "Perception": "Perception",
+        "Initiative": "Initiative",
+        "HitPointAmount": "Quantité de points de vie",
+        "Attack": "Attaque",
+        "Unidentified": "Non identifié",
+        "CarryState": "État de transport",
+        "Spells": "Sorts",
+        "LoadingBiography": "Chargement de la biographie…",
+        "InlineRollUnavailable": "Jet intégré indisponible sans autorisation OWNER",
+        "EmptyBiography": "Aucune biographie n’a été enregistrée.",
+        "BiographyUnavailable": "La biographie est indisponible.",
+        "AddCondition": "Ajouter un état",
+        "Working": "En cours…",
+        "ActionFailed": "Cette action n’a pas pu être effectuée.",
+        "Empty": "Rien à afficher ici.",
+        "Tab": {
+          "Overview": "Vue d’ensemble",
+          "Statistics": "Statistiques",
+          "Inventory": "Inventaire",
+          "Spells": "Sorts",
+          "Features": "Capacités",
+          "Biography": "Biographie",
+          "Actions": "Actions",
+          "Gear": "Équipement",
+          "More": "Plus"
+        },
+        "Carry": {
+          "Held1": "Tenu (1 main)",
+          "Held2": "Tenu (2 mains)",
+          "WornSlot": "Porté dans un emplacement d’équipement",
+          "WornNoSlot": "Porté hors d’un emplacement d’équipement",
+          "Stowed": "Rangé",
+          "Dropped": "Lâché",
+          "Held": "Tenu",
+          "Worn": "Porté"
+        },
+        "Type": {
+          "Character": "Personnage",
+          "NPC": "PNJ",
+          "Familiar": "Familier",
+          "Hazard": "Danger",
+          "Loot": "Butin",
+          "Party": "Groupe",
+          "Army": "Armée",
+          "Vehicle": "Véhicule"
+        },
+        "Biography": {
+          "Age": "Âge",
+          "Gender": "Genre",
+          "Height": "Taille",
+          "Weight": "Poids",
+          "BirthPlace": "Lieu de naissance",
+          "Attitude": "Attitude",
+          "Beliefs": "Croyances",
+          "Edicts": "Édits",
+          "Anathema": "Anathème"
+        },
+        "Section": {
+          "VitalStatistics": "Statistiques vitales",
+          "HitPoints": "Points de vie",
+          "Resources": "Ressources",
+          "Strikes": "Attaques",
+          "Conditions": "États",
+          "SavingThrows": "Jets de sauvegarde",
+          "Skills": "Compétences",
+          "Perception": "Perception",
+          "CurrencyAndWealth": "Monnaie et richesse",
+          "Inventory": "Inventaire",
+          "Biography": "Biographie",
+          "Spells": "Sorts",
+          "Attributes": "Attributs",
+          "Actions": "Actions",
+          "PassiveFeatures": "Capacités passives",
+          "PinnedActions": "Actions épinglées"
+        },
+        "Action": {
+          "Add": "Ajouter",
+          "ApplyCarry": "Appliquer l’état de transport",
+          "Attack": "Attaquer",
+          "Cast": "Lancer",
+          "CriticalDamage": "Dégâts critiques",
+          "Damage": "Dégâts",
+          "Details": "Détails",
+          "Heal": "Soigner",
+          "Invest": "Investir",
+          "ItemCard": "Carte d’objet",
+          "RestOvernight": "Se reposer toute la nuit",
+          "RollInitiative": "Lancer l’initiative",
+          "SetTemporaryHP": "Définir les PV temporaires",
+          "Uninvest": "Désinvestir",
+          "Use": "Utiliser",
+          "DecreaseResource": "Réduire {resource}",
+          "IncreaseResource": "Augmenter {resource}",
+          "DecreaseCondition": "Réduire {condition}",
+          "IncreaseCondition": "Augmenter {condition}",
+          "PostToChat": "Publier dans le chat",
+          "ViewAll": "Tout afficher",
+          "ViewAllStatistics": "Toutes les statistiques"
+        },
+        "ActionCost": {
+          "Actions": "Coût en actions",
+          "Free": "Action gratuite",
+          "Reaction": "Réaction"
+        },
+        "AdjustHitPoints": "Ajuster les points de vie",
+        "AllRanks": "Tous les rangs",
+        "AtWill": "À volonté",
+        "AttackVariants": "Variantes d’attaque",
+        "Cantrip": "Sort mineur",
+        "Cantrips": "Sorts mineurs",
+        "ClassDC": "DD de classe",
+        "EditCharacter": "Modifier le personnage",
+        "Expended": "Dépensé",
+        "Filter": {
+          "All": "Toutes les actions",
+          "Pinned": "Épinglé",
+          "Reactions": "Réactions"
+        },
+        "FilterActions": "Filtrer les actions",
+        "FilterSpells": "Filtrer les sorts",
+        "Focus": "Focalisé",
+        "HeroPoints": "Points héroïques",
+        "ItemActions": "Actions de l’objet",
+        "MoreDetails": "Plus de détails",
+        "ProficiencyRank": "Maîtrise : {rank}",
+        "Rank": {
+          "Untrained": "Non formé",
+          "Label": "Rang"
+        },
+        "PrepareSpells": "Préparer",
+        "PrepareEntry": "Préparer {entry}",
+        "Preparation": {
+          "Title": "Préparer les sorts",
+          "Intro": "Choisissez un sort pour chaque emplacement, puis touchez Appliquer. Chaque modification est enregistrée immédiatement ; les emplacements dépensés le restent.",
+          "SlotLabel": "{rank}, emplacement {slot}",
+          "EmptySlot": "Emplacement vide",
+          "UnavailableSpell": "Sort indisponible",
+          "Apply": "Appliquer",
+          "SpellCollection": "Collection de sorts",
+          "SpellCollectionCount": "Collection de sorts · {value}/{max}",
+          "Remove": "Retirer",
+          "NoSlots": "Aucun emplacement de préparation n’est disponible dans cette entrée."
+        },
+        "RollSave": "Lancer le jet de sauvegarde de {label} {modifier}",
+        "RollSkill": "Lancer {label} {modifier} ; {rank}",
+        "RollStatistic": "Lancer {label} {modifier}",
+        "SearchActions": "Rechercher les actions",
+        "SearchGear": "Rechercher l’équipement",
+        "SearchSpells": "Rechercher les sorts",
+        "Shield": {
+          "Broken": "Brisé",
+          "Destroyed": "Détruit",
+          "Raised": "Levée",
+          "Details": "Détails du bouclier",
+          "Intact": "En bon état",
+          "HP": "PV du bouclier",
+          "RaisedAC": "CA avec le bouclier levé",
+          "BreakThreshold": "Seuil de rupture",
+          "None": "Aucun bouclier",
+          "Tab": "Bouclier",
+          "Repair": "Tenter de réparer",
+          "Changed": "Les PV du bouclier ont changé. Rouvrez cet éditeur."
+        },
+        "SpellAttack": "Attaque de sort",
+        "SpellDC": "DD des sorts",
+        "TemporaryHP": "PV temporaires",
+        "Details": "Détails",
+        "AC": "CA",
+        "Actions": "Actions",
+        "Bulk": {
+          "Encumbered": "Encombré au-delà de",
+          "Label": "Encombrement",
+          "Maximum": "Maximum"
+        },
+        "Check": "Jet",
+        "HP": "PV",
+        "Hardness": "Dureté",
+        "CharacterOptions": "Options du personnage",
+        "TempHPShort": "PV temp.",
+        "NoActiveConditions": "Aucun état actif.",
+        "Supplement": {
+          "Effects": "Effets",
+          "NativeManagement": "Fonctions de la fiche native",
+          "NativeManagementHint": "La préparation des sorts, les rituels, la fabrication, la progression et les paramètres de campagne se gèrent dans la fiche native PF2e.",
+          "Bulk": "Encombrement",
+          "Identity": "Identité et exploration",
+          "Heritage": "Héritage",
+          "Background": "Historique",
+          "Deity": "Divinité",
+          "Size": "Taille",
+          "Traits": "Traits",
+          "Experience": "Expérience",
+          "Languages": "Langues",
+          "Senses": "Sens",
+          "Movement": "Déplacement",
+          "Proficiencies": "Autres maîtrises",
+          "Equipment": "Monnaie et investissement",
+          "Currency": "Monnaie",
+          "Invested": "Investis",
+          "Defenses": "Immunités, faiblesses et résistances",
+          "Immunities": "Immunités",
+          "Weaknesses": "Faiblesses",
+          "Resistances": "Résistances",
+          "Expired": "Expiré",
+          "Slots": "Emplacements"
+        },
+        "ArmorClassModifiers": "Modificateurs de CA",
+        "ModifierName": "Nom du modificateur",
+        "ModifierValue": "Valeur du modificateur",
+        "ModifierType": "Type de modificateur",
+        "RemoveModifier": "Supprimer {label}",
+        "ModifiersChanged": "Les modificateurs de CA ont changé. Rouvrez l’éditeur et réessayez.",
+        "Defenses": {
+          "Immunities": "Immunités",
+          "Weaknesses": "Faiblesses",
+          "Resistances": "Résistances",
+          "Add": "Ajouter {category}",
+          "Derived": "Dérivées des dons et effets",
+          "Exception": "Sauf {value}",
+          "Type": "Type de défense",
+          "Value": "Valeur",
+          "ChooseType": "Choisir un type",
+          "Remove": "Supprimer {type}",
+          "More": "Plus",
+          "Exceptions": "Cas particuliers",
+          "DoubleVs": "Double résistance contre",
+          "ChooseTag": "Choisir un trait",
+          "RemoveTag": "Supprimer {tag}",
+          "Changed": "Les défenses ont changé. Rouvrez l’éditeur et réessayez."
+        },
+        "ShortcutUnavailable": "Ce raccourci n’est plus disponible.",
+        "ModifierTypes": {
+          "ability": "Caractéristique",
+          "proficiency": "Maîtrise",
+          "item": "Objet",
+          "status": "État",
+          "circumstance": "Circonstance",
+          "untyped": "Sans type"
+        },
+        "EffectsAndConditions": "Effets et états",
+        "RollPerception": "Lancer Perception",
+        "RestHint": "Terminez la journée. Préparez la suivante.",
+        "OverviewDefenses": "Défenses",
+        "ViewDetails": "Voir les détails",
+        "PerceptionStatus": "Statut",
+        "DamageType": "Type de dégâts",
+        "LimitedUses": "Utilisations",
+        "Charges": "Charges"
+      },
+      "NativeEditorRequired": "Cette action nécessite l’éditeur d’acteur natif de PF2e.",
+      "RequiresV14": "Cette action PF2e nécessite Foundry VTT 14 ou une version ultérieure.",
+      "Unavailable": "Cette action PF2e est indisponible.",
+      "InvalidInput": "Cette action PF2e est invalide ou a changé. Actualisez puis réessayez.",
+      "SpellPreparation": {
+        "InvalidInput": "Ce choix de préparation de sort est invalide ou a changé. Actualisez puis réessayez.",
+        "Unavailable": "Cette entrée de lancement n’est plus disponible pour la préparation.",
+        "Changed": "La préparation des sorts a changé. Actualisez puis réessayez."
+      },
+      "ItemMissing": "Cet objet n’est plus disponible.",
+      "ResourceChanged": "Cette ressource a changé. Actualisez puis réessayez.",
+      "HitPointsChanged": "Les points de vie ont changé. Actualisez puis réessayez.",
+      "CurrencyChanged": "La monnaie a changé. Actualisez puis réessayez.",
+      "InventoryEffect": {
+        "Changed": "Cet objet a changé. Actualisez et réessayez."
+      },
+      "EditItem": "Modifier l’objet",
+      "ItemDetailsChanged": "Cet objet n’est plus disponible. Actualisez la vue et réessayez.",
+      "Play": {
+        "Changed": "Cette option a changé ou n’est plus disponible. Actualisez et réessayez.",
+        "Options": "Variantes",
+        "ActiveExploration": "Exploration active",
+        "StartExploration": "Commencer l’exploration",
+        "Ammunition": "Munitions",
+        "NoAmmo": "Aucune munition",
+        "LoadedAmmo": "Munitions chargées",
+        "ElementalBlasts": "Décharges élémentaires",
+        "DamageType": "Type de dégâts",
+        "ChannelElements": "Canaliser les éléments",
+        "Melee": "Corps à corps",
+        "Ranged": "À distance",
+        "Damage": "Dégâts",
+        "Critical": "Critique"
+      },
+      "Spells": {
+        "Title": "Gérer les sorts",
+        "ManageIntro": "Gérez les sorts de cette entrée, y compris les signatures disponibles, ou ajoutez des sorts depuis les recueils installés.",
+        "Signatures": "Sorts de signature",
+        "Unsign": "Retirer la signature",
+        "Sign": "Définir comme signature",
+        "Search": "Rechercher les sorts installés",
+        "SearchButton": "Rechercher",
+        "Add": "Ajouter un sort",
+        "ImportRank": "Importer au rang",
+        "Import": "Ajouter",
+        "More": "Plus de résultats",
+        "NoResults": "Aucun sort admissible trouvé.",
+        "SearchFailed": "La recherche de sorts n’a pas pu aboutir."
+      },
+      "Controls": {
+        "Quantity": "Quantité",
+        "ApplyQuantity": "Appliquer la quantité",
+        "Container": "Contenant",
+        "NoContainer": "Aucun contenant",
+        "ApplyContainer": "Déplacer l’objet",
+        "DecreaseEffect": "Diminuer la valeur de l’effet",
+        "IncreaseEffect": "Augmenter la valeur de l’effet",
+        "RemoveEffect": "Supprimer l’effet",
+        "ConfirmRemoveEffect": "Touchez à nouveau pour supprimer cet effet"
+      },
+      "PersistentDamage": {
+        "Title": "Dégâts persistants",
+        "Unavailable": "Cette action de dégâts persistants PF2e est indisponible.",
+        "InvalidInput": "Cette action est invalide ou a changé. Actualisez et réessayez.",
+        "Changed": "Les dégâts persistants ont changé. Rouvrez l’éditeur.",
+        "Formula": "Formule de dégâts",
+        "DamageType": "Type de dégâts",
+        "DC": "DD de récupération",
+        "Add": "Ajouter",
+        "AddTitle": "Ajouter des dégâts persistants",
+        "Empty": "Aucun dégât persistant enregistré.",
+        "Remove": "Supprimer",
+        "Recovery": "Récupération",
+        "RollDamage": "Lancer les dégâts"
       }
     }
   }

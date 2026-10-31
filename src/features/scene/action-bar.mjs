@@ -180,8 +180,14 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
     if (native && !shortcut) { chooseMacro(index); return; }
     if (!shortcut?.available) throw new Error(localizedText(commands.localize, "VEMOBILE.Interface.ActionBar.IsNoLongerAvailable", "{labelShortcut} is no longer available", { labelShortcut: (shortcut?.label ?? localizedText(commands.localize, "VEMOBILE.ActionBar.Shortcut", "Shortcut")) }));
     if (native) { await commands.executeHotbarMacro({ slot: index + 1, macroId: shortcut.macroId }); return; }
-    const command = shortcut.kind === "skill" ? ACTOR_COMMANDS.ROLL_SKILL : ACTOR_COMMANDS.USE_ITEM;
-    const payload = shortcut.kind === "skill" ? { skill: shortcut.skill } : { itemId: shortcut.itemId, ...(shortcut.activityId ? { activityId: shortcut.activityId } : {}) };
+    const suppliedPayload = shortcut.payload;
+    const hasGatewayAction = typeof shortcut.command === "string" && shortcut.command.trim().length > 0
+      && suppliedPayload !== null && typeof suppliedPayload === "object" && !Array.isArray(suppliedPayload)
+      && [Object.prototype, null].includes(Object.getPrototypeOf(suppliedPayload));
+    const command = hasGatewayAction ? shortcut.command : shortcut.kind === "skill" ? ACTOR_COMMANDS.ROLL_SKILL : ACTOR_COMMANDS.USE_ITEM;
+    const payload = hasGatewayAction ? suppliedPayload : shortcut.kind === "skill"
+      ? { skill: shortcut.skill }
+      : { itemId: shortcut.itemId, ...(shortcut.activityId ? { activityId: shortcut.activityId } : {}) };
     let openedId = "";
     const openActionSession = (session) => {
       const id = String(session?.rootMessageId ?? "");
@@ -189,7 +195,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
       openedId = id;
       commands.openActionSession(session, "scene");
     };
-    const outcome = await commands.execute(command, { actorSourceUuid: actor.sourceUuid, ...payload }, { onActionSession: openActionSession });
+    const outcome = await commands.execute(command, { ...payload, actorSourceUuid: actor.sourceUuid }, { onActionSession: openActionSession });
     if (outcome?.actionSession) openActionSession(outcome.actionSession);
   });
   function update() {

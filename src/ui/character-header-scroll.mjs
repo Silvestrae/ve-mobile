@@ -7,6 +7,14 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
   const heading = screen.querySelector(".ve-character-heading");
   const root = screen.closest(".ve-mobile-app");
   if (!heading || !(root?.dataset.formFactor === "phone" || root?.dataset.splitScreen === "true")) return null;
+  // Integrations may provide a static header. Only morph a header that exposes
+  // the complete compact-vitals layout contract. Do not allocate observers or
+  // measure system-specific markup when that optional layout is absent.
+  // Intrinsic layouts supply CSS endpoints using the same progress property;
+  // all gesture stops, scroll restoration and cleanup remain shared.
+  const band = heading.querySelector(".ve-character-identity-band");
+  const intrinsic = heading.dataset?.headerLayout === "intrinsic";
+  if (!intrinsic && !band?.closest(".ve-sheet-identity")?.querySelector(".ve-character-vitals-group")) return null;
   const view = heading.ownerDocument.defaultView;
   const reducedMotion = view.matchMedia("(prefers-reduced-motion: reduce)");
   let expanded = 0, collapsedClientHeight = scroller.clientHeight, range = 0, offset = 0, baseline = scroller.scrollTop, width = -1, height = -1, observedHeadingHeight = heading.getBoundingClientRect().height;
@@ -71,8 +79,9 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
   const measure = () => {
     if (scope.disposed || !heading.isConnected) return;
     const band = heading.querySelector(".ve-character-identity-band");
-    if (!band) return;
-    const header = band.closest(".ve-sheet-identity");
+    if (!band && !intrinsic) return;
+    const header = intrinsic ? heading.querySelector(".ve-sheet-identity") : band.closest(".ve-sheet-identity");
+    if (!header) return;
     header.style.removeProperty("--ve-header-compact-band");
     header.style.removeProperty("--ve-header-compact-metrics");
     const progress = range ? offset / range : 0;
@@ -92,23 +101,27 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
       update();
       return;
     }
-    heading.style.setProperty("--ve-header-full-band", `${band.getBoundingClientRect().height}px`);
-    heading.style.setProperty("--ve-header-full-portrait", `${band.querySelector(".ve-sheet-portrait-frame").getBoundingClientRect().width}px`);
-    heading.style.setProperty("--ve-header-full-controls", `${band.querySelector(".ve-character-identity-controls").getBoundingClientRect().width}px`);
-    heading.style.setProperty("--ve-header-full-xp", `${xp?.getBoundingClientRect().height ?? 0}px`);
+    if (!intrinsic) {
+      heading.style.setProperty("--ve-header-full-band", `${band.getBoundingClientRect().height}px`);
+      heading.style.setProperty("--ve-header-full-portrait", `${band.querySelector(".ve-sheet-portrait-frame").getBoundingClientRect().width}px`);
+      heading.style.setProperty("--ve-header-full-controls", `${band.querySelector(".ve-character-identity-controls").getBoundingClientRect().width}px`);
+      heading.style.setProperty("--ve-header-full-xp", `${xp?.getBoundingClientRect().height ?? 0}px`);
+    }
     expanded = heading.getBoundingClientRect().height;
     heading.dataset.collapse = "true";
     delete heading.dataset.measure;
     heading.style.setProperty("--ve-header-progress", "1");
     // Measure the actual compact text and HP row once per geometry invalidation.
     // Long NPC metadata and downed controls must not be clipped by a fixed band.
-    const metricsHeight = header.querySelector(".ve-character-vitals-group").getBoundingClientRect().height;
-    const summary = band.querySelector(".ve-character-compact-summary");
-    const deathRowHeight = band.querySelector(".ve-death-saves")?.getBoundingClientRect().height ?? 0;
-    const compactBand = Math.max(104,
-      27 + summary.getBoundingClientRect().height + metricsHeight + 4) + (deathRowHeight ? deathRowHeight + 6 : 0);
-    header.style.setProperty("--ve-header-compact-metrics", `${metricsHeight}px`);
-    header.style.setProperty("--ve-header-compact-band", `${compactBand}px`);
+    if (!intrinsic) {
+      const metricsHeight = header.querySelector(".ve-character-vitals-group").getBoundingClientRect().height;
+      const summary = band.querySelector(".ve-character-compact-summary");
+      const deathRowHeight = band.querySelector(".ve-death-saves")?.getBoundingClientRect().height ?? 0;
+      const compactBand = Math.max(104,
+        27 + summary.getBoundingClientRect().height + metricsHeight + 4) + (deathRowHeight ? deathRowHeight + 6 : 0);
+      header.style.setProperty("--ve-header-compact-metrics", `${metricsHeight}px`);
+      header.style.setProperty("--ve-header-compact-band", `${compactBand}px`);
+    }
     range = Math.max(0, expanded - heading.getBoundingClientRect().height);
     collapsedClientHeight = scroller.clientHeight;
     offset = progress * range;
@@ -221,11 +234,13 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
   measure();
   let selector = heading.firstElementChild;
   let tabs = heading.querySelector(".ve-sheet-tabs");
+  let revision = heading.dataset.headerRevision;
   return {
     update,
     prepareScrollRestore: update,
     refresh() {
-      if (selector === heading.firstElementChild && tabs === heading.querySelector(".ve-sheet-tabs")) return;
+      if (selector === heading.firstElementChild && tabs === heading.querySelector(".ve-sheet-tabs") && revision === heading.dataset.headerRevision) return;
+      revision = heading.dataset.headerRevision;
       selector = heading.firstElementChild;
       tabs = heading.querySelector(".ve-sheet-tabs");
       measure();

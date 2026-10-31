@@ -61,6 +61,12 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
   if (requiresReload) reloadPrompt.show({ name: uiText(commands, "DefaultSettings", "Default settings") });
   const fields = [...(preferences.fields ?? []), ...(preferences.performanceMode ? [preferences.performanceMode] : [])];
   const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
+  let colourScheme = fieldsByKey.get("colorScheme")?.value;
+  let thirdColourEnabled = fieldsByKey.get("customThemeThirdEnabled")?.value === true;
+  const customColourRows = [];
+  const syncCustomColourRows = () => {
+    for (const [key, row] of customColourRows) row.hidden = colourScheme !== "custom" || (key === "customThemeThird" && !thirdColourEnabled);
+  };
   const groups = groupSettings(fields);
   const joystickDetail = node("p", { className: "ve-setting-live-detail", attrs: { "data-ve-joystick-resolved": true } });
   const graphicsDetail = node("p", { className: "ve-setting-live-detail", attrs: { "data-ve-graphics-resolved": true } });
@@ -139,8 +145,17 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
           const rowsFor = (groupFields) => groupFields.flatMap((field) => {
             const row = settingField(field, commands, status, scope, reloadPrompt, {
               detail: field.key === "joystickSide" ? joystickDetail : field.key === "graphicsSafety" ? graphicsDetail : field.key === "diceRendering" ? diceDetail : null,
-              onSaved: ["joystickSide", "mode", "graphicsSafety", "diceRendering"].includes(field.key) ? () => updateJoystickDetail(commands.readPresentationPreferences()) : null
+              onSaved: result => {
+                if (field.key === "colorScheme") colourScheme = result.value;
+                if (field.key === "customThemeThirdEnabled") thirdColourEnabled = result.value === true;
+                syncCustomColourRows();
+                if (["joystickSide", "mode", "graphicsSafety", "diceRendering"].includes(field.key)) updateJoystickDetail(commands.readPresentationPreferences());
+              }
             });
+            if (["customThemePrimary", "customThemeSecondary", "customThemeThirdEnabled", "customThemeThird"].includes(field.key)) {
+              customColourRows.push([field.key, row]);
+              syncCustomColourRows();
+            }
             return field.key === "mode" ? [row, deviceInfo] : [row];
           });
           let children = rowsFor(group.fields);
@@ -938,7 +953,7 @@ export function groupSettings(fields) {
   const groups = [
     { id: "device", title: "Device & Power", keys: ["mode", "keepScreenAwake"] },
     { id: "scene", title: "Scene & Controls", keys: ["movementControl", "joystickSide", "actionSceneReturn", "recenterAfterMove", "movementRepeatDelay", "quickbarEnabled", "quickbarSource", "quickbarRows", "showActionSummaries", "compactActionSummaries", "combatCarousel"] },
-    { id: "appearance", title: "Appearance", keys: ["theme", "colorScheme", "headerArtwork", "headerArtworkOpacity", "protectVeStyling"] },
+    { id: "appearance", title: "Appearance", keys: ["theme", "colorScheme", "customThemePrimary", "customThemeSecondary", "customThemeThirdEnabled", "customThemeThird", "headerArtwork", "headerArtworkOpacity", "protectVeStyling"] },
     { id: "performance", title: "Performance & Memory", keys: ["performanceMode", "noCanvas", "graphicsSafety", "diceRendering", "mobileOptimizedAssets", "afterGraphicsFailure", "sceneMemoryWarnings"] },
     { id: "overlays", title: "Module Overlays (Experimental)", keys: [], always: true },
     { id: "support", title: "Support", keys: ["loggingLevel", "saveDiagnosticsToJournal"], always: true }

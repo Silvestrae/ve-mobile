@@ -1,11 +1,12 @@
 import { localizeFoundry } from "./localization.mjs";
-import { createActorDirectoryRecord, createActorViewRecord } from "./actor-view.mjs";
 import { actorSourceRecord, actorSourceUuid, resolveActorSource, validSourceUuid } from "./character-source.mjs";
-import { collectiveReferenceUuids } from "./collective-actor-view.mjs";
+import { selectSystemIntegration, assertSystemIntegration } from "./system-integration.mjs";
+import { clampJournalFontSize, DEFAULT_JOURNAL_FONT_SIZE, MIN_JOURNAL_FONT_SIZE, MAX_JOURNAL_FONT_SIZE } from "../kernel/journal-font-size.mjs";
 
 const TOKEN_GEOMETRY_FIELDS = new Set(["x", "y", "elevation", "rotation", "sort"]);
 
 export const SESSION_INVALIDATION_MAP = Object.freeze({
+  pauseGame: Object.freeze(["world"]),
   renderHotbar: Object.freeze(["scene"]),
   updateUser: Object.freeze(["scene", "actors", "combat", "user"]),
   createMacro: Object.freeze(["scene"]),
@@ -61,8 +62,22 @@ export function createFoundrySessionGateway({
   combatForSnapshot = () => null,
   combatControlsForSnapshot = () => Object.freeze({ isGM: false }),
   targetCountForSnapshot = () => Number(game?.user?.targets?.size ?? 0) || 0,
-  performanceObserver = null
+  performanceObserver = null,
+  getStorage = () => globalThis.localStorage,
+  systemIntegration = selectSystemIntegration(globalThis.game?.system?.id ?? "dnd5e")
 } = {}) {
+  const journalFontKey = "ve-mobile.journal-font-size.v1";
+  let journalFontSize = null;
+  const readJournalFontSize = () => {
+    if (journalFontSize !== null) return journalFontSize;
+    journalFontSize = DEFAULT_JOURNAL_FONT_SIZE;
+    try {
+      const raw = getStorage()?.getItem(journalFontKey);
+      const value = raw === null || raw === undefined ? NaN : Number(raw);
+      if (Number.isFinite(value) && value >= MIN_JOURNAL_FONT_SIZE && value <= MAX_JOURNAL_FONT_SIZE) journalFontSize = clampJournalFontSize(value);
+    } catch { /* Browser storage may be unavailable; keep the current session usable. */ }
+    return journalFontSize;
+  };
   let refreshQueued = false;
   let targetPublicationDeferred = false;
   let targetRefreshPending = false;
@@ -94,13 +109,13 @@ export function createFoundrySessionGateway({
   };
 
   const projectSelectedActor = (actor, user) => {
-    selectedReferenceSources = new Set(collectiveReferenceUuids(actor));
+    selectedReferenceSources = new Set(systemIntegration.actors.references(actor));
     count("authoritative.actor.projected");
     count("authoritative.actor.detail.projected");
     const finish = performanceObserver?.start?.("authoritative.actor.detail.project") ?? (() => {});
     try {
       return Object.freeze({
-        ...createActorViewRecord(actor, user, capabilitiesForActor, game.users),
+        ...systemIntegration.actors.view(actor, user, capabilitiesForActor, game.users),
         source: actorSourceRecord(actor),
         sourceUuid: actorSourceUuid(actor),
         quickbar: quickbarForActor(actor, user)
@@ -113,20 +128,22 @@ export function createFoundrySessionGateway({
   const projectDirectoryActor = (actor) => {
     count("authoritative.actor.directory.projected");
     const finish = performanceObserver?.start?.("authoritative.actor.directory.project") ?? (() => {});
-    try { return createActorDirectoryRecord(actor); } finally { finish(); }
+    try { return systemIntegration.actors.directory(actor); } finally { finish(); }
   };
 
   const readActors = () => readDomain("actors.directory", () => {
+    assertSystemIntegration(systemIntegration, game);
     const user = game.user;
-    return Object.freeze(visibleActors(user).map(projectDirectoryActor));
+    return Object.freeze(visibleActors(user, systemIntegration).map(projectDirectoryActor));
   });
 
   const patchActors = (previous, actorIds) => readDomain("actors.incremental", () => {
+    assertSystemIntegration(systemIntegration, game);
     const user = game.user;
     const records = new Map((previous ?? []).map((actor) => [String(actor.id), actor]));
     for (const actorId of actorIds) {
       const actor = game.actors?.get?.(actorId) ?? Array.from(game.actors ?? []).find((entry) => String(entry?.id ?? "") === actorId);
-      if (isActorEligible(actor, user)) records.set(actorId, projectDirectoryActor(actor));
+      if (isActorEligible(actor, user, systemIntegration)) records.set(actorId, projectDirectoryActor(actor));
       else records.delete(actorId);
     }
     return Object.freeze([...records.values()].sort((left, right) => Number(right.id === user?.character?.id) - Number(left.id === user?.character?.id) || left.name.localeCompare(right.name)));
@@ -148,11 +165,11 @@ export function createFoundrySessionGateway({
 
   const resolveSelectedActor = (actors, user) => {
     let actor = selectedActorSourceUuid ? resolveActorSource(selectedActorSourceUuid) : null;
-    if (!isActorEligible(actor, user)) {
+    if (!isActorEligible(actor, user, systemIntegration)) {
       selectedActorSourceUuid = preferredActorSourceUuid(actors);
       actor = selectedActorSourceUuid ? resolveActorSource(selectedActorSourceUuid) : null;
     }
-    return actor && isActorEligible(actor, user) ? projectSelectedActor(actor, user) : null;
+    return actor && isActorEligible(actor, user, systemIntegration) ? projectSelectedActor(actor, user) : null;
   };
 
   const readScene = () => readDomain("scene", () => {
@@ -164,7 +181,7 @@ export function createFoundrySessionGateway({
       ...scene,
       hotbar: hotbarForSnapshot(),
       quickbarActorSourceUuid: sourceUuid,
-      quickbar: actor && isActorEligible(actor, game.user) ? quickbarForActor(actor, game.user) : null
+      quickbar: actor && isActorEligible(actor, game.user, systemIntegration) ? quickbarForActor(actor, game.user) : null
     });
   });
 
@@ -173,6 +190,7 @@ export function createFoundrySessionGateway({
     count("snapshot.build.full");
     const finish = performanceObserver?.start?.("snapshot.build.full") ?? (() => {});
     try {
+      assertSystemIntegration(systemIntegration, game);
       const user = game.user;
       const actors = readActors();
       if (!selectedActorSourceUuid) selectedActorSourceUuid = controlledSourceUuid() || preferredActorSourceUuid(actors);
@@ -187,12 +205,14 @@ export function createFoundrySessionGateway({
           id: game.world?.id ?? "",
           title: game.world?.title ?? game.world?.id ?? localizeFoundry("VEMOBILE.Interface.SessionGateway.FoundryWorld", "Foundry World"),
           systemId: game.system?.id ?? "",
-          systemVersion: game.system?.version ?? ""
+          systemVersion: game.system?.version ?? "",
+          paused: Boolean(game.paused)
         })),
         user: readDomain("user", () => ({
           id: user?.id ?? "",
           name: user?.name ?? "Player",
-          isGM: Boolean(user?.isGM)
+          isGM: Boolean(user?.isGM),
+          canPause: Boolean(user?.isGM)
         })),
         preferredActorId: preferredActorId(actors),
         preferredActorSourceUuid: preferredActorSourceUuid(actors),
@@ -236,7 +256,8 @@ export function createFoundrySessionGateway({
           next.selectedActorSourceUuid = selectedActorSourceUuid;
         }
       }
-      if (domains.has("user")) next.user = readDomain("user", () => ({ id: game.user?.id ?? "", name: game.user?.name ?? "Player", isGM: Boolean(game.user?.isGM) }));
+      if (domains.has("world")) next.world = readDomain("world", () => Object.freeze({ ...latestSnapshot.world, paused: Boolean(game.paused) }));
+      if (domains.has("user")) next.user = readDomain("user", () => ({ id: game.user?.id ?? "", name: game.user?.name ?? "Player", isGM: Boolean(game.user?.isGM), canPause: Boolean(game.user?.isGM) }));
       if (domains.has("scene")) next.scene = readScene();
       if (domains.has("combat")) {
         const combat = readDomain("combat", () => Object.freeze({
@@ -257,17 +278,29 @@ export function createFoundrySessionGateway({
 
   return Object.freeze({
     read,
+    readJournalFontSize,
+    setJournalFontSize(value) {
+      if (!Number.isFinite(value)) return readJournalFontSize();
+      journalFontSize = clampJournalFontSize(value);
+      try { getStorage()?.setItem(journalFontKey, String(journalFontSize)); } catch { /* Retain the in-memory preference. */ }
+      return journalFontSize;
+    },
     adopt(snapshot) {
-      if (!snapshot) return;
+      if (!snapshot || snapshot === latestSnapshot) return;
       latestSnapshot = snapshot;
       selectedActorSourceUuid = String(snapshot.selectedActorSourceUuid ?? snapshot.selectedActor?.sourceUuid ?? selectedActorSourceUuid);
       latestDomainSignatures = snapshotDomainSignatures(snapshot);
+    },
+    toggleGamePause(expectedSession = {}) {
+      assertSession(expectedSession);
+      if (!game.user.isGM) throw new Error(localizeFoundry("VEMOBILE.Navigation.PauseDenied", "You do not have permission to pause the game."));
+      return game.togglePause(!game.paused, { broadcast: true });
     },
     selectCharacterSource(sourceUuid, expectedSession = {}) {
       assertSession(expectedSession);
       const uuid = validSourceUuid(sourceUuid);
       const actor = resolveActorSource(uuid);
-      if (!actor || !isActorEligible(actor, game.user)) throw new Error(localizeFoundry("VEMOBILE.Interface.SessionGateway.ThisActorIsNoLongerAvailable", "This actor is no longer available."));
+      if (!actor || !isActorEligible(actor, game.user, systemIntegration)) throw new Error(localizeFoundry("VEMOBILE.Interface.SessionGateway.ThisActorIsNoLongerAvailable", "This actor is no longer available."));
       selectedActorSourceUuid = uuid;
       if (!latestSnapshot) return read();
       const snapshot = Object.freeze({
@@ -277,15 +310,17 @@ export function createFoundrySessionGateway({
         selectedActor: projectSelectedActor(actor, game.user)
       });
       latestSnapshot = snapshot;
-      latestDomainSignatures = snapshotDomainSignatures(snapshot);
+      // Selection replaces only the actor domain; retain signatures for the
+      // unchanged scene, chat and other owned snapshot records.
+      latestDomainSignatures = Object.freeze({ ...latestDomainSignatures, actors: snapshotDomainSignature(snapshot, "actors") });
       return snapshot;
     },
     selectReferencedCharacterSource({ originSourceUuid, targetSourceUuid }, expectedSession = {}) {
       assertSession(expectedSession);
       const origin = resolveActorSource(validSourceUuid(originSourceUuid));
       const target = validSourceUuid(targetSourceUuid);
-      if (selectedActorSourceUuid !== originSourceUuid || !origin || !isActorEligible(origin, game.user)
-        || !collectiveReferenceUuids(origin).includes(target)) throw new Error(localizeFoundry("VEMOBILE.Interface.SessionGateway.ThisReferenceIsNoLongerAvailable", "This reference is no longer available."));
+      if (selectedActorSourceUuid !== originSourceUuid || !origin || !isActorEligible(origin, game.user, systemIntegration)
+        || !systemIntegration.actors.references(origin).includes(target)) throw new Error(localizeFoundry("VEMOBILE.Interface.SessionGateway.ThisReferenceIsNoLongerAvailable", "This reference is no longer available."));
       return this.selectCharacterSource(target, expectedSession);
     },
     holdCharacterSource(sourceUuid) {
@@ -319,7 +354,7 @@ export function createFoundrySessionGateway({
               ? actorSourceUuid(replacement?.parent?.id === invalidation.sceneId ? replacement.actor : null)
               : invalidation.sourceUuid;
             const nextActor = nextSourceUuid ? resolveActorSource(nextSourceUuid) : null;
-            if (nextSourceUuid !== selectedActorSourceUuid && isActorEligible(nextActor, game.user)) {
+            if (nextSourceUuid !== selectedActorSourceUuid && isActorEligible(nextActor, game.user, systemIntegration)) {
               pendingTokenActorSourceUuid = nextSourceUuid;
               pendingControlledSelection = true;
             }
@@ -363,13 +398,16 @@ export function createFoundrySessionGateway({
             const snapshot = readIncremental(domains, actorIds, fullActorRead, refreshSelectedActor, refreshControlledSelection, resetSceneSelection);
             pendingTokenActorSourceUuid = "";
             const changedDomains = new Set();
+            const computedSignatures = {};
             for (const domain of domains) {
               count(`snapshot.signature.${domain}`);
               if (domain === "targets") {
                 if (Number(snapshot?.scene?.movement?.targetCount ?? 0) !== Number(latestSnapshot?.scene?.movement?.targetCount ?? 0)) changedDomains.add("scene");
                 continue;
               }
-              if (snapshotDomainSignature(snapshot, domain) !== latestDomainSignatures[domain]) changedDomains.add(domain);
+              const signature = snapshotDomainSignature(snapshot, domain);
+              computedSignatures[domain] = signature;
+              if (signature !== latestDomainSignatures[domain]) changedDomains.add(domain);
             }
             if (!changedDomains.size) {
               count("snapshot.deduplicated");
@@ -384,7 +422,7 @@ export function createFoundrySessionGateway({
             latestSnapshot = Object.freeze(published);
             latestDomainSignatures = Object.freeze({
               ...latestDomainSignatures,
-              ...Object.fromEntries([...changedDomains].map((domain) => [domain, snapshotDomainSignature(latestSnapshot, domain)]))
+              ...Object.fromEntries([...changedDomains].map((domain) => [domain, computedSignatures[domain] ?? snapshotDomainSignature(latestSnapshot, domain)]))
             });
             count("snapshot.publish");
             onSnapshot(latestSnapshot);
@@ -440,7 +478,7 @@ export function createFoundrySessionGateway({
             queueTargetRefresh();
             return;
           }
-          const invalidation = sessionInvalidationForHook(hook, ...args);
+          const invalidation = sessionInvalidationForHook(hook, args[0], args[1], systemIntegration);
           if (!invalidation.domains.length) {
             count("hook.ignored");
             return;
@@ -514,18 +552,18 @@ export function createFoundrySessionGateway({
       const text = String(content ?? "").trim();
       if (!text || text.length > 5000) throw new Error(localizeFoundry("VEMOBILE.Interface.SessionGateway.ChatMessagesMustContainBetweenAndCharacters", "Chat messages must contain between 1 and 5,000 characters."));
       const actor = sourceUuid ? resolveActorSource(sourceUuid) : null;
-      if (sourceUuid && (!actor || !isActorEligible(actor, game.user))) throw new Error(localizeFoundry("VEMOBILE.Interface.SessionGateway.ThisActorIsNoLongerAvailable", "This actor is no longer available."));
+      if (sourceUuid && (!actor || !isActorEligible(actor, game.user, systemIntegration))) throw new Error(localizeFoundry("VEMOBILE.Interface.SessionGateway.ThisActorIsNoLongerAvailable", "This actor is no longer available."));
       const speaker = actor ? ChatMessage.getSpeaker({ actor }) : ChatMessage.getSpeaker({ user: game.user });
       return ChatMessage.create({ content: text, speaker, user: game.user.id });
     }
   });
 }
 
-export function sessionInvalidationForHook(hook, document, changes = {}) {
+export function sessionInvalidationForHook(hook, document, changes = {}, systemIntegration = selectSystemIntegration(globalThis.game?.system?.id ?? "dnd5e")) {
   if (hook === "updateUser") return Object.freeze({ hook, domains: SESSION_INVALIDATION_MAP.updateUser, fullDirectoryRead: true, refreshSelectedActor: true });
   if (hook === "updateActor") {
     const fields = changedPaths(changes);
-    const directoryChanged = !document?.isToken && (fields.length === 0 || fields.some((field) => /^(?:name|img|type|folder|ownership|system\.details\.(?:level|cr|type)|system\.traits\.size)(?:\.|$)/u.test(field)));
+    const directoryChanged = !document?.isToken && (fields.length === 0 || fields.some((field) => /^(?:name|img|type|folder|ownership)(?:\.|$)/u.test(field)) || systemIntegration.actors.directoryFieldsChanged(fields));
     const sceneChanged = fields.length === 0 || fields.some((field) => /^(?:name|img|ownership|prototypeToken|flags\.ve-mobile\.quickbar)(?:\.|$)/u.test(field));
     const sourceUuid = actorSourceUuid(document);
     const directoryActorId = directoryChanged ? String(document?.id ?? "") : "";
@@ -551,16 +589,16 @@ export function sessionInvalidationForHook(hook, document, changes = {}) {
     const key = String(document?.key ?? document?.id ?? "");
     const namespace = String(document?.namespace ?? "");
     const fullKey = key.includes(".") ? key : namespace && key ? `${namespace}.${key}` : key;
-    if (["dnd5e.levelingMode", "dnd5e.metricLengthUnits", "dnd5e.metricWeightUnits", "dnd5e.metricTravelUnits"].includes(fullKey)) return Object.freeze({ hook, domains: Object.freeze(["actors"]), refreshSelectedActor: true });
-    const domains = ["core.hotbarLock", "core.macroScript"].includes(fullKey) ? Object.freeze(["scene"])
-      : fullKey === "dnd5e.initiativeDexTiebreaker" ? Object.freeze(["combat"]) : Object.freeze([]);
+    const systemInvalidation = systemIntegration.settingsInvalidation(fullKey);
+    if (systemInvalidation) return Object.freeze({ hook, ...systemInvalidation });
+    const domains = ["core.hotbarLock", "core.macroScript"].includes(fullKey) ? Object.freeze(["scene"]) : Object.freeze([]);
     return Object.freeze({ hook, domains });
   }
   const configuredDomains = SESSION_INVALIDATION_MAP[hook] ?? Object.freeze([]);
   const actor = hook === "deleteToken" ? document?.actor : actorForHook(hook, document);
   const sourceUuid = actorSourceUuid(actor);
   const worldActor = actor && !actor.isToken;
-  const classItemChanged = ["createItem", "updateItem", "deleteItem"].includes(hook) && document?.type === "class";
+  const classItemChanged = ["createItem", "updateItem", "deleteItem"].includes(hook) && systemIntegration.actors.directoryItemChanged(document);
   const directoryActorId = worldActor && (["createActor", "deleteActor"].includes(hook) || classItemChanged) ? String(actor.id ?? "") : "";
   const controlledSelection = hook === "controlToken";
   const validatesSelectedSource = ["canvasReady", "canvasTearDown", "deleteScene", "deleteToken"].includes(hook);
@@ -650,17 +688,15 @@ export function snapshotPresentationSignature(snapshot) {
   return JSON.stringify(presentation);
 }
 
-function visibleActors(user) {
+function visibleActors(user, systemIntegration) {
   return Array.from(game.actors ?? [])
-    .filter((actor) => isActorEligible(actor, user))
+    .filter((actor) => isActorEligible(actor, user, systemIntegration))
     .sort((a, b) => Number(b.id === user?.character?.id) - Number(a.id === user?.character?.id) || a.name.localeCompare(b.name));
 }
 
 /** The one eligibility policy shared by full and incremental Actor discovery. */
-export function isActorEligible(actor, user) {
-  if (["character", "group", "vehicle"].includes(actor?.type)) return canObserve(actor, user);
-  if (actor?.type === "npc") return Boolean(user?.isGM) || canOwn(actor, user);
-  return false;
+export function isActorEligible(actor, user, systemIntegration = selectSystemIntegration(globalThis.game?.system?.id ?? "dnd5e")) {
+  return systemIntegration.actors.eligible(actor, user, { canObserve, canOwn });
 }
 
 function visibleJournals(user) {

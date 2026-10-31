@@ -1,5 +1,9 @@
 {
   "VEMOBILE": {
+    "System": {
+      "Unsupported": "VE Mobile does not support this world's game system.",
+      "Changed": "The world's game system changed. Reload VE Mobile before continuing."
+    },
     "Navigation": {
       "Character": "Character",
       "Chat": "Chat",
@@ -7,7 +11,12 @@
       "Scene": "Scene",
       "Combat": "Combat",
       "Settings": "Settings",
-      "MoveRight": "Move navigation to right side"
+      "MoveRight": "Move navigation to right side",
+      "PausedHint": "Game paused · Double-tap Scene to unpause",
+      "Paused": "Game paused",
+      "PauseDenied": "You do not have permission to pause the game.",
+      "ChatUnreadOne": "Chat · 1 unread message",
+      "ChatUnreadMany": "Chat · {count} unread messages"
     },
     "Scene": {
       "ReleaseToken": "Release token",
@@ -35,14 +44,6 @@
         "SourceChanged": "The Actor drag source changed.",
         "PrototypeChanged": "The Actor's prototype Token changed during placement.",
         "PlaceFailed": "Token could not be placed."
-      },
-      "ClearTargets": {
-        "One": "Clear {count} target",
-        "Other": "Clear {count} targets"
-      },
-      "TargetCount": {
-        "One": "{count} Target",
-        "Other": "{count} Targets"
       },
       "CurrentlyViewed": "Currently viewed",
       "WorldActive": "World active",
@@ -83,6 +84,14 @@
         "CanvasUnavailable": "Open the map and wait for it to load before choosing a level.",
         "Unavailable": "That Scene level is no longer available.",
         "NotViewed": "Foundry could not open the selected Scene level."
+      },
+      "ClearTargets": {
+        "One": "Clear {count} target",
+        "Other": "Clear {count} targets"
+      },
+      "TargetCount": {
+        "One": "{count} Target",
+        "Other": "{count} Targets"
       }
     },
     "Settings": {
@@ -108,7 +117,8 @@
         "Class": "Based on class",
         "Red": "VE Red",
         "Neutral": "Neutral",
-        "Bestiary": "Bestiary"
+        "Bestiary": "Bestiary",
+        "Custom": "Custom"
       },
       "ProtectVeStyling": {
         "Name": "Protect VE styling",
@@ -219,6 +229,7 @@
         "Name": "Keep screen awake",
         "Hint": "Ask this browser to keep the screen on while VE Mobile is active. Your browser must support this feature.",
         "Unsupported": "Screen Wake Lock is unavailable in this browser.",
+        "SecureContextRequired": "Requires HTTPS.",
         "Failure": "The browser refused the screen wake lock. Check Low Power Mode and browser permissions, then try again."
       },
       "CharacterFavouritesSource": {
@@ -608,7 +619,8 @@
         "NumberExpected": "That setting requires a number.",
         "RangeExceeded": "That setting is outside its allowed range.",
         "MobileTypeUnsupported": "That setting type is not supported on mobile.",
-        "VeSettingMissing": "That VE Mobile setting does not exist."
+        "VeSettingMissing": "That VE Mobile setting does not exist.",
+        "ColorExpected": "Choose a colour in #RRGGBB format."
       },
       "LowMemoryCanvas": {
         "Name": "Low-memory Canvas profile active",
@@ -630,6 +642,22 @@
         "Always": "Always",
         "Combat": "During combat only",
         "Off": "Off"
+      },
+      "CustomThemePrimary": {
+        "Name": "Primary colour",
+        "Hint": "Used for buttons and selected controls."
+      },
+      "CustomThemeSecondary": {
+        "Name": "Secondary colour",
+        "Hint": "Used to tint backgrounds and panels."
+      },
+      "CustomThemeThirdEnabled": {
+        "Name": "Use a third colour",
+        "Hint": "Choose a separate highlight colour; otherwise VE Mobile derives it from your two colours."
+      },
+      "CustomThemeThird": {
+        "Name": "Highlight colour",
+        "Hint": "Used for highlights, borders and decorative details."
       }
     },
     "Character": {
@@ -756,6 +784,10 @@
         "Edit": "Edit {label}",
         "CloseEditor": "Close {label} editor",
         "TextAndFoundryRichHTML": "Text and Foundry-rich HTML",
+        "RichTextToolbar": "Text formatting",
+        "RichTextBold": "Bold",
+        "RichTextItalic": "Italic",
+        "RichTextBulletedList": "Bulleted list",
         "No": "No {label}.",
         "Conditions": "Conditions",
         "Active": "Active: {activeCount}",
@@ -863,7 +895,8 @@
         "SpellAttackBonus": "Spell attack {modifier}",
         "SpellSaveDC": "Save DC {dc}",
         "SpellcastingClass": "Spellcasting class",
-        "DefaultSpellcasting": "Default"
+        "DefaultSpellcasting": "Default",
+        "AddToHotbar": "Add to Hotbar"
       },
       "ActorView": {
         "Senses": "Senses",
@@ -1124,14 +1157,14 @@
         "Effectscount": "Effects ({count})",
         "valueofmaximumweight": "{value} of {maximum} weight",
         "Emptycontainer": "Empty container",
-        "ItemCount": {
-          "One": "{count} item",
-          "Other": "{count} items"
-        },
         "Effects": "Effects",
         "BonusActionAbbreviation": "BA",
         "ReactionAbbreviation": "R",
-        "ActionAbbreviation": "A"
+        "ActionAbbreviation": "A",
+        "ItemCount": {
+          "One": "{count} item",
+          "Other": "{count} items"
+        }
       },
       "EffectsEmpty": {
         "temporary": "No temporary effects.",
@@ -1166,16 +1199,16 @@
       "Next": "Next page",
       "Empty": "This journal has no visible pages.",
       "Enlarge": "Enlarge {name}",
-      "PageCount": {
-        "One": "{count} page",
-        "Other": "{count} pages"
-      },
       "PagesAndHeadings": "Journal pages and headings",
       "ChoosePageOrHeading": "Choose Journal page or heading",
       "ChoosePage": "Choose page",
       "OpenAttachment": "Open attachment",
       "UntitledPage": "Untitled page",
-      "Edit": "Edit"
+      "Edit": "Edit",
+      "PageCount": {
+        "One": "{count} page",
+        "Other": "{count} pages"
+      }
     },
     "RestorationRecovery": {
       "title": "Desktop settings recovery required",
@@ -1295,7 +1328,8 @@
         "DesktopReview": "You are reviewing mobile controls from Desktop. Mobile Mode in Foundry settings enables or selects the Phone or Tablet presentation for this browser and reloads Foundry.",
         "Phone": "Phone shows one screen at a time. Actor placement uses a staged preview with Place and Cancel.",
         "TabletSplit": "Tablet Split shows content beside the Scene in landscape. Use the side control to move the dock. Split portrait drops create tokens directly; native action previews still use Place and Cancel.",
-        "TabletFull": "Tablet Full shows the selected screen across the available space. Use Split Screen to return to side-by-side content when landscape and the live map are available."
+        "TabletFull": "Tablet Full shows the selected screen across the available space. Use Split Screen to return to side-by-side content when landscape and the live map are available.",
+        "ScenePause": "Double-tap the Scene navigation tab to pause or unpause the game. Only users with GM permission can do this. The paused notice and alternating Scene/pause icon are visible to everyone."
       },
       "Settings": {
         "preferences": "Phone & Tablet preferences",
@@ -1569,7 +1603,8 @@
         "AMacroIDOrNullIsRequired": "A macro ID or null is required.",
         "ChooseADifferentDestinationSlot": "Choose a different destination slot.",
         "YouCanNoLongerEditThatMacro": "You can no longer edit that macro.",
-        "ThatMacroHasNoEditableSheet": "That macro has no editable sheet."
+        "ThatMacroHasNoEditableSheet": "That macro has no editable sheet.",
+        "ItemHotbarMacrosUnavailable": "Item hotbar macros are unavailable."
       },
       "LowMemoryCanvasGateway": {
         "GraphicsRestorationLedgerCouldNotBeVerified": "Graphics restoration ledger could not be verified.",
@@ -1656,7 +1691,9 @@
         "ThisQuickbarChangedWhileYouWereEditingReopenIt": "This Quickbar changed while you were editing. Reopen it and try again.",
         "ThatActionTypeCannotBePlacedOnTheQuickbar": "That action type cannot be placed on the Quickbar.",
         "ThatItemOrActivityIsNoLongerAvailable": "That item or activity is no longer available.",
-        "ThatSkillIsNoLongerAvailable": "That skill is no longer available."
+        "ThatSkillIsNoLongerAvailable": "That skill is no longer available.",
+        "ThatActionTypeIsUnavailable": "That action type is unavailable.",
+        "ThatItemIsNoLongerAvailable": "That item is no longer available."
       },
       "SceneGateway": {
         "ChooseAValidScene": "Choose a valid Scene.",
@@ -1830,11 +1867,14 @@
       "CurrentDefeated": "{name}, current turn, defeated",
       "Current": "{name}, current turn",
       "DefeatedName": "{name}, defeated",
+      "TokenUnavailable": "That combatant token is no longer available.",
       "Count": {
         "One": "{count} combatant",
         "Other": "{count} combatants"
       },
-      "TokenUnavailable": "That combatant token is no longer available."
+      "RollAll": "Roll All",
+      "RollNPCs": "Roll NPCs",
+      "NoInitiativeAvailable": "No initiative rolls available"
     },
     "Action": {
       "Close": "Close action"
@@ -2257,6 +2297,341 @@
       "Mode": {
         "phone": "Phone",
         "tablet": "Tablet"
+      }
+    },
+    "PF2E": {
+      "Character": {
+        "Recovery": "Recovery",
+        "Sections": "Character sections",
+        "SelectCharacter": "Select a character",
+        "Character": "Character",
+        "EditorFailed": "Could not open the Actor editor.",
+        "Edit": "Edit",
+        "ArmorClass": "Armour Class",
+        "Speed": "Speed",
+        "Perception": "Perception",
+        "Initiative": "Initiative",
+        "HitPointAmount": "Hit point amount",
+        "Attack": "Attack",
+        "Unidentified": "Unidentified",
+        "CarryState": "Carry state",
+        "Spells": "Spells",
+        "LoadingBiography": "Loading biography…",
+        "InlineRollUnavailable": "Inline roll unavailable without OWNER permission",
+        "EmptyBiography": "No biography has been recorded.",
+        "BiographyUnavailable": "Biography is unavailable.",
+        "AddCondition": "Add a condition",
+        "Working": "Working…",
+        "ActionFailed": "That action could not be completed.",
+        "Empty": "Nothing to show here.",
+        "Tab": {
+          "Overview": "Overview",
+          "Statistics": "Statistics",
+          "Inventory": "Inventory",
+          "Spells": "Spells",
+          "Features": "Features",
+          "Biography": "Biography",
+          "Actions": "Actions",
+          "Gear": "Gear",
+          "More": "More"
+        },
+        "Carry": {
+          "Held1": "Held (1 hand)",
+          "Held2": "Held (2 hands)",
+          "WornSlot": "Worn in equipment slot",
+          "WornNoSlot": "Worn outside equipment slot",
+          "Stowed": "Stowed",
+          "Dropped": "Dropped",
+          "Held": "Held",
+          "Worn": "Worn"
+        },
+        "Type": {
+          "Character": "Character",
+          "NPC": "NPC",
+          "Familiar": "Familiar",
+          "Hazard": "Hazard",
+          "Loot": "Loot",
+          "Party": "Party",
+          "Army": "Army",
+          "Vehicle": "Vehicle"
+        },
+        "Biography": {
+          "Age": "Age",
+          "Gender": "Gender",
+          "Height": "Height",
+          "Weight": "Weight",
+          "BirthPlace": "Birth place",
+          "Attitude": "Attitude",
+          "Beliefs": "Beliefs",
+          "Edicts": "Edicts",
+          "Anathema": "Anathema"
+        },
+        "Section": {
+          "VitalStatistics": "Vital statistics",
+          "HitPoints": "Hit points",
+          "Resources": "Resources",
+          "Strikes": "Attacks",
+          "Conditions": "Conditions",
+          "SavingThrows": "Saving throws",
+          "Skills": "Skills",
+          "Perception": "Perception",
+          "CurrencyAndWealth": "Currency and Wealth",
+          "Inventory": "Inventory",
+          "Biography": "Biography",
+          "Spells": "Spells",
+          "Attributes": "Attributes",
+          "Actions": "Actions",
+          "PassiveFeatures": "Passive features",
+          "PinnedActions": "Pinned actions"
+        },
+        "Action": {
+          "Add": "Add",
+          "ApplyCarry": "Apply carry state",
+          "Attack": "Attack",
+          "Cast": "Cast",
+          "CriticalDamage": "Critical damage",
+          "Damage": "Damage",
+          "Details": "Details",
+          "Heal": "Heal",
+          "Invest": "Invest",
+          "ItemCard": "Item card",
+          "RestOvernight": "Rest overnight",
+          "RollInitiative": "Roll initiative",
+          "SetTemporaryHP": "Set temporary HP",
+          "Uninvest": "Uninvest",
+          "Use": "Use",
+          "DecreaseResource": "Decrease {resource}",
+          "IncreaseResource": "Increase {resource}",
+          "DecreaseCondition": "Decrease {condition}",
+          "IncreaseCondition": "Increase {condition}",
+          "PostToChat": "Post to chat",
+          "ViewAll": "View all",
+          "ViewAllStatistics": "View all statistics"
+        },
+        "ActionCost": {
+          "Actions": "Action cost",
+          "Free": "Free action",
+          "Reaction": "Reaction"
+        },
+        "AdjustHitPoints": "Adjust hit points",
+        "AllRanks": "All ranks",
+        "AtWill": "At will",
+        "AttackVariants": "Attack variants",
+        "Cantrip": "Cantrip",
+        "Cantrips": "Cantrips",
+        "ClassDC": "Class DC",
+        "EditCharacter": "Edit character",
+        "Expended": "Expended",
+        "Filter": {
+          "All": "All actions",
+          "Pinned": "Pinned",
+          "Reactions": "Reactions"
+        },
+        "FilterActions": "Filter actions",
+        "FilterSpells": "Filter spells",
+        "Focus": "Focus",
+        "HeroPoints": "Hero points",
+        "ItemActions": "Item actions",
+        "MoreDetails": "More details",
+        "ProficiencyRank": "{rank} proficiency",
+        "Rank": {
+          "Untrained": "Untrained",
+          "Label": "Rank"
+        },
+        "PrepareSpells": "Prepare",
+        "PrepareEntry": "Prepare {entry}",
+        "Preparation": {
+          "Title": "Prepare spells",
+          "Intro": "Choose a spell for each slot, then select Apply. Each change saves immediately; expended slots stay expended.",
+          "SlotLabel": "{rank}, slot {slot}",
+          "EmptySlot": "Empty slot",
+          "UnavailableSpell": "Unavailable spell",
+          "Apply": "Apply",
+          "SpellCollection": "Spell collection",
+          "SpellCollectionCount": "Spell collection · {value}/{max}",
+          "Remove": "Remove",
+          "NoSlots": "No preparation slots are available in this entry."
+        },
+        "RollSave": "Roll {label} save {modifier}",
+        "RollSkill": "Roll {label} {modifier}; {rank}",
+        "RollStatistic": "Roll {label} {modifier}",
+        "SearchActions": "Search actions",
+        "SearchGear": "Search gear",
+        "SearchSpells": "Search spells",
+        "Shield": {
+          "Broken": "Broken",
+          "Destroyed": "Destroyed",
+          "Raised": "Raised",
+          "Details": "Shield details",
+          "Intact": "Intact",
+          "HP": "Shield HP",
+          "RaisedAC": "Armour Class when raised",
+          "BreakThreshold": "Break threshold",
+          "None": "No shield",
+          "Tab": "Shield",
+          "Repair": "Attempt to Repair",
+          "Changed": "Shield Hit Points changed. Reopen the editor and try again."
+        },
+        "SpellAttack": "Spell attack",
+        "SpellDC": "Spell DC",
+        "TemporaryHP": "Temporary HP",
+        "Details": "Details",
+        "AC": "AC",
+        "Actions": "Actions",
+        "Bulk": {
+          "Encumbered": "Encumbered above",
+          "Label": "Bulk",
+          "Maximum": "Maximum"
+        },
+        "Check": "Check",
+        "HP": "HP",
+        "Hardness": "Hardness",
+        "CharacterOptions": "Character options",
+        "TempHPShort": "Temp HP",
+        "NoActiveConditions": "No active conditions.",
+        "Supplement": {
+          "Effects": "Effects",
+          "NativeManagement": "Native sheet workflows",
+          "NativeManagementHint": "Spell preparation, rituals, crafting, character advancement and campaign settings are managed in the native PF2e sheet.",
+          "Bulk": "Bulk",
+          "Identity": "Identity & exploration",
+          "Heritage": "Heritage",
+          "Background": "Background",
+          "Deity": "Deity",
+          "Size": "Size",
+          "Traits": "Traits",
+          "Experience": "Experience",
+          "Languages": "Languages",
+          "Senses": "Senses",
+          "Movement": "Movement",
+          "Proficiencies": "Other proficiencies",
+          "Equipment": "Currency & investment",
+          "Currency": "Currency",
+          "Invested": "Invested",
+          "Defenses": "Immunities, weaknesses & resistances",
+          "Immunities": "Immunities",
+          "Weaknesses": "Weaknesses",
+          "Resistances": "Resistances",
+          "Expired": "Expired",
+          "Slots": "Slots"
+        },
+        "ArmorClassModifiers": "Armour Class modifiers",
+        "ModifierName": "Modifier name",
+        "ModifierValue": "Modifier value",
+        "ModifierType": "Modifier type",
+        "RemoveModifier": "Remove {label}",
+        "ModifiersChanged": "Armour Class modifiers changed. Reopen the editor and try again.",
+        "Defenses": {
+          "Immunities": "Immunities",
+          "Weaknesses": "Weaknesses",
+          "Resistances": "Resistances",
+          "Add": "Add {category}",
+          "Derived": "Derived from feats and effects",
+          "Exception": "Except {value}",
+          "Type": "Defence type",
+          "Value": "Value",
+          "ChooseType": "Choose type",
+          "Remove": "Remove {type}",
+          "More": "More",
+          "Exceptions": "Exceptions",
+          "DoubleVs": "Double resistance against",
+          "ChooseTag": "Choose a trait",
+          "RemoveTag": "Remove {tag}",
+          "Changed": "Defences changed. Reopen the editor and try again."
+        },
+        "ShortcutUnavailable": "This shortcut is no longer available.",
+        "ModifierTypes": {
+          "ability": "Ability",
+          "proficiency": "Proficiency",
+          "item": "Item",
+          "status": "Status",
+          "circumstance": "Circumstance",
+          "untyped": "Untyped"
+        },
+        "EffectsAndConditions": "Effects and Conditions",
+        "RollPerception": "Roll Perception",
+        "RestHint": "End the day. Prepare for the next.",
+        "OverviewDefenses": "Defenses",
+        "ViewDetails": "View details",
+        "PerceptionStatus": "Status",
+        "DamageType": "Damage type",
+        "LimitedUses": "Uses",
+        "Charges": "Charges"
+      },
+      "NativeEditorRequired": "PF2e native Actor editor is required for this action.",
+      "RequiresV14": "This PF2e action requires Foundry VTT 14 or newer.",
+      "Unavailable": "This PF2e action is unavailable.",
+      "InvalidInput": "This PF2e action is invalid or has changed. Refresh and try again.",
+      "SpellPreparation": {
+        "InvalidInput": "This spell preparation choice is invalid or has changed. Refresh and try again.",
+        "Unavailable": "This spellcasting entry is no longer available for preparation.",
+        "Changed": "Spell preparation changed. Refresh and try again."
+      },
+      "ItemMissing": "This item is no longer available.",
+      "ResourceChanged": "This resource changed. Refresh and try again.",
+      "HitPointsChanged": "Hit Points changed. Refresh and try again.",
+      "CurrencyChanged": "Currency changed. Refresh and try again.",
+      "InventoryEffect": {
+        "Changed": "This item changed. Refresh and try again."
+      },
+      "EditItem": "Edit item",
+      "ItemDetailsChanged": "This item is no longer available. Refresh and try again.",
+      "Play": {
+        "Changed": "This option changed or is unavailable. Refresh and try again.",
+        "Options": "Options",
+        "ActiveExploration": "Active exploration",
+        "StartExploration": "Start exploring",
+        "Ammunition": "Ammunition",
+        "NoAmmo": "No ammunition",
+        "LoadedAmmo": "Loaded ammunition",
+        "ElementalBlasts": "Elemental Blasts",
+        "DamageType": "Damage type",
+        "ChannelElements": "Channel Elements",
+        "Melee": "Melee",
+        "Ranged": "Ranged",
+        "Damage": "Damage",
+        "Critical": "Critical"
+      },
+      "Spells": {
+        "Title": "Manage spells",
+        "ManageIntro": "Manage this entry’s spells, including available signatures, or add spells from installed compendiums.",
+        "Signatures": "Signature spells",
+        "Unsign": "Remove signature",
+        "Sign": "Set signature",
+        "Search": "Search installed spells",
+        "SearchButton": "Search",
+        "Add": "Add a spell",
+        "ImportRank": "Import at rank",
+        "Import": "Add",
+        "More": "More results",
+        "NoResults": "No eligible spells found.",
+        "SearchFailed": "Spell search could not be completed."
+      },
+      "Controls": {
+        "Quantity": "Quantity",
+        "ApplyQuantity": "Apply quantity",
+        "Container": "Container",
+        "NoContainer": "No container",
+        "ApplyContainer": "Move item",
+        "DecreaseEffect": "Decrease effect value",
+        "IncreaseEffect": "Increase effect value",
+        "RemoveEffect": "Remove effect",
+        "ConfirmRemoveEffect": "Tap again to remove this effect"
+      },
+      "PersistentDamage": {
+        "Title": "Persistent damage",
+        "Unavailable": "This PF2e persistent damage action is unavailable.",
+        "InvalidInput": "This persistent damage action is invalid or has changed. Refresh and try again.",
+        "Changed": "Persistent damage changed. Reopen the editor and try again.",
+        "Formula": "Damage formula",
+        "DamageType": "Damage type",
+        "DC": "Recovery DC",
+        "Add": "Add",
+        "AddTitle": "Add persistent damage",
+        "Empty": "No persistent damage is recorded.",
+        "Remove": "Remove",
+        "Recovery": "Recovery",
+        "RollDamage": "Roll damage"
       }
     }
   }

@@ -1,5 +1,9 @@
 {
   "VEMOBILE": {
+    "System": {
+      "Unsupported": "VE Mobile non supporta il sistema di gioco di questo mondo.",
+      "Changed": "Il sistema di gioco del mondo è cambiato. Ricarica VE Mobile prima di continuare."
+    },
     "Navigation": {
       "Character": "Personaggio",
       "Chat": "Chat",
@@ -7,7 +11,12 @@
       "Scene": "Scena",
       "Combat": "Combattimento",
       "Settings": "Impostazioni",
-      "MoveRight": "Sposta la navigazione sul lato destro"
+      "MoveRight": "Sposta la navigazione sul lato destro",
+      "PausedHint": "Partita in pausa · Tocca Scena due volte per riprendere",
+      "Paused": "Partita in pausa",
+      "PauseDenied": "Non hai il permesso di mettere in pausa la partita.",
+      "ChatUnreadOne": "Chat · 1 messaggio non letto",
+      "ChatUnreadMany": "Chat · {count} messaggi non letti"
     },
     "Scene": {
       "ReleaseToken": "Rilascia token",
@@ -35,14 +44,6 @@
         "SourceChanged": "La sorgente di trascinamento del personaggio è cambiata.",
         "PrototypeChanged": "Il token prototipo del personaggio è cambiato durante il posizionamento.",
         "PlaceFailed": "Impossibile posizionare il token."
-      },
-      "ClearTargets": {
-        "One": "Rimuovi {count} bersaglio",
-        "Other": "Rimuovi {count} bersagli"
-      },
-      "TargetCount": {
-        "One": "{count} bersaglio",
-        "Other": "{count} bersagli"
       },
       "CurrentlyViewed": "Attualmente visualizzata",
       "WorldActive": "Scena attiva del mondo",
@@ -83,6 +84,14 @@
         "CanvasUnavailable": "Apri la mappa e attendi che venga caricata prima di scegliere un livello.",
         "Unavailable": "Quel livello della scena non è più disponibile.",
         "NotViewed": "Foundry non ha potuto aprire il livello della scena selezionato."
+      },
+      "ClearTargets": {
+        "One": "Rimuovi {count} bersaglio",
+        "Other": "Rimuovi {count} bersagli"
+      },
+      "TargetCount": {
+        "One": "{count} bersaglio",
+        "Other": "{count} bersagli"
       }
     },
     "Settings": {
@@ -108,7 +117,8 @@
         "Class": "In base alla classe",
         "Red": "Rosso VE",
         "Neutral": "Neutro",
-        "Bestiary": "Bestiario"
+        "Bestiary": "Bestiario",
+        "Custom": "Personalizzato"
       },
       "ProtectVeStyling": {
         "Name": "Proteggi lo stile VE",
@@ -219,6 +229,7 @@
         "Name": "Mantieni schermo attivo",
         "Hint": "Chiedi a questo browser di mantenere attivo lo schermo mentre VE Mobile è in uso. Il browser deve supportare la funzionalità.",
         "Unsupported": "Il blocco sospensione schermo non è disponibile in questo browser.",
+        "SecureContextRequired": "Richiede HTTPS.",
         "Failure": "Il browser ha rifiutato il blocco sospensione schermo. Controlla il risparmio energetico e le autorizzazioni del browser, poi riprova."
       },
       "CharacterFavouritesSource": {
@@ -608,7 +619,8 @@
         "NumberExpected": "Questa impostazione richiede un numero.",
         "RangeExceeded": "Questa impostazione è fuori dall’intervallo consentito.",
         "MobileTypeUnsupported": "Questo tipo di impostazione non è supportato su dispositivi mobili.",
-        "VeSettingMissing": "Questa impostazione di VE Mobile non esiste."
+        "VeSettingMissing": "Questa impostazione di VE Mobile non esiste.",
+        "ColorExpected": "Scegli un colore nel formato #RRGGBB."
       },
       "LowMemoryCanvas": {
         "Name": "Profilo Canvas a basso consumo di memoria attivo",
@@ -630,6 +642,22 @@
         "Always": "Sempre",
         "Combat": "Solo durante il combattimento",
         "Off": "Disattivato"
+      },
+      "CustomThemePrimary": {
+        "Name": "Colore primario",
+        "Hint": "Usato per pulsanti e controlli selezionati."
+      },
+      "CustomThemeSecondary": {
+        "Name": "Colore secondario",
+        "Hint": "Usato per colorare sfondi e pannelli."
+      },
+      "CustomThemeThirdEnabled": {
+        "Name": "Usa un terzo colore",
+        "Hint": "Scegli un colore di evidenziazione distinto; altrimenti VE Mobile lo ricava dagli altri due colori."
+      },
+      "CustomThemeThird": {
+        "Name": "Colore di evidenziazione",
+        "Hint": "Usato per evidenziazioni, bordi e dettagli decorativi."
       }
     },
     "Character": {
@@ -756,6 +784,10 @@
         "Edit": "Modifica {label}",
         "CloseEditor": "Chiudi editor {label}",
         "TextAndFoundryRichHTML": "Testo e HTML formattato di Foundry",
+        "RichTextToolbar": "Formattazione del testo",
+        "RichTextBold": "Grassetto",
+        "RichTextItalic": "Corsivo",
+        "RichTextBulletedList": "Elenco puntato",
         "No": "Nessun {label}.",
         "Conditions": "Condizioni",
         "Active": "Attivi: {activeCount}",
@@ -863,7 +895,8 @@
         "SpellAttackBonus": "Attacco con incantesimo {modifier}",
         "SpellSaveDC": "CD del tiro salvezza {dc}",
         "SpellcastingClass": "Classe da incantatore",
-        "DefaultSpellcasting": "Predefinito"
+        "DefaultSpellcasting": "Predefinito",
+        "AddToHotbar": "Aggiungi alla barra di Foundry"
       },
       "ActorView": {
         "Senses": "Sensi",
@@ -1124,14 +1157,14 @@
         "Effectscount": "Effetti ({count})",
         "valueofmaximumweight": "{value} di {maximum} peso",
         "Emptycontainer": "Contenitore vuoto",
-        "ItemCount": {
-          "One": "{count} oggetto",
-          "Other": "{count} oggetti"
-        },
         "Effects": "Effetti",
         "BonusActionAbbreviation": "Az",
         "ReactionAbbreviation": "R",
-        "ActionAbbreviation": "A"
+        "ActionAbbreviation": "A",
+        "ItemCount": {
+          "One": "{count} oggetto",
+          "Other": "{count} oggetti"
+        }
       },
       "EffectsEmpty": {
         "temporary": "Nessun effetto temporaneo.",
@@ -1166,16 +1199,16 @@
       "Next": "Pagina successiva",
       "Empty": "Questo diario non contiene pagine visibili.",
       "Enlarge": "Ingrandisci {name}",
-      "PageCount": {
-        "One": "{count} pagina",
-        "Other": "{count} pagine"
-      },
       "PagesAndHeadings": "Pagine e intestazioni del diario",
       "ChoosePageOrHeading": "Scegli una pagina o un’intestazione del diario",
       "ChoosePage": "Scegli pagina",
       "OpenAttachment": "Apri allegato",
       "UntitledPage": "Pagina senza titolo",
-      "Edit": "Modifica"
+      "Edit": "Modifica",
+      "PageCount": {
+        "One": "{count} pagina",
+        "Other": "{count} pagine"
+      }
     },
     "RestorationRecovery": {
       "title": "È necessario ripristinare le impostazioni desktop",
@@ -1295,7 +1328,8 @@
         "DesktopReview": "Stai consultando i comandi per dispositivi mobili da Desktop. La Modalità mobile nelle impostazioni di Foundry attiva o seleziona la visualizzazione Telefono o Tablet per questo browser e riavvia Foundry.",
         "Phone": "Telefono mostra una schermata alla volta. Il posizionamento di un personaggio usa un’anteprima preparata con Posiziona e Annulla.",
         "TabletSplit": "In orizzontale, la modalità a schermo diviso del tablet mostra i contenuti accanto alla scena. Usa il controllo laterale per spostare il pannello. I rilasci in modalità verticale a schermo diviso creano direttamente token; le anteprime delle azioni native usano Posiziona e Annulla.",
-        "TabletFull": "La modalità a schermo intero del tablet mostra la schermata selezionata in tutto lo spazio disponibile. Usa Schermo diviso per tornare ai contenuti affiancati quando il tablet è in orizzontale e la mappa è disponibile."
+        "TabletFull": "La modalità a schermo intero del tablet mostra la schermata selezionata in tutto lo spazio disponibile. Usa Schermo diviso per tornare ai contenuti affiancati quando il tablet è in orizzontale e la mappa è disponibile.",
+        "ScenePause": "Tocca due volte la scheda Scena per mettere in pausa o riprendere la partita. Sono necessari i permessi del GM. L’avviso e l’icona alternata Scena/pausa sono visibili a tutti."
       },
       "Settings": {
         "preferences": "Preferenze Telefono e tablet",
@@ -1569,7 +1603,8 @@
         "AMacroIDOrNullIsRequired": "È richiesto un ID macro o null.",
         "ChooseADifferentDestinationSlot": "Scegli un altro slot di destinazione.",
         "YouCanNoLongerEditThatMacro": "Non puoi più modificare quella macro.",
-        "ThatMacroHasNoEditableSheet": "Quella macro non ha una scheda modificabile."
+        "ThatMacroHasNoEditableSheet": "Quella macro non ha una scheda modificabile.",
+        "ItemHotbarMacrosUnavailable": "Le macro oggetto della barra rapida non sono disponibili."
       },
       "LowMemoryCanvasGateway": {
         "GraphicsRestorationLedgerCouldNotBeVerified": "Impossibile verificare il registro di ripristino grafico.",
@@ -1656,7 +1691,9 @@
         "ThisQuickbarChangedWhileYouWereEditingReopenIt": "La Barra rapida è cambiata durante la modifica. Riaprila e riprova.",
         "ThatActionTypeCannotBePlacedOnTheQuickbar": "Questo tipo di azione non può essere inserito nella Barra rapida.",
         "ThatItemOrActivityIsNoLongerAvailable": "L’oggetto o l’attività non è più disponibile.",
-        "ThatSkillIsNoLongerAvailable": "Questa abilità non è più disponibile."
+        "ThatSkillIsNoLongerAvailable": "Questa abilità non è più disponibile.",
+        "ThatActionTypeIsUnavailable": "Questo tipo di azione non è disponibile.",
+        "ThatItemIsNoLongerAvailable": "Questo oggetto non è più disponibile."
       },
       "SceneGateway": {
         "ChooseAValidScene": "Scegli una scena valida.",
@@ -1830,11 +1867,14 @@
       "CurrentDefeated": "{name}, turno attuale, sconfitto",
       "Current": "{name}, turno attuale",
       "DefeatedName": "{name}, sconfitto",
+      "TokenUnavailable": "Il token di questo combattente non è più disponibile.",
       "Count": {
         "One": "{count} combattente",
         "Other": "{count} combattenti"
       },
-      "TokenUnavailable": "Il token di questo combattente non è più disponibile."
+      "RollAll": "Tira tutti",
+      "RollNPCs": "Tira PNG",
+      "NoInitiativeAvailable": "Nessun tiro di iniziativa disponibile"
     },
     "Action": {
       "Close": "Chiudi azione"
@@ -2257,6 +2297,341 @@
       "Mode": {
         "phone": "Telefono",
         "tablet": "Tablet"
+      }
+    },
+    "PF2E": {
+      "Character": {
+        "Recovery": "Recupero",
+        "Sections": "Sezioni del personaggio",
+        "SelectCharacter": "Seleziona un personaggio",
+        "Character": "Personaggio",
+        "EditorFailed": "Impossibile aprire l’editor dell’attore.",
+        "Edit": "Modifica",
+        "ArmorClass": "Classe Armatura",
+        "Speed": "Velocità",
+        "Perception": "Percezione",
+        "Initiative": "Iniziativa",
+        "HitPointAmount": "Quantità di punti ferita",
+        "Attack": "Attacco",
+        "Unidentified": "Non identificato",
+        "CarryState": "Stato di trasporto",
+        "Spells": "Incantesimi",
+        "LoadingBiography": "Caricamento della biografia…",
+        "InlineRollUnavailable": "Tiro integrato non disponibile senza autorizzazione OWNER",
+        "EmptyBiography": "Non è stata registrata alcuna biografia.",
+        "BiographyUnavailable": "La biografia non è disponibile.",
+        "AddCondition": "Aggiungi una condizione",
+        "Working": "Operazione in corso…",
+        "ActionFailed": "Impossibile completare l’azione.",
+        "Empty": "Non c’è niente da mostrare.",
+        "Tab": {
+          "Overview": "Panoramica",
+          "Statistics": "Statistiche",
+          "Inventory": "Inventario",
+          "Spells": "Incantesimi",
+          "Features": "Capacità",
+          "Biography": "Biografia",
+          "Actions": "Azioni",
+          "Gear": "Equipaggiamento",
+          "More": "Altro"
+        },
+        "Carry": {
+          "Held1": "Impugnato (1 mano)",
+          "Held2": "Impugnato (2 mani)",
+          "WornSlot": "Indossato in uno slot equipaggiamento",
+          "WornNoSlot": "Indossato fuori da uno slot equipaggiamento",
+          "Stowed": "Riposto",
+          "Dropped": "Lasciato cadere",
+          "Held": "Impugnato",
+          "Worn": "Indossato"
+        },
+        "Type": {
+          "Character": "Personaggio",
+          "NPC": "PNG",
+          "Familiar": "Famiglio",
+          "Hazard": "Pericolo",
+          "Loot": "Bottino",
+          "Party": "Gruppo",
+          "Army": "Esercito",
+          "Vehicle": "Veicolo"
+        },
+        "Biography": {
+          "Age": "Età",
+          "Gender": "Genere",
+          "Height": "Altezza",
+          "Weight": "Peso",
+          "BirthPlace": "Luogo di nascita",
+          "Attitude": "Atteggiamento",
+          "Beliefs": "Convinzioni",
+          "Edicts": "Editti",
+          "Anathema": "Anatema"
+        },
+        "Section": {
+          "VitalStatistics": "Statistiche vitali",
+          "HitPoints": "Punti ferita",
+          "Resources": "Risorse",
+          "Strikes": "Attacchi",
+          "Conditions": "Condizioni",
+          "SavingThrows": "Tiri salvezza",
+          "Skills": "Abilità",
+          "Perception": "Percezione",
+          "CurrencyAndWealth": "Monete e ricchezza",
+          "Inventory": "Inventario",
+          "Biography": "Biografia",
+          "Spells": "Incantesimi",
+          "Attributes": "Attributi",
+          "Actions": "Azioni",
+          "PassiveFeatures": "Capacità passive",
+          "PinnedActions": "Azioni fissate"
+        },
+        "Action": {
+          "Add": "Aggiungi",
+          "ApplyCarry": "Applica stato di trasporto",
+          "Attack": "Attacca",
+          "Cast": "Lancia",
+          "CriticalDamage": "Danni critici",
+          "Damage": "Danni",
+          "Details": "Dettagli",
+          "Heal": "Cura",
+          "Invest": "Investi",
+          "ItemCard": "Scheda oggetto",
+          "RestOvernight": "Riposa per la notte",
+          "RollInitiative": "Tira l’iniziativa",
+          "SetTemporaryHP": "Imposta PF temporanei",
+          "Uninvest": "Disinvesti",
+          "Use": "Usar",
+          "DecreaseResource": "Riduci {resource}",
+          "IncreaseResource": "Aumenta {resource}",
+          "DecreaseCondition": "Riduci {condition}",
+          "IncreaseCondition": "Aumenta {condition}",
+          "PostToChat": "Pubblica in chat",
+          "ViewAll": "Mostra tutto",
+          "ViewAllStatistics": "Mostra tutte le statistiche"
+        },
+        "ActionCost": {
+          "Actions": "Costo azione",
+          "Free": "Azione gratuita",
+          "Reaction": "Reazione"
+        },
+        "AdjustHitPoints": "Modifica i punti ferita",
+        "AllRanks": "Tutti i gradi",
+        "AtWill": "A volontà",
+        "AttackVariants": "Varianti di attacco",
+        "Cantrip": "Trucchetto",
+        "Cantrips": "Trucchetti",
+        "ClassDC": "CD di classe",
+        "EditCharacter": "Modifica personaggio",
+        "Expended": "Esaurito",
+        "Filter": {
+          "All": "Tutte le azioni",
+          "Pinned": "Fissati",
+          "Reactions": "Reazioni"
+        },
+        "FilterActions": "Filtra azioni",
+        "FilterSpells": "Filtra incantesimi",
+        "Focus": "Focalizzato",
+        "HeroPoints": "Punti eroici",
+        "ItemActions": "Azioni dell’oggetto",
+        "MoreDetails": "Altri dettagli",
+        "ProficiencyRank": "Competenza {rank}",
+        "Rank": {
+          "Untrained": "Non addestrato",
+          "Label": "Grado"
+        },
+        "PrepareSpells": "Prepara",
+        "PrepareEntry": "Prepara {entry}",
+        "Preparation": {
+          "Title": "Preparare gli incantesimi",
+          "Intro": "Scegli un incantesimo per ogni slot e tocca Applica. Ogni modifica viene salvata subito; gli slot consumati restano tali.",
+          "SlotLabel": "{rank}, casella {slot}",
+          "EmptySlot": "Slot vuoto",
+          "UnavailableSpell": "Incantesimo non disponibile",
+          "Apply": "Applica",
+          "SpellCollection": "Raccolta di incantesimi",
+          "SpellCollectionCount": "Raccolta di incantesimi · {value}/{max}",
+          "Remove": "Rimuovi",
+          "NoSlots": "Non ci sono slot di preparazione disponibili in questa voce."
+        },
+        "RollSave": "Tira il tiro salvezza di {label} {modifier}",
+        "RollSkill": "Tira {label} {modifier}; {rank}",
+        "RollStatistic": "Tira {label} {modifier}",
+        "SearchActions": "Cerca azioni",
+        "SearchGear": "Cerca equipaggiamento",
+        "SearchSpells": "Cerca incantesimi",
+        "Shield": {
+          "Broken": "Rotto",
+          "Destroyed": "Distrutto",
+          "Raised": "Sollevato",
+          "Details": "Dettagli scudo",
+          "Intact": "Integro",
+          "HP": "PF scudo",
+          "RaisedAC": "CA con scudo sollevato",
+          "BreakThreshold": "Soglia di rottura",
+          "None": "Nessuno scudo",
+          "Tab": "Scudo",
+          "Repair": "Tenta riparazione",
+          "Changed": "I PF dello scudo sono cambiati. Riapri questo editor."
+        },
+        "SpellAttack": "Attacco con incantesimo",
+        "SpellDC": "CD dell’incantesimo",
+        "TemporaryHP": "PF temporanei",
+        "Details": "Dettagli",
+        "AC": "CA",
+        "Actions": "Azioni",
+        "Bulk": {
+          "Encumbered": "Sovraccarico oltre",
+          "Label": "Ingombro",
+          "Maximum": "Massimo"
+        },
+        "Check": "Prova",
+        "HP": "PF",
+        "Hardness": "Durezza",
+        "CharacterOptions": "Opzioni personaggio",
+        "TempHPShort": "PF temp.",
+        "NoActiveConditions": "Nessuna condizione attiva.",
+        "Supplement": {
+          "Effects": "Effetti",
+          "NativeManagement": "Funzioni della scheda nativa",
+          "NativeManagementHint": "Preparazione degli incantesimi, rituali, artigianato, avanzamento del personaggio e impostazioni della campagna si gestiscono nella scheda nativa PF2e.",
+          "Bulk": "Volume",
+          "Identity": "Identità ed esplorazione",
+          "Heritage": "Retaggio",
+          "Background": "Antefatto",
+          "Deity": "Divinità",
+          "Size": "Taglia",
+          "Traits": "Tratti",
+          "Experience": "Esperienza",
+          "Languages": "Lingue",
+          "Senses": "Sensi",
+          "Movement": "Movimento",
+          "Proficiencies": "Altre competenze",
+          "Equipment": "Monete e investimenti",
+          "Currency": "Monete",
+          "Invested": "Investiti",
+          "Defenses": "Immunità, debolezze e resistenze",
+          "Immunities": "Immunità",
+          "Weaknesses": "Debolezze",
+          "Resistances": "Resistenze",
+          "Expired": "Scaduto",
+          "Slots": "Slot"
+        },
+        "ArmorClassModifiers": "Modificatori della Classe Armatura",
+        "ModifierName": "Nome del modificatore",
+        "ModifierValue": "Valore del modificatore",
+        "ModifierType": "Tipo di modificatore",
+        "RemoveModifier": "Rimuovi {label}",
+        "ModifiersChanged": "I modificatori della Classe Armatura sono cambiati. Riapri l’editor e riprova.",
+        "Defenses": {
+          "Immunities": "Immunità",
+          "Weaknesses": "Debolezze",
+          "Resistances": "Resistenze",
+          "Add": "Aggiungi {category}",
+          "Derived": "Derivate da talenti ed effetti",
+          "Exception": "Eccetto {value}",
+          "Type": "Tipo di difesa",
+          "Value": "Valore",
+          "ChooseType": "Scegli un tipo",
+          "Remove": "Rimuovi {type}",
+          "More": "Altro",
+          "Exceptions": "Eccezioni",
+          "DoubleVs": "Doppia resistenza contro",
+          "ChooseTag": "Scegli un tratto",
+          "RemoveTag": "Rimuovi {tag}",
+          "Changed": "Le difese sono cambiate. Riapri l’editor e riprova."
+        },
+        "ShortcutUnavailable": "Questa scorciatoia non è più disponibile.",
+        "ModifierTypes": {
+          "ability": "Caratteristica",
+          "proficiency": "Competenza",
+          "item": "Oggetto",
+          "status": "Bonus di stato",
+          "circumstance": "Circostanza",
+          "untyped": "Senza tipo"
+        },
+        "EffectsAndConditions": "Effetti e condizioni",
+        "RollPerception": "Tira Percezione",
+        "RestHint": "Concludi la giornata. Preparati alla prossima.",
+        "OverviewDefenses": "Difese",
+        "ViewDetails": "Mostra dettagli",
+        "PerceptionStatus": "Stato",
+        "DamageType": "Tipo di danno",
+        "LimitedUses": "Utilizzi",
+        "Charges": "Cariche"
+      },
+      "NativeEditorRequired": "Questa azione richiede l’editor attore nativo di PF2e.",
+      "RequiresV14": "Questa azione PF2e richiede Foundry VTT 14 o successivo.",
+      "Unavailable": "Questa azione PF2e non è disponibile.",
+      "InvalidInput": "Questa azione PF2e non è valida o è cambiata. Aggiorna e riprova.",
+      "SpellPreparation": {
+        "InvalidInput": "Questa scelta di preparazione degli incantesimi non è valida o è cambiata. Aggiorna e riprova.",
+        "Unavailable": "Questa voce di lancio non è più disponibile per la preparazione.",
+        "Changed": "La preparazione degli incantesimi è cambiata. Aggiorna e riprova."
+      },
+      "ItemMissing": "Questo oggetto non è più disponibile.",
+      "ResourceChanged": "Questa risorsa è cambiata. Aggiorna e riprova.",
+      "HitPointsChanged": "I punti ferita sono cambiati. Aggiorna e riprova.",
+      "CurrencyChanged": "La valuta è cambiata. Aggiorna e riprova.",
+      "InventoryEffect": {
+        "Changed": "Questo oggetto è cambiato. Aggiorna e riprova."
+      },
+      "EditItem": "Modifica oggetto",
+      "ItemDetailsChanged": "Questo oggetto non è più disponibile. Aggiorna la vista e riprova.",
+      "Play": {
+        "Changed": "Questa opzione è cambiata o non è disponibile. Aggiorna e riprova.",
+        "Options": "Opzioni",
+        "ActiveExploration": "Esplorazione attiva",
+        "StartExploration": "Inizia a esplorare",
+        "Ammunition": "Munizioni",
+        "NoAmmo": "Nessuna munizione",
+        "LoadedAmmo": "Munizioni caricate",
+        "ElementalBlasts": "Esplosioni elementali",
+        "DamageType": "Tipo di danno",
+        "ChannelElements": "Canalizza gli elementi",
+        "Melee": "Mischia",
+        "Ranged": "Distanza",
+        "Damage": "Danni",
+        "Critical": "Critico"
+      },
+      "Spells": {
+        "Title": "Gestisci incantesimi",
+        "ManageIntro": "Gestisci gli incantesimi di questa voce, comprese le firme disponibili, oppure aggiungi incantesimi dai compendi installati.",
+        "Signatures": "Incantesimi firma",
+        "Unsign": "Rimuovi firma",
+        "Sign": "Imposta come firma",
+        "Search": "Cerca incantesimi installati",
+        "SearchButton": "Cerca",
+        "Add": "Aggiungi un incantesimo",
+        "ImportRank": "Importa al grado",
+        "Import": "Aggiungi",
+        "More": "Altri risultati",
+        "NoResults": "Nessun incantesimo idoneo trovato.",
+        "SearchFailed": "Impossibile completare la ricerca degli incantesimi."
+      },
+      "Controls": {
+        "Quantity": "Quantità",
+        "ApplyQuantity": "Applica quantità",
+        "Container": "Contenitore",
+        "NoContainer": "Nessun contenitore",
+        "ApplyContainer": "Sposta oggetto",
+        "DecreaseEffect": "Riduci valore effetto",
+        "IncreaseEffect": "Aumenta valore effetto",
+        "RemoveEffect": "Rimuovi effetto",
+        "ConfirmRemoveEffect": "Tocca di nuovo per rimuovere questo effetto"
+      },
+      "PersistentDamage": {
+        "Title": "Danni persistenti",
+        "Unavailable": "Questa azione PF2e per i danni persistenti non è disponibile.",
+        "InvalidInput": "Questa azione non è valida o è cambiata. Aggiorna e riprova.",
+        "Changed": "I danni persistenti sono cambiati. Riapri l’editor.",
+        "Formula": "Formula dei danni",
+        "DamageType": "Tipo di danno",
+        "DC": "CD di recupero",
+        "Add": "Aggiungi",
+        "AddTitle": "Aggiungi danni persistenti",
+        "Empty": "Nessun danno persistente registrato.",
+        "Remove": "Rimuovi",
+        "Recovery": "Recupero",
+        "RollDamage": "Tira i danni"
       }
     }
   }

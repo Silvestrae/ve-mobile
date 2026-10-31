@@ -47,6 +47,10 @@
       radial-gradient(circle at 85% -10%, color-mix(in srgb, var(--ve-red-bright) 34%, transparent), transparent 34%) !important;
   }
 
+  .ve-mobile-app[data-ve-style-authority][data-character-theme="custom"] {
+    background-image: linear-gradient(180deg, var(--ve-surface-up), var(--ve-bg) 58%) !important;
+  }
+
   .ve-mobile-app[data-ve-style-authority][data-character-theme="bestiary"] {
     background-image: radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--ve-red-bright) 9%, transparent), transparent 37%) !important;
   }
@@ -262,6 +266,14 @@
     background: linear-gradient(180deg,
       color-mix(in srgb, var(--ve-character-accent) 18%, var(--ve-surface-up)),
       color-mix(in srgb, var(--ve-character-accent) 8%, var(--ve-surface))) !important;
+  }
+
+  .ve-mobile-app[data-ve-style-authority][data-character-theme="custom"] .ve-bottom-nav .ve-main-nav-item:is(.is-active, [aria-current="page"]),
+  .ve-mobile-app[data-ve-style-authority][data-character-theme="custom"] .ve-sheet-tabs button:is(.is-active, [aria-selected="true"]) {
+    color: var(--ve-custom-accent-text) !important;
+    border-color: var(--ve-custom-highlight-ink) !important;
+    background: var(--ve-custom-accent) !important;
+    box-shadow: none !important;
   }
 
   .ve-mobile-app[data-ve-style-authority] .ve-sheet-tabs button span {
@@ -569,4 +581,143 @@
     padding-bottom: 0 !important;
   }
   .ve-mobile-app[data-ve-style-authority] .ve-character-shared-shell > .ve-character-heading > .ve-sheet-tabs { position: relative !important; top: 0 !important; }
+}
+
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-settings-group-toggle {
+    min-height: 51px !important; padding: 9px 10px !important; gap: 8px !important;
+    font: 600 16px/1.25 "Signika", sans-serif !important;
+    & > span { font: inherit !important; }
+    & > i { font-size: 16px !important; }
+  }
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-journal-entry {
+    grid-template-columns: 32px minmax(0,1fr) 18px !important;
+    & > img, & > .ve-journal-entry-icon { width: 32px !important; height: 32px !important; font-size: 16px !important; }
+  }
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-ac-tabs {
+    display: flex !important; gap: 6px !important; margin-bottom: 10px !important;
+    & > button { flex: 1 !important; min-height: 36px !important; }
+    & > button[aria-selected="true"] { background: color-mix(in srgb,var(--ve-character-accent,var(--ve-red)) 24%,var(--ve-surface)) !important; border-color: var(--ve-character-accent,var(--ve-red)) !important; }
+    & > button:disabled { opacity: .4 !important; cursor: default !important; }
+  }
+  .ve-mobile-app[data-ve-style-authority] :is(.ve-pf2e-ac-panel,.ve-pf2e-shield-panel)[hidden] { display: none !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-pf2e-shield-hp-editor {
+    display: flex !important; align-items: center !important; gap: 8px !important; margin: 12px 0 !important;
+    & input { width: 76px !important; min-width: 0 !important; }
+  }
+  .ve-mobile-app[data-ve-style-authority] .ve-pf2e-shield-editor-actions { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
+  .ve-mobile-app[data-theme="dark"] :is(.ve-native-chat-screen,.ve-action-session-messages) :is(a.inline-check, a.inline-damage, a[data-pf2-effect-area], a[data-pf2-check], a[data-pf2-repost-flavor]) {
+    color: var(--ve-chat-message-text,var(--ve-text)) !important; background: var(--ve-chat-message-control,var(--ve-surface-up)) !important;
+    border-color: var(--ve-chat-message-line,var(--ve-border)) !important; text-shadow: none !important;
+    & :is(span,i) { color: inherit !important; background: transparent !important; }
+  }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-document-dialog .ve-pf2e-shield-hp-editor { display: flex !important; align-items: center !important; gap: 8px !important; }
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-document-dialog .ve-pf2e-shield-hp-editor input { width: 76px !important; flex: 0 1 76px !important; }
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-document-dialog .ve-pf2e-ac-tabs > button[aria-selected="true"] { background: color-mix(in srgb,var(--ve-character-accent,var(--ve-red)) 24%,var(--ve-surface)) !important; border-color: var(--ve-character-accent,var(--ve-red)) !important; }
+}
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-reader > header h2,
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-page > h3 {
+    min-width: 0 !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+  }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-page-selector span {
+    min-width: 0 !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+  }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: visible !important;
+    touch-action: pan-y !important;
+    font-size: clamp(12px, var(--ve-journal-font-size, 16px), 30px) !important;
+  }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text * {
+    min-inline-size: 0 !important;
+    max-inline-size: 100% !important;
+    box-sizing: border-box !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    font-size: inherit !important;
+  }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text :is(h1,h2,h3,h4,h5,h6) { line-height: 1.2 !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text h1 { font-size: 1.8em !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text h2 { font-size: 1.55em !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text h3 { font-size: 1.35em !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text h4 { font-size: 1.2em !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text h5 { font-size: 1.1em !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text h6 { font-size: 1em !important; }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text :is(pre,code,kbd,samp) {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere !important;
+  }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text table {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+  }
+  .ve-mobile-app[data-ve-style-authority] .ve-journal-rich-text :is(th,td) {
+    min-width: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+}
+/* Admit the native D&D5e AC form into VE's mobile visual language. All native
+   fields and submit-on-change handlers stay intact; these rules expire with VE. */
+@layer ve-mobile-style-authority {
+  body.system-dnd5e.ve-mobile-running:has(.ve-mobile-app[data-theme]) .armor-class.ve-mobile-admitted-app {
+    --ve-ac-surface: #211d1d;
+    --ve-ac-raised: #292525;
+    --ve-ac-text: #fff7e8;
+    --ve-ac-subtle: #cdbb9f;
+    --ve-ac-line: #77694f;
+    width: min(420px,calc(100vw - 24px)) !important;
+    height: auto !important; min-height: 0 !important;
+    max-height: calc(var(--ve-mobile-viewport-height,100dvh) - 24px) !important;
+    display: flex !important; flex-direction: column !important;
+    border: 1px solid var(--ve-ac-line) !important; border-radius: 10px !important;
+    color: var(--ve-ac-text) !important; background: var(--ve-ac-surface) !important;
+    box-shadow: 0 12px 40px #0008 !important; overflow: hidden !important;
+    & .window-header { flex: 0 0 auto !important; min-height: 48px !important; padding: 4px 10px !important; border: 0 !important; border-bottom: 1px solid var(--ve-ac-line) !important; background: var(--ve-ac-raised) !important; color: var(--ve-ac-text) !important; }
+    & .window-title { margin: 0 !important; color: inherit !important; font: 700 20px/1.2 Georgia,serif !important; }
+    & .window-header .header-control:not([data-action="close"]):not(.close) { display: none !important; }
+    & .window-header :is([data-action="close"],.close) { display: grid !important; place-items: center !important; width: 40px !important; min-height: 40px !important; border: 1px solid var(--ve-ac-line) !important; border-radius: 6px !important; color: inherit !important; background: var(--ve-ac-surface) !important; }
+    & .window-content { flex: 1 1 auto !important; min-height: 0 !important; padding: 12px !important; color: inherit !important; background: transparent !important; border: 0 !important; overflow: hidden auto !important; }
+    & section.flexcol { display: grid !important; gap: 12px !important; height: auto !important; min-height: 0 !important; }
+    & .final-value { color: var(--ve-ac-text) !important; font: 700 36px/1.1 Signika,sans-serif !important; text-align: center !important; }
+    & fieldset.card { display: grid !important; gap: 10px !important; min-width: 0 !important; margin: 0 !important; padding: 10px !important; border: 1px solid var(--ve-ac-line) !important; border-radius: 7px !important; background: var(--ve-ac-raised) !important; box-shadow: none !important; color: inherit !important; }
+    & legend { padding-inline: 4px !important; color: var(--ve-ac-subtle) !important; font: 600 12px/1.3 Signika,sans-serif !important; }
+    & .form-group { min-width: 0 !important; margin: 0 !important; gap: 5px !important; color: inherit !important; }
+    & fieldset:not(.table) .form-group { display: grid !important; grid-template-columns: minmax(0,1fr) !important; }
+    & .form-fields { display: flex !important; min-width: 0 !important; }
+    & :is(label,input,select,.form-fields) { color: var(--ve-ac-text) !important; font-family: Signika,sans-serif !important; font-size: 14px !important; }
+    & :is(input,select) { box-sizing: border-box !important; width: 100% !important; min-width: 0 !important; min-height: 40px !important; padding: 6px 8px !important; border: 1px solid var(--ve-ac-line) !important; border-radius: 5px !important; background: var(--ve-ac-surface) !important; }
+    & input[name="system.attributes.ac.formula"] { font: 10px/1.3 monospace !important; padding-inline: 4px !important; }
+    & input:disabled { opacity: 1 !important; color: var(--ve-ac-subtle) !important; }
+    & fieldset.table :is(.header,.form-group) { display: grid !important; grid-template-columns: minmax(0,1fr) 44px 44px !important; align-items: center !important; gap: 6px !important; background: transparent !important; }
+    & fieldset.table .header { color: var(--ve-ac-subtle) !important; min-height: 24px !important; }
+    & .header .armor-value { grid-column: 2 !important; }
+    & .header .magical-bonus { grid-column: 3 !important; }
+    & .name { display: flex !important; align-items: center !important; gap: 7px !important; min-width: 0 !important; }
+    & .name img { flex: 0 0 28px !important; width: 28px !important; height: 28px !important; }
+    & .name a { color: inherit !important; overflow-wrap: anywhere !important; }
+    & :is(.armor-value,.magical-bonus) { text-align: center !important; }
+  }
+  body.system-dnd5e.ve-mobile-running:has(.ve-mobile-app[data-theme="light"]) .armor-class.ve-mobile-admitted-app {
+    --ve-ac-surface: #faf5e9; --ve-ac-raised: #e5ddcb; --ve-ac-text: #282b23; --ve-ac-subtle: #565b48; --ve-ac-line: #aaa38a;
+  }
+}
+@layer ve-mobile-style-authority {
+  body.system-dnd5e.ve-mobile-running:has(.ve-mobile-app[data-character-theme="custom"]) .armor-class.ve-mobile-admitted-app {
+    --ve-ac-surface: var(--ve-custom-surface);
+    --ve-ac-raised: var(--ve-custom-surface-up);
+    --ve-ac-text: var(--ve-custom-text);
+    --ve-ac-subtle: var(--ve-custom-subtle);
+    --ve-ac-line: var(--ve-custom-border);
+  }
 }

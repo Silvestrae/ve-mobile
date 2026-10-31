@@ -5,7 +5,7 @@ import { localizeFoundry } from "./localization.mjs";
  * This adapter only invokes the listeners installed by that native request.
  */
 export function createNativeTokenPlacementGateway({
-  getPlacementClass = () => globalThis.game?.system?.canvas?.TokenPlacement,
+  getPlacementClass = () => null,
   getCanvas = () => globalThis.canvas,
   getRequestFrame = () => globalThis.requestAnimationFrame,
   getCancelFrame = () => globalThis.cancelAnimationFrame

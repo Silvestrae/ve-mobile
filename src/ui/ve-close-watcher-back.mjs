@@ -1,3 +1,5 @@
+import { characterHomeBackTarget } from "./ve-back-dispatcher.mjs";
+
 /**
  * Give Android's close request one VE layer per user-opened surface. Unlike a
  * script-created history entry, a CloseWatcher receives Back before history
@@ -79,6 +81,7 @@ export function veCloseWatcherLayers(state = {}, { splitActive = false, nativeLa
   if (state.modeTransition || state.reconnect || state.templatePlacement) return [];
   const layers = [];
   if (state.route && state.route !== "characters") layers.push(`route:${state.route}`);
+  if (characterHomeBackTarget(state)) layers.push("character-overview");
   if (splitActive) layers.push("split-pane");
   if (state.sceneChooserOpen) layers.push("scene-chooser");
   if (state.route === "journals" && state.journal) layers.push(`journal:${state.journal.id ?? "open"}`);

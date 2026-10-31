@@ -1,5 +1,5 @@
 import { localizedText, localizedNumber } from "./localized-text.mjs";
-import { icon, node } from "./dom.mjs";
+import { icon, node, vectorIcon } from "./dom.mjs";
 import { renderCharacters } from "../features/characters/presenter.mjs";
 import { renderJournals } from "../features/journals/presenter.mjs";
 import { renderChat } from "../features/chat/presenter.mjs";
@@ -8,6 +8,7 @@ import { renderSettings } from "../features/settings/presenter.mjs";
 import { createCombatCarouselUiState, renderCombat, renderGmCombatControls } from "../features/combat/presenter.mjs";
 import { sheetTabIcon } from "../features/characters/sheet-icons.mjs";
 import { resolveCharacterThemeProfile } from "../kernel/character-theme.mjs";
+import { createCustomThemePaletteResolver } from "../kernel/custom-theme.mjs";
 import { actionResultsDeferred, renderActionSessionModal } from "./action-session-modal.mjs";
 import { createSceneChoiceTransition } from "./scene-choice-transition.mjs";
 import { createVeBackDispatcher } from "./ve-back-dispatcher.mjs";
@@ -15,6 +16,7 @@ import { createVeCloseWatcherBack, veCloseWatcherLayers } from "./ve-close-watch
 import { createElapsedWorkerClock } from "./elapsed-worker-clock.mjs";
 import { createLoadingCheckpoints } from "./loading-checkpoints.mjs";
 import { bindCharacterHeaderScroll } from "./character-header-scroll.mjs";
+import { createSceneTabGesture } from "./scene-tab-gesture.mjs";
 import { createControlsGuide } from "./controls-guide.mjs";
 import { createControlsInvitation } from "./controls-invitation.mjs";
 
@@ -55,6 +57,8 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   let renderedSplitSceneKey = "";
   let renderedSplitActionSessionId = "";
   let renderedState = null;
+  const customThemePalette = createCustomThemePaletteResolver();
+  let appliedCustomPalette = null;
   let activeSplitScreen = false;
   let activeTemplatePlacement = false;
   let sceneFocusTransitioning = false;
@@ -156,6 +160,20 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     ["combat", combatNavIcon, "Combat"],
     ["settings", "fa-gear", "Settings"]
   ];
+  const pauseNotice = node("div", { className: "ve-pause-notice", attrs: { hidden: true, role: "status", "aria-live": "polite" } });
+  const sceneTabGesture = createSceneTabGesture({
+    scope,
+    canPause: () => Boolean(store.state.snapshot?.user?.canPause),
+    blocked: () => Boolean(activeTemplatePlacement || store.state.reconnect || store.state.modeTransition),
+    onSingle: () => {
+      const action = sceneNavigationTapAction({ route: store.state.route, splitActive: activeSplitScreen });
+      if (action === "open-full-scene") commands.openFullScene();
+      else if (action === "open-split-scene-chooser") commands.openSplitSceneChooser();
+      else if (action === "navigate-scene") commands.navigate("scene");
+      else commands.toggleSceneChooser();
+    },
+    onDouble: () => Promise.resolve().then(() => commands.toggleGamePause()).catch(error => commands.reportSceneNavigationError?.(error))
+  });
   const navButtons = new Map(navItems.map(([route, createIcon, label]) => {
     const localizedLabel = commands.localize?.(`VEMOBILE.Navigation.${label}`, label) ?? label;
     const button = node("button", {
@@ -163,22 +181,37 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       attrs: { type: "button" },
       dataset: { route },
       on: {
-        click: () => {
+        click: (event) => {
           if (activeTemplatePlacement) return;
+          if (route !== "scene") sceneTabGesture.cancel();
           if (route === "scene") {
-            const action = sceneNavigationTapAction({ route: store.state.route, splitActive: activeSplitScreen });
-            if (action === "open-full-scene") commands.openFullScene();
-            else if (action === "open-split-scene-chooser") commands.openSplitSceneChooser();
-            else if (action === "navigate-scene") commands.navigate("scene");
-            else commands.toggleSceneChooser();
+            sceneTabGesture.tap(event);
           } else if (activeSplitScreen && store.state.route === route) commands.openFullScene();
           else commands.navigate(route);
         }
       },
-      children: [typeof createIcon === "function" ? createIcon() : icon(createIcon), node("span", { text: localizedLabel })]
+      children: [...(route === "scene" ? [node("div", { className: "ve-scene-nav-icons", children: [icon("fa-map"), icon("fa-pause")] })] : [typeof createIcon === "function" ? createIcon() : icon(createIcon)]), node("span", { text: localizedLabel })]
     }, scope);
     return [route, button];
   }));
+  const unreadBadge = node("div", { className: "ve-chat-unread-badge", attrs: { hidden: true, "aria-hidden": "true" } });
+  navButtons.get("chat").append(unreadBadge);
+  let previousUnread = 0, unreadAnimation = null;
+  scope.own(() => unreadAnimation?.cancel());
+  commands.watchUnreadChat?.(scope, ({ count }) => {
+    const total = Math.max(0, Number(count) || 0);
+    unreadBadge.hidden = total === 0;
+    unreadBadge.textContent = total > 99 ? "99+" : localizedNumber(total, commands.readLocale?.() ?? "en");
+    navButtons.get("chat").setAttribute("aria-label", total === 0
+      ? localizedText(commands.localize, "VEMOBILE.Navigation.Chat", "Chat")
+      : total === 1 ? localizedText(commands.localize, "VEMOBILE.Navigation.ChatUnreadOne", "Chat · 1 unread message")
+        : localizedText(commands.localize, "VEMOBILE.Navigation.ChatUnreadMany", "Chat · {count} unread messages", { count: localizedNumber(total, commands.readLocale?.() ?? "en") }));
+    if (total > previousUnread && !root.ownerDocument?.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+      unreadAnimation?.cancel();
+      unreadAnimation = unreadBadge.animate?.([{ transform: "scale(1)" }, { transform: "scale(1.18)" }, { transform: "scale(1)" }], { duration: 360 });
+    }
+    previousUnread = total;
+  });
   const latencyValue = node("strong", { text: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.Ms", "— ms") });
   const fpsValue = node("strong", { text: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.FPS", "— FPS") });
   const metricsInfo = node("div", {
@@ -191,6 +224,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   });
   const navRoutes = node("div", { className: "ve-nav-routes", children: [...navButtons.values(), metricsInfo] });
   nav.append(splitToggle, rotateSuggestion, navRoutes, navSideToggle);
+  nav.append(pauseNotice);
 
   const backDispatcher = createVeBackDispatcher({
     getState: () => store.state,
@@ -200,8 +234,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       closeTopmost: () => nativeApplications?.settings?.topmost?.()
         ? nativeApplications.settings.closeTopmost() : nativeApplications?.admissions?.closeTopmost?.()
     },
-    getRoot: () => root.ownerDocument ?? root,
-    isSplitActive: () => activeSplitScreen
+    getRoot: () => root.ownerDocument ?? root
   });
   const nativeBackLayers = () => [...(nativeApplications?.admissions?.layers ?? []), ...(nativeApplications?.settings?.layers ?? []), ...(!controlsGuide.element.hidden ? ["controls-guide"] : [])];
   const closeWatcherBack = createVeCloseWatcherBack({
@@ -250,9 +283,17 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     const settings = commands.readFramePreferences();
     const themeProfile = resolveCharacterThemeProfile(
       selectedActor?.themeClassKeys ?? [selectedActor?.themeClassKey ?? "neutral"],
-      settings.colorScheme
+      settings.colorScheme,
+      settings.customTheme
     );
     const characterTheme = themeProfile.theme;
+    const customPalette = characterTheme === "custom" ? customThemePalette.resolve(settings.customTheme, latestPolicy.theme) : null;
+    if (customPalette !== appliedCustomPalette) {
+      applyCustomThemePalette(root, customPalette);
+      applyCustomThemePalette(document.body, customPalette);
+      appliedCustomPalette = customPalette;
+      if (!customPalette) customThemePalette.clear();
+    }
     const previousSplitActive = activeSplitScreen;
     const previousSceneHost = previousSplitActive
       ? splitSceneViewport
@@ -368,13 +409,21 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       queueMicrotask(syncCombatControlGeometry);
     }
 
+    const paused = Boolean(state.snapshot?.world?.paused);
+    pauseNotice.hidden = !paused || state.route !== "scene";
+    const pauseCopy = state.snapshot?.user?.canPause
+      ? localizedText(commands.localize, "VEMOBILE.Navigation.PausedHint", "Game paused · Double-tap Scene to unpause")
+      : localizedText(commands.localize, "VEMOBILE.Navigation.Paused", "Game paused");
+    if (pauseNotice.textContent !== pauseCopy) pauseNotice.textContent = pauseCopy;
     for (const [route, button] of navButtons) {
       const active = state.route === route;
       button.classList.toggle("is-active", active);
       if (active) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
       button.disabled = activeTemplatePlacement;
+      if (route === "combat") button.classList.toggle("has-active-encounter", Boolean(state.snapshot?.combat?.started));
       if (route === "scene") {
+        button.classList.toggle("is-game-paused", paused);
         const chooserIntent = active;
         const chooserOpen = chooserIntent && state.sceneChooserOpen;
         const label = chooserOpen ? localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.CloseScenes", "Close Scenes") : localizedText(commands.localize, "VEMOBILE.Interface.Presenter.ChooseScene", "Choose Scene");
@@ -750,6 +799,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   function syncCombatControlGeometry() {
     if (!mounted) return;
     const navBounds = nav.getBoundingClientRect();
+    root.dataset.navigationDock = navBounds.width > navBounds.height ? "bottom" : "side";
     // Forced Tablet can still use bottom navigation below the rail breakpoint.
     if (navBounds.width > navBounds.height && navBounds.height > 0) root.style.setProperty("--ve-nav-dock-height", `${navBounds.height}px`);
     const controlHeight = combatControlsHost.hidden ? 0 : combatControlsHost.getBoundingClientRect().height;
@@ -987,6 +1037,9 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     delete document.body.dataset.veMobileCharacterTheme;
     delete document.body.dataset.veMobileCharacterThemeBlend;
     clearThemeBlend(document.body);
+    applyCustomThemePalette(document.body, null);
+    customThemePalette.clear();
+    appliedCustomPalette = null;
     root.remove();
   }
 
@@ -1364,7 +1417,29 @@ export function createModeTransitionBlocker(scope, { localize = null, delayMs = 
 }
 
 function combatNavIcon() {
-  return icon("fa-swords");
+  const sword = "M16 1 18.5 5V20H22V22H17.5V27H18.5V30H13.5V27H14.5V22H10V20H13.5V5Z";
+  return node("div", { className: "ve-combat-nav-icon", attrs: { "aria-hidden": "true" }, children: [
+    vectorIcon("0 0 32 32", [
+      { tag: "path", attrs: { class: "ve-combat-sword ve-combat-sword-left", d: sword } },
+      { tag: "path", attrs: { class: "ve-combat-sword ve-combat-sword-right", d: sword } },
+      { tag: "path", attrs: { class: "ve-combat-clash-spark", d: "M16 8V12 M16 16V20 M10 14H14 M18 14H22 M12 10L14 12 M18 16L20 18 M12 18L14 16 M18 12L20 10" } }
+    ])
+  ] });
+}
+
+const CUSTOM_THEME_PROPERTIES = Object.freeze({
+  "--ve-custom-accent": "accent", "--ve-custom-highlight": "highlight",
+  "--ve-custom-accent-ink": "accentInk", "--ve-custom-highlight-ink": "highlightInk",
+  "--ve-custom-accent-text": "accentText", "--ve-custom-bg": "background",
+  "--ve-custom-surface": "surface", "--ve-custom-surface-up": "raised",
+  "--ve-custom-border": "border", "--ve-custom-text": "text", "--ve-custom-subtle": "subtle"
+});
+
+function applyCustomThemePalette(element, palette) {
+  for (const [property, key] of Object.entries(CUSTOM_THEME_PROPERTIES)) {
+    if (palette) element.style.setProperty(property, palette[key]);
+    else element.style.removeProperty(property);
+  }
 }
 
 function applyThemeBlend(element, profile) {
@@ -1415,7 +1490,8 @@ export function snapshotPresentationChangedForRoute(previous, current) {
       return previousActor !== currentActor || actorMenuSignature(previous.snapshot.actors) !== actorMenuSignature(current.snapshot.actors);
     }
     return previous.snapshot.selectedActor !== current.snapshot.selectedActor
-      || actorMenuSignature(previous.snapshot.actors) !== actorMenuSignature(current.snapshot.actors);
+      || (previous.snapshot.actors !== current.snapshot.actors
+        && actorMenuSignature(previous.snapshot.actors) !== actorMenuSignature(current.snapshot.actors));
   }
   if (current.route === "combat") return previous.snapshot.combat !== current.snapshot.combat;
   if (current.route === "journals") return previous.snapshot.journals !== current.snapshot.journals;
