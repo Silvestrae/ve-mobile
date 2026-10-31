@@ -21,7 +21,7 @@ export function nativeSceneTileTapAllowed({ active, state, presentation }) {
     && sceneInteractionIsReady(presentation));
 }
 
-export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
+export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, pwaInstall = null, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
   const localize = (key, fallback, data) => localizedText((id, _fallback, values) => preferencesGateway?.localize?.(id, values), key, fallback, data);
   let runtimeScope = null;
   let activationCommitted = false;
@@ -502,6 +502,18 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
         collective: Boolean(state.snapshot?.selectedActor?.collective),
         canPlaceActor: actorTokenEligible(state.selectedActorSourceUuid),
         actionBarSource: (preferencesGateway.actionMenu?.() ?? {}).quickbarSource ?? "character" });
+    },
+    readPwaInstall: () => pwaInstall?.snapshot() ?? null,
+    watchPwaInstall: (owner, listener) => pwaInstall?.watch(owner, listener),
+    setPwaName: (name, { isCurrent: viewIsCurrent = () => true } = {}) => {
+      const owner = runtimeScope;
+      const isCurrent = () => activationCommitted && owner && runtimeScope === owner && !owner.disposed && readPolicy().active && viewIsCurrent();
+      if (!isCurrent()) return Promise.resolve(false);
+      return pwaInstall?.setName(name, { isCurrent }) ?? Promise.resolve(false);
+    },
+    installPwa: () => {
+      if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active) return Promise.resolve(false);
+      return pwaInstall?.install() ?? Promise.resolve(false);
     },
     readActionSummaryPreferences: () => preferencesGateway.actionSummaries?.() ?? { showActionSummaries: true },
     readSettings: () => {

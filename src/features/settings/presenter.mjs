@@ -13,6 +13,126 @@ import { localizedNumber, localizedText } from "../../ui/localized-text.mjs";
 
 const uiText = (commands, key, fallback, data) => localizedText(commands?.localize, `VEMOBILE.Settings.UI.${key}`, fallback, data);
 
+export function renderPwaInstallSettings(commands, scope, namePrompt = null) {
+  const title = node("strong", { text: uiText(commands, "InstallApp", "Install app") });
+  const hint = node("small");
+  const button = node("button", { className: "ve-settings-diagnostics-button", attrs: { type: "button" }, children: [icon("fa-download"), title] });
+  const update = state => {
+    if (scope.disposed || !state) return;
+    button.disabled = !state.enabled || state.busy;
+    title.textContent = state.installed ? uiText(commands, "AppName", "Installed app name") : uiText(commands, "InstallApp", "Install app");
+    hint.textContent = state.installed
+      ? uiText(commands, "AppInstalledHint", "App installed. Launch it from your home screen. A connection to Foundry is still required.")
+      : !state.secure
+        ? uiText(commands, "AppHttps", "App installation requires an HTTPS Foundry address. An ordinary HTTP LAN address cannot be installed.")
+        : state.canInstall
+          ? uiText(commands, "AppReady", "Install this Foundry address on your home screen for a full-screen experience.")
+          : uiText(commands, "AppMenu", "Open your browser menu and look for Install app or Add to Home screen. Availability depends on your browser and device. Sign in to the world before installing.");
+  };
+  scope.listen(button, "click", async event => {
+    try {
+      if (namePrompt) namePrompt.show(event.currentTarget);
+      else await commands.installPwa();
+    }
+    catch {
+      if (!scope.disposed) hint.textContent = uiText(commands, "AppFailed", "Installation could not open. Try Install app or Add to Home screen from your browser menu.");
+    }
+  });
+  update(commands.readPwaInstall());
+  commands.watchPwaInstall?.(scope, update);
+  return node("div", { className: "ve-setting ve-pwa-install", children: [
+    node("div", { className: "ve-setting-copy", children: [button, hint] })
+  ] });
+}
+
+export function createPwaNamePrompt(commands, scope) {
+  const label = uiText(commands, "AppName", "Installed app name");
+  const input = node("input", { attrs: { id: "ve-pwa-name", type: "text", maxlength: "80", autocomplete: "off" } });
+  const hint = node("p", { attrs: { role: "status", "aria-live": "polite" } });
+  const cancel = node("button", { className: "ve-settings-reload-later", attrs: { type: "button" }, text: uiText(commands, "Cancel", "Cancel") });
+  const install = node("button", { className: "ve-settings-reload-now", attrs: { type: "button" } });
+  const element = node("div", { className: "ve-settings-reload ve-pwa-name-dialog", attrs: {
+    hidden: true, role: "dialog", "aria-modal": "true", "aria-labelledby": "ve-pwa-name-title"
+  }, children: [node("section", { className: "ve-settings-reload-card", children: [
+    icon("fa-download"), node("h2", { attrs: { id: "ve-pwa-name-title" }, text: uiText(commands, "InstallApp", "Install app") }),
+    node("label", { attrs: { for: "ve-pwa-name" }, text: label }), input,
+    node("p", { text: uiText(commands, "AppNameHint", "Use the world title or choose a name for this browser. Different server addresses can be installed separately.") }),
+    hint, node("div", { className: "ve-settings-reload-actions", children: [cancel, install] })
+  ] })] });
+  let opener = null;
+  let generation = 0;
+  let preparing = false;
+  const close = () => {
+    generation++;
+    preparing = false;
+    element.hidden = true;
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+    opener = null;
+  };
+  const update = () => {
+    if (scope.disposed || element.hidden) return;
+    const state = commands.readPwaInstall();
+    if (state.nameSupported === false) input.value = state.name;
+    const changed = input.value.trim() !== state.name;
+    input.disabled = preparing || state.busy || state.nameSupported === false;
+    cancel.disabled = state.busy;
+    install.disabled = preparing || state.busy || !input.value.trim() || (!changed && !state.canInstall);
+    install.textContent = changed ? uiText(commands, "AppContinue", "Continue") : uiText(commands, "InstallApp", "Install app");
+    hint.textContent = state.nameSupported === false
+      ? uiText(commands, "AppNameFailed", "The app name or installation could not be prepared. Try again, or use your browser menu.")
+      : changed ? "" : state.installed
+      ? uiText(commands, "AppRenameHint", "Your browser controls installed app updates. If the name stays unchanged, uninstall the old app and install it again from your browser.")
+      : state.canInstall
+      ? uiText(commands, "AppNameReady", "Tap Install app to continue in your browser.")
+      : uiText(commands, "AppNameWaiting", "Waiting for the browser to offer installation. You can also check Install app or Add to Home screen in its menu.");
+  };
+  scope.listen(cancel, "click", close);
+  scope.listen(input, "input", update);
+  scope.listen(element, "keydown", event => {
+    if (event.key === "Escape" && !cancel.disabled) { event.preventDefault(); close(); }
+    if (event.key === "Tab") {
+      const controls = [input, cancel, install].filter(control => !control.disabled);
+      const index = controls.indexOf(element.ownerDocument.activeElement);
+      const target = controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length];
+      if (target) { event.preventDefault(); target.focus(); }
+    }
+  });
+  scope.listen(install, "click", async () => {
+    const current = generation;
+    const isCurrent = () => !scope.disposed && !element.hidden && generation === current;
+    try {
+      if (input.value.trim() !== commands.readPwaInstall().name) {
+        preparing = true;
+        update();
+        const saved = await commands.setPwaName(input.value, { isCurrent });
+        if (isCurrent() && saved) input.value = commands.readPwaInstall().name;
+      } else {
+        const pending = commands.installPwa(); // Preserve the browser's user gesture.
+        if (await pending && isCurrent()) close();
+      }
+      if (isCurrent()) { preparing = false; update(); }
+    } catch {
+      if (isCurrent()) {
+        preparing = false;
+        update();
+        hint.textContent = uiText(commands, "AppNameFailed", "The app name or installation could not be prepared. Try again, or use your browser menu.");
+      }
+    }
+  });
+  commands.watchPwaInstall?.(scope, update);
+  return Object.freeze({ element, show(trigger) {
+    generation++;
+    preparing = false;
+    opener = trigger;
+    const state = commands.readPwaInstall();
+    input.value = state.customName || state.defaultName || state.name;
+    element.hidden = false;
+    update();
+    input.focus({ preventScroll: true });
+    input.select();
+  } });
+}
+
 export function renderSettings({ commands, scope, overlayHost = null }) {
   const host = node("section", { attrs: { "data-ve-settings-presenter-builds": "1", "data-ve-settings-content-builds": "0" } });
   const accordionState = createSettingsAccordionState();
@@ -53,8 +173,9 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
   const reportModal = createDiagnosticReportModal(commands, scope);
   const reportActions = diagnosticsButtons(commands, scope, reportModal);
   const lowMemoryPrompt = createLowMemoryPrompt(commands, scope, refresh);
+  const pwaNamePrompt = commands.readPwaInstall?.() ? createPwaNamePrompt(commands, scope) : null;
   const optimizer = preferences.mobileMemory?.assets?.isGm ? createMobileAssetOptimizer(commands, scope) : null;
-  const overlays = [reloadPrompt.element, defaults.element, reportModal.element, lowMemoryPrompt.element, optimizer?.element].filter(Boolean);
+  const overlays = [reloadPrompt.element, defaults.element, reportModal.element, lowMemoryPrompt.element, optimizer?.element, pwaNamePrompt?.element].filter(Boolean);
   captureOverlays(overlays);
   scope.own(() => { for (const element of overlays) element.remove(); });
   if (overlayHost) overlayHost.replaceChildren(...overlays);
@@ -159,6 +280,7 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
             return field.key === "mode" ? [row, deviceInfo] : [row];
           });
           let children = rowsFor(group.fields);
+          if (group.id === "device" && pwaNamePrompt) children.push(renderPwaInstallSettings(commands, scope, pwaNamePrompt));
           if (group.id === "performance") {
             const fieldsFor = (...keys) => group.fields.filter((field) => keys.includes(field.key));
             children = [

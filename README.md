@@ -20,6 +20,12 @@ Open your usual Foundry world in a browser and sign in—no separate app or acco
 is required. Rolls and actions use your game system and its usual chat cards,
 permissions, and automation.
 
+**Install your Foundry game on your home screen.**
+On supported browsers, VE Mobile can run as an installed web app with a fullscreen
+experience. Use your world’s title or choose your own app name, making different
+servers easy to recognise. You still sign in normally, and Foundry must remain
+online. See [Install as an app (PWA)](#install-as-an-app-pwa).
+
 <p align="center">
   <img src="docs/screenshots/tablet-split-scene.png" alt="D&D5e in Tablet Split: a live Scene and combat carousel beside the character sheet" width="960">
 </p>
@@ -32,6 +38,7 @@ appear in the PF2e section below.*
 - [Compatibility](#compatibility)
 - [Devices and support](#devices-and-support)
 - [Install and start playing](#install-and-start-playing)
+- [Install as an app (PWA)](#install-as-an-app-pwa)
 - [Phone and tablet layouts](#phone-and-tablet-layouts)
 - [Dungeons & Dragons Fifth Edition](#dungeons--dragons-fifth-edition)
 - [Pathfinder Second Edition](#pathfinder-second-edition)
@@ -127,6 +134,32 @@ On first use:
 - Tap item rows to read details; use their action controls to roll or cast.
 - Choose **Joystick** or **D-pad** in **Settings → Scene & Controls → Movement control**.
 - Open **Settings → Support → Controls & Gestures** for the touch guide.
+
+## Install as an app (PWA)
+
+On Android Chrome or Edge, open your Foundry **HTTPS** address and sign in to a
+world with VE Mobile enabled. Open **Settings → Device & Power → Install app**.
+The name field starts with the current world title. Keep it or enter a custom
+name for this browser. If you change it, tap **Continue**, then **Install app**
+when the browser offers installation. Different server addresses can have
+separate installed apps; changing the label does not create another copy of
+the same server app.
+If the install button is unavailable, check the browser menu for **Install app**
+or **Add to Home screen**; wording and availability vary by browser and device.
+
+Launch the installed app from its home-screen icon. It requests fullscreen,
+with standalone display as a fallback, and uses your normal Foundry sign-in.
+Installation does not provide offline play: Foundry must remain reachable.
+An ordinary HTTP LAN address is not eligible for PWA installation.
+
+The module adds installation metadata after entering `/game`; installation
+from the initial login page is not provided. Hosting beneath a URL prefix is
+supported, and the installed app covers both the login and game routes.
+Existing web-app manifests supplied by the host or another module are preserved.
+Your browser controls updates to an already-installed name. If an older app
+still says **VE Mobile**, uninstall it and reinstall from the browser after a
+full Foundry reload. Restrictive hosting policies can prevent custom names;
+the original static installation remains available in that case.
 
 ## Phone and tablet layouts
 

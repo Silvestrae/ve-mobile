@@ -64,10 +64,20 @@ import { createMobileAssetOptimizer } from "./features/settings/presenter.mjs";
 import { createMobileClientCapabilityGateway } from "./foundry/mobile-client-capability-gateway.mjs";
 import { createFoundryMobileBackGateway } from "./foundry/mobile-back-gateway.mjs";
 import { createNativeLightingPrecisionCompatibility } from "./foundry/native-lighting-precision.mjs";
+import { createPwaInstall } from "./ui/pwa-install.mjs";
+import { readPwaWorldName } from "./foundry/pwa-world-name.mjs";
 
 const isGamePage = /\/game\/?$/.test(window.location.pathname);
 
 if (isGamePage) {
+  const pwaScope = createTaskScope("pwa-install-page");
+  pwaScope.listen(window, "pagehide", event => { if (!event.persisted) pwaScope.dispose(); });
+  let pwaInstall = null;
+  try { pwaInstall = createPwaInstall({ scope: pwaScope }); }
+  catch (error) {
+    pwaScope.dispose();
+    console.warn("VE Mobile | App installation metadata could not be initialized", error);
+  }
   const fullLoadStartedAt = navigationStartAt();
   const loadTimingGateway = createClientLoadTimingGateway();
   // This page-lifetime physical classification is deliberately independent of
@@ -575,6 +585,7 @@ if (isGamePage) {
     diagnostics.record("info", `Graphics policy active: effects=${policy.effects}, dice=${policy.dice}, reason=${policy.diceReason}, device=${policy.device.family}/${policy.device.tier}`);
   };
   kernel = createAppKernel({
+    pwaInstall,
     store,
     session,
     commandGateway,
@@ -849,6 +860,9 @@ if (isGamePage) {
     advanceBootstrap("canvas");
   });
   Hooks.once("ready", async () => {
+    void pwaInstall?.setDefaultName(readPwaWorldName()).catch(error => {
+      if (!pwaScope.disposed) console.warn("VE Mobile | App name could not be prepared", error);
+    });
     const startup = await startupGate.prepare();
     if (startup.state !== "ready") { showRestorationRecovery(); return; }
     advanceBootstrap("theme");

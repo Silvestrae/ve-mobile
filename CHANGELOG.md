@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+## 1.1.1 — 2026-10-31
+
+### Installable mobile app support
+
+- Add installable web-app support for compatible browsers, with app icons,
+  fullscreen display preference, and installation guidance in Device & Power.
+- Default installed app names to the world title and let players choose a name
+  before installation, saved separately in each browser for each server address.
+- Keep the installed app name field readable in both light and dark themes.
+
 ## 1.1.0 — 2026-10-31
 
 ### Pathfinder Second Edition compatibility
