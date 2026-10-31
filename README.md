@@ -30,6 +30,7 @@ appear in the PF2e section below.*
 ## Contents
 
 - [Compatibility](#compatibility)
+- [Devices and support](#devices-and-support)
 - [Install and start playing](#install-and-start-playing)
 - [Phone and tablet layouts](#phone-and-tablet-layouts)
 - [Dungeons & Dragons Fifth Edition](#dungeons--dragons-fifth-edition)
@@ -66,6 +67,35 @@ which actors and controls you can use.
 The repository README may include unreleased changes. Check the
 [release notes](https://github.com/Silvestrae/ve-mobile/releases) for the features
 included in a particular download.
+
+## Devices and support
+
+VE Mobile aims to provide a broadly usable phone and tablet interface, but
+**compatibility, performance and stability are not guaranteed on any individual
+device**. Results depend on your hardware, operating system, browser, Foundry
+world and enabled modules.
+
+Development and support focus on improvements that benefit the module generally.
+Device-specific troubleshooting, optimisation and compatibility fixes are outside
+the project's support scope. Reproducible module bugs are welcome, but reporting
+a problem does not guarantee a fix for a particular device.
+
+### A note for iPhone and iPad users
+
+Safari uses Apple's **WebKit browser engine**, and other iPhone/iPad browsers
+commonly use it too. Switching to Chrome or Firefox therefore may not change the
+underlying browser engine. Apple permits alternative engines in certain regions,
+so this can vary. See [Apple's browser-engine information](https://developer.apple.com/support/alternative-browser-engines/).
+
+Foundry's canvas relies on **WebGL 2.0** for graphics, and Foundry currently lists
+Safari as unsupported. Apple mobile users should approach compatibility
+cautiously: graphics-heavy scenes may encounter rendering problems, unexpected
+page reloads or crashes. VE Mobile cannot guarantee protection from browser,
+graphics or memory limitations. See [Foundry's requirements](https://foundryvtt.com/article/requirements/).
+
+If stability is poor, try reducing scene complexity and graphics settings,
+closing other tabs, or using VE Mobile without the canvas. **iPhone and iPad
+compatibility remains best-effort.**
 
 ## Install and start playing
 
