@@ -2,6 +2,7 @@ import { MODULE_ID } from "./preferences.mjs";
 import { localizeFoundry } from "./localization.mjs";
 import { localizedDate, localizedText } from "../ui/localized-text.mjs";
 
+/** Bounds for authenticated client-to-GM diagnostics and journal rendering. */
 export const DIAGNOSTICS_SOCKET = `module.${MODULE_ID}`;
 export const DIAGNOSTICS_MAX_EVENTS = 200;
 export const DIAGNOSTICS_MAX_PAYLOAD = 120_000;
@@ -53,14 +54,17 @@ export function createDiagnosticsJournalGateway({
   let lastFlushAt = 0;
   let stopped = true;
 
+  // Resolve the current active user’s client record for diagnostics ownership checks.
   const activeClient = () => {
     if (!MODES.has(String(getMode()))) return false;
     try { return getGame()?.settings?.get?.(MODULE_ID, "saveDiagnosticsToJournal") !== false; }
     catch { return false; }
   };
+  // Find the active GM client selected to write shared diagnostics entries.
   const electedGm = () => [...(getGame()?.users ?? [])]
     .filter(user => user?.isGM && user.active !== false)
     .sort((a, b) => String(a.id).localeCompare(String(b.id)))[0] ?? null;
+  // Serialize journal writes so concurrent diagnostics reports do not overwrite each other.
   const queueWrite = (payload) => {
     writing = writing.catch(() => {}).then(() => writeDiagnosticsPage(payload, {
       game: getGame(), JournalEntry: getJournalClass(), now
@@ -68,11 +72,13 @@ export function createDiagnosticsJournalGateway({
     return writing;
   };
   const api = {
+    // Start scoped diagnostics collection and register its flush with the owning lifecycle.
     start(owner) {
       if (scope && !scope.disposed) return;
       scope = owner;
       stopped = false;
       const socket = getGame()?.socket;
+      // Receive a diagnostics report, validate its sender and payload, and queue an authorized journal write.
       const receive = (message, senderId) => {
         if (stopped || message?.type !== "diagnostics-write") return;
         const game = getGame();
@@ -101,6 +107,7 @@ export function createDiagnosticsJournalGateway({
       if (!entry || !activeClient()) return;
       api.schedule();
     },
+    // Queue a diagnostics flush after the current burst rather than writing on every event.
     schedule() {
       if (stopped || !activeClient() || timer !== null) return;
       const delay = lastFlushAt ? Math.max(0, DIAGNOSTICS_FLUSH_MS - (now() - lastFlushAt)) : DIAGNOSTICS_FLUSH_MS;
@@ -111,6 +118,7 @@ export function createDiagnosticsJournalGateway({
         });
       }, delay);
     },
+    // Persist pending diagnostics and retain them when the write cannot complete.
     async flush({ explicit = false } = {}) {
       if (stopped || !activeClient()) return false;
       const game = getGame();
@@ -135,6 +143,8 @@ export function createDiagnosticsJournalGateway({
   return Object.freeze(api);
 }
 
+/** Build a size-limited, privacy-bounded report from current client settings
+ * and the recent diagnostic event categories. */
 export function buildDiagnosticsPayload({ game, mode, preferences, graphics, diagnostics, navigator, now = () => Date.now() }) {
   if (!MODES.has(mode) || !game?.user?.id) return null;
   const settings = [...(game.settings?.settings?.entries?.() ?? [])]
@@ -183,6 +193,8 @@ export function buildDiagnosticsPayload({ game, mode, preferences, graphics, dia
   return JSON.stringify(payload).length <= DIAGNOSTICS_MAX_PAYLOAD ? payload : null;
 }
 
+/** Validate the socket sender, live user, schema, size, keys and every field
+ * before a GM writes a client report into a Journal. */
 export function validateDiagnosticsPayload(payload, game, authenticatedSenderId) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
   try { if (JSON.stringify(payload).length > DIAGNOSTICS_MAX_PAYLOAD) return false; }
@@ -199,7 +211,7 @@ export function validateDiagnosticsPayload(payload, game, authenticatedSenderId)
   if (!Array.isArray(payload.settings) || payload.settings.length > 80 || payload.settings.some(item =>
     !exactKeys(item, ["key", "stored"], ["effective"]) || !allowedSettings.has(item.key)
     || !smallScalar(item.stored, 120) || (item.effective !== undefined && !smallScalar(item.effective, 120)))) return false;
-  if (!payload.native || !exactKeys(payload.native, [...NATIVE_SETTINGS.map(([ns, key]) => `${ns}.${key}`), ...NATIVE_MODULES.map(id => `${id}.active`)])
+  if (!payload.native || !exactKeys(payload.native, [...NATIVE_SETTINGS.map(([namespace, key]) => `${namespace}.${key}`), ...NATIVE_MODULES.map(id => `${id}.active`)])
     || Object.values(payload.native).some(value => !smallScalar(value, 120))) return false;
   if (!Array.isArray(payload.events) || payload.events.length > DIAGNOSTICS_MAX_EVENTS || payload.events.some(item =>
     !exactKeys(item, ["at", "level", "category"]) || !validTime(item.at)
@@ -208,10 +220,12 @@ export function validateDiagnosticsPayload(payload, game, authenticatedSenderId)
   return true;
 }
 
+/** Upsert one private VE-owned journal page per user, mode and browser. */
 export async function writeDiagnosticsPage(payload, { game, JournalEntry, now = () => Date.now() }) {
   if (!game?.user?.isGM || !JournalEntry?.create) return false;
   const journalTitle = localizedText(localizeFoundry, "VEMOBILE.Diagnostics.JournalTitle", "VE Diagnostics");
   const suffixedJournalTitle = localizedText(localizeFoundry, "VEMOBILE.Diagnostics.JournalTitleSuffixed", "VE Diagnostics (VE Mobile)");
+  // Resolve or create the diagnostics journal under the configured ownership policy.
   const journals = () => [...(game.journal ?? [])];
   let journal = journals().find(entry => entry?.getFlag?.(MODULE_ID, JOURNAL_FLAG) === true);
   if (!journal) {
@@ -234,9 +248,12 @@ export async function writeDiagnosticsPage(payload, { game, JournalEntry, now = 
   return true;
 }
 
+/** Render a validated diagnostics record as escaped journal content. */
 export function renderDiagnosticsPage(payload, game, now = () => Date.now(), localize = localizeFoundry) {
-  const t = (key, fallback, data) => localizedText(localize, `VEMOBILE.Diagnostics.${key}`, fallback, data);
+  // Resolve a translation key with a local diagnostics label fallback.
+  const translate = (key, fallback, data) => localizedText(localize, `VEMOBILE.Diagnostics.${key}`, fallback, data);
   const locale = String(game?.i18n?.lang ?? "en");
+  // Map a diagnostics event category to its localized journal section label.
   const sectionLabel = category => {
     const keys = {
       "Mode transition": "ModeTransition", "Graphics policy": "GraphicsPolicy", "Graphics recovery": "GraphicsRecovery",
@@ -244,21 +261,21 @@ export function renderDiagnosticsPage(payload, game, now = () => Date.now(), loc
       "Module overlay": "ModuleOverlay", "Style authority": "StyleAuthority", Startup: "Startup", Cleanup: "Cleanup",
       "Memory protection": "MemoryProtection", "Browser navigation": "BrowserNavigation"
     };
-    return keys[category] ? t(`Category.${keys[category]}`, category) : t(category === "VE error" ? "EventError" : "Event", category);
+    return keys[category] ? translate(`Category.${keys[category]}`, category) : translate(category === "VE error" ? "EventError" : "Event", category);
   };
   const lines = [
-    t("DiagnosticReportTitle", "VE Diagnostics — {user}", { user: bounded(game.users?.get?.(payload.userId)?.name, 60) }),
-    t("Saved", "Saved: {date}", { date: localizedDate(now(), locale) }),
-    t("Client", "Client: {mode} {browser}", { mode: localizedText(localize, `VEMOBILE.Diagnostics.Mode.${payload.mode}`, payload.mode), browser: payload.browser }),
-    "", t("Environment", "ENVIRONMENT"), ...Object.entries(payload.environment).map(([key, value]) => `${key}: ${value}`),
-    "", t("CurrentSettings", "CURRENT VE SETTINGS"), ...payload.settings.map(item => item.effective === undefined
-      ? t("Stored", "{key}: Stored {stored}", { key: item.key, stored: item.stored })
-      : t("StoredEffective", "{key}: Stored {stored}; Effective {effective}", { key: item.key, stored: item.stored, effective: item.effective })),
-    "", t("WorldPolicy", "WORLD / GM POLICY"),
-    t("FcsOverride", "FCS auto-soft override: {value}", { value: safeSettingValue(readSetting(game, MODULE_ID, "fcsAutoSoftOverride")) }),
-    t("AssetCatalog", "Asset catalogue: {summary}", { summary: catalogSummary(readSetting(game, MODULE_ID, "mobileAssetCatalog"), t) }),
-    "", t("NativeSettings", "RELEVANT NATIVE SETTINGS"), ...Object.entries(payload.native).map(([key, value]) => `${key}: ${value}`),
-    "", t("RecentEvents", "RECENT VE EVENTS"), ...payload.events.map(item => `${item.at} ${item.level.toUpperCase()} ${sectionLabel(item.category)}`)
+    translate("DiagnosticReportTitle", "VE Diagnostics — {user}", { user: bounded(game.users?.get?.(payload.userId)?.name, 60) }),
+    translate("Saved", "Saved: {date}", { date: localizedDate(now(), locale) }),
+    translate("Client", "Client: {mode} {browser}", { mode: localizedText(localize, `VEMOBILE.Diagnostics.Mode.${payload.mode}`, payload.mode), browser: payload.browser }),
+    "", translate("Environment", "ENVIRONMENT"), ...Object.entries(payload.environment).map(([key, value]) => `${key}: ${value}`),
+    "", translate("CurrentSettings", "CURRENT VE SETTINGS"), ...payload.settings.map(item => item.effective === undefined
+      ? translate("Stored", "{key}: Stored {stored}", { key: item.key, stored: item.stored })
+      : translate("StoredEffective", "{key}: Stored {stored}; Effective {effective}", { key: item.key, stored: item.stored, effective: item.effective })),
+    "", translate("WorldPolicy", "WORLD / GM POLICY"),
+    translate("FcsOverride", "FCS auto-soft override: {value}", { value: safeSettingValue(readSetting(game, MODULE_ID, "fcsAutoSoftOverride")) }),
+    translate("AssetCatalog", "Asset catalogue: {summary}", { summary: catalogSummary(readSetting(game, MODULE_ID, "mobileAssetCatalog"), translate) }),
+    "", translate("NativeSettings", "RELEVANT NATIVE SETTINGS"), ...Object.entries(payload.native).map(([key, value]) => `${key}: ${value}`),
+    "", translate("RecentEvents", "RECENT VE EVENTS"), ...payload.events.map(item => `${item.at} ${item.level.toUpperCase()} ${sectionLabel(item.category)}`)
   ];
   while (lines.length && lines.join("\n").length > DIAGNOSTICS_MAX_PAGE - 100) {
     const index = lines.indexOf("RECENT VE EVENTS");
@@ -268,24 +285,29 @@ export function renderDiagnosticsPage(payload, game, now = () => Date.now(), loc
   return `<pre>${escapeHtml(lines.join("\n").slice(0, DIAGNOSTICS_MAX_PAGE - 20))}</pre>`;
 }
 
+// Summarize the current asset catalogue without embedding its full contents.
 function catalogSummary(value, localize = (key, fallback) => fallback) {
   const entries = Array.isArray(value?.entries) ? value.entries : Array.isArray(value) ? value : [];
   const summary = value ? localize("PresentEntries", "present; {count} entries", { count: entries.length }) : localize("AbsentEntries", "absent; {count} entries", { count: entries.length });
   return summary;
 }
+// Read a journal-gateway setting with a fallback for missing configuration.
 function readSetting(game, namespace, key) {
   try { return game.settings?.get?.(namespace, key); } catch { return undefined; }
 }
+// Read the client-scoped diagnostics destination value from its supported storage shape.
 function storedClientValue(game, namespace, key) {
   try {
     const document = game.settings?.storage?.get?.("client")?.get?.(`${namespace}.${key}`);
     return document && Object.hasOwn(document, "value") ? document.value : undefined;
   } catch { return undefined; }
 }
+// Normalize a diagnostic event category to the supported journal section.
 function eventCategory(message, level) {
   const text = String(message ?? "");
   return EVENT_CATEGORIES.find(([prefix]) => text.includes(prefix))?.[1] ?? (level === "error" ? "VE error" : "VE event");
 }
+// Identify a coarse browser family from the sanitized client identity.
 function browserFamily(userAgent) {
   const value = String(userAgent ?? "");
   if (/Edg\//u.test(value)) return "Edge";
@@ -294,6 +316,7 @@ function browserFamily(userAgent) {
   if (/Safari\//u.test(value)) return "Safari";
   return "Other";
 }
+// Identify a coarse operating-system family without retaining the full user agent.
 function platformFamily(navigator) {
   const value = `${navigator?.platform ?? ""} ${navigator?.userAgent ?? ""}`;
   if (/Android/iu.test(value)) return "Android";
@@ -303,6 +326,7 @@ function platformFamily(navigator) {
   if (/Linux/iu.test(value)) return "Linux";
   return "Other";
 }
+// Read a setting and return only values safe for a diagnostics journal.
 function safeSettingValue(value) {
   if (value === null || value === undefined) return "unavailable";
   if (typeof value === "boolean" || typeof value === "number") return String(value);
@@ -311,20 +335,25 @@ function safeSettingValue(value) {
   if (typeof value === "object") return `${Object.keys(value).length} keys`;
   return "unavailable";
 }
+// Clamp a numeric diagnostics value to its allowed range.
 function bounded(value, limit) {
   return String(value ?? "unknown").replace(/[\u0000-\u001f\u007f]/gu, " ").slice(0, limit);
 }
+// Require an exact set of report keys before accepting an incoming diagnostic record.
 function exactKeys(value, required, optional = []) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const keys = Object.keys(value);
   return required.every(key => keys.includes(key)) && keys.every(key => required.includes(key) || optional.includes(key));
 }
+// Accept only bounded scalar values for journal metadata.
 function smallScalar(value, limit) {
   return typeof value === "string" && value.length <= limit && !/[\u0000-\u001f\u007f]/u.test(value);
 }
+// Validate an event timestamp against the permitted age and future limits.
 function validTime(value) {
   return typeof value === "string" && value.length <= 30 && Number.isFinite(Date.parse(value));
 }
+// Escape report text before inserting it into journal markup.
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/gu, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 }

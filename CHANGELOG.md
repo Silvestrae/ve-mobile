@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 1.1.2 — 2026-11-02
+
+- Match app installation instructions to the available button and show Share → Add to Home Screen steps on iPhone and iPad.
+- Make the installed app name field more compact and explain that short names fit best beneath its icon.
+- Avoid a startup race that could leave Chromium using the original install manifest instead of the prepared app name.
+- Stop Dice So Nice from reserving space for the hidden desktop sidebar in mobile layouts, which could squeeze PWA rolls into a narrow strip.
+- Use the dark Heroic Inspiration badge in both themes and remove the unused light image.
+- Improve Auto detection for desktop identities and keep ambiguous touch devices in Desktop mode.
+- Ask for a Phone, Tablet or Desktop choice before Auto mode activates, then remember the choice in this browser. Keep the confirmation compact with a full-width Confirm button.
+- Clarify internal responsibilities, lifecycle ownership and identifier naming for maintenance.
+- Keep Desktop recovery retry failures visible and allow startup to continue with current appearance preferences when saved appearance preferences cannot be restored. Graphics recovery and administrator policy remain protected.
+- Keep the PF2e Character footer consistent with the other navigation tabs.
+- Improve the contrast of stock SVG active-effect icons in the light theme.
+
 ## 1.1.1 — 2026-10-31
 
 ### Installable mobile app support

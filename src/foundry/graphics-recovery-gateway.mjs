@@ -2,6 +2,8 @@ import { KEYS, MODULE_ID } from "./preferences.mjs";
 import { nextMemoryProfile } from "./low-memory-canvas-gateway.mjs";
 import { localizeFoundry } from "./localization.mjs";
 
+/** Present observed graphics failures and route recovery through the owned
+ * profile transaction. An ambiguous interrupted draw stays diagnostic only. */
 export function createGraphicsRecoveryGateway({
   journal,
   lowMemoryGateway,
@@ -18,6 +20,7 @@ export function createGraphicsRecoveryGateway({
   const previous = journal?.previous ?? null;
 
   const api = {
+    // Expose the current graphics recovery transaction as an immutable diagnostic record.
     snapshot() {
       const game = getGame();
       const recovery = journal?.recovery?.() ?? {};
@@ -46,6 +49,7 @@ export function createGraphicsRecoveryGateway({
       });
     },
 
+    // Normalize the browser's WebGL loss event into safe diagnostic details for this canvas label.
     contextLossDetails(label = "Foundry canvas") {
       const game = getGame();
       const canvas = getCanvas();
@@ -80,12 +84,15 @@ export function createGraphicsRecoveryGateway({
     },
 
     async acknowledge() {
+      // Persist acknowledgment so startup does not repeatedly prompt for the
+      // same observed failure; it does not clear the underlying history.
       const state = api.snapshot();
       const timestamp = Math.max(state.failureAt, Date.now());
       await getGame()?.settings?.set?.(MODULE_ID, KEYS.GRAPHICS_RECOVERY_ACKNOWLEDGED, timestamp);
       return Object.freeze({ ok: true, acknowledgedAt: timestamp });
     },
 
+    // Apply the chosen low-memory profile before returning the canvas to a memory-risk Scene.
     async prepareLowMemory() {
       if (!isMobileAuthorityActive()) throw new Error(localizeFoundry("VEMOBILE.Graphics.MobileInactive", "Mobile performance protection is inactive in Desktop mode."));
       const current = lowMemoryGateway.snapshot()?.profile ?? "normal";
@@ -101,6 +108,8 @@ export function createGraphicsRecoveryGateway({
     },
 
     async startupAction() {
+      // Automatic escalation is limited to a reliable unacknowledged context
+      // loss and a non-maximum profile; uncertain interruption never writes.
       const state = api.snapshot();
       if (!isMobileAuthorityActive()) return Object.freeze({ action: "none", state });
       if (!state.reliablePending) return Object.freeze({ action: "none", state });
@@ -122,6 +131,7 @@ export function createGraphicsRecoveryGateway({
   return Object.freeze(api);
 }
 
+// Convert renderer dimensions to a plain finite width/height record.
 function plainDimensions(value) {
   const width = Number(value?.width ?? 0);
   const height = Number(value?.height ?? 0);
@@ -131,10 +141,12 @@ function plainDimensions(value) {
   });
 }
 
+// Normalize the configured recovery behavior to the supported policy values.
 function normalizedBehavior(value) {
   return ["ask", "auto", "nothing"].includes(value) ? value : "ask";
 }
 
+// Read one recovery setting with a fallback when Foundry does not expose it.
 function safeGet(game, namespace, key) {
   try { return game?.settings?.get?.(namespace, key); } catch { return undefined; }
 }

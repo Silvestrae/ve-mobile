@@ -33,7 +33,8 @@ export const dnd5eIntegration = Object.freeze({
   }),
   actions: dnd5eActorActions,
   messages: dnd5eActionMessages,
-  settingsInvalidation(fullKey) {
+    // Identify settings that change D&D5e presentation or action data and invalidate their snapshots.
+    settingsInvalidation(fullKey) {
     if (["dnd5e.levelingMode", "dnd5e.metricLengthUnits", "dnd5e.metricWeightUnits", "dnd5e.metricTravelUnits"].includes(fullKey)) {
       return { domains: Object.freeze(["actors"]), refreshSelectedActor: true };
     }

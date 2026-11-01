@@ -1,24 +1,29 @@
-import { ACTOR_COMMANDS as C } from "../../../../kernel/command-names.mjs";
+import { ACTOR_COMMANDS } from "../../../../kernel/command-names.mjs";
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
 
+// Resolve localized text from the PF2e inventory-controls namespace.
 const text = (commands, key, fallback) => localizedText(commands.localize, `VEMOBILE.PF2E.Controls.${key}`, fallback);
+// Create a scoped inventory action button with its current disabled/pressed state.
 const action = (label, glyph, onClick, scope, disabled = false, pressed = undefined) => node("button", {
   className: "ve-pf2e-action-button ve-pf2e-item-control",
   attrs: { type: "button", "aria-label": label, title: label, disabled, ...(pressed === undefined ? {} : { "aria-pressed": String(pressed) }) },
   children: [icon(glyph)], on: { click: event => { event.preventDefault(); event.stopPropagation(); if (!disabled) onClick(event.currentTarget); } }
 }, scope);
 
+// Read the current quantity command record, with a simple legacy item fallback.
 function quantityRecord(item) {
   return item.inventoryControls ?? {
     itemId: item.id, quantity: item.quantity, containerId: item.containerId ?? null, containers: [], canEditQuantity: true, canMove: false
   };
 }
+// Return the prepared effect-action record when this item has one.
 function effectRecord(item) {
   return item.effectControls ?? null;
 }
+// Send one explicit inventory operation with the source values needed for revalidation.
 function runInventory(run, actor, item, record, operation, value) {
-  return run(C.EDIT_PF2E_INVENTORY, {
+  return run(ACTOR_COMMANDS.EDIT_PF2E_INVENTORY, {
     itemId: item.id, operation, [operation === "quantity" ? "quantity" : "containerId"]: value,
     originalQuantity: record.quantity, originalContainerId: record.containerId ?? null
   });
@@ -60,13 +65,14 @@ export function inventoryControls(item, actor, commands, scope, run) {
 export function effectControls(item, actor, commands, scope, run) {
   const record = effectRecord(item);
   if (!record || !run) return null;
+  // Carry the badge's displayed original type/value so the command can reject an outdated edit.
   const payload = operation => ({ itemId: item.id, operation, originalBadgeType: record.badgeType, originalBadgeValue: record.badgeValue });
   const controls = [];
   if (record.badgeType === "counter" && Number.isSafeInteger(record.badgeValue)) {
     const value = node("span", { className: "ve-pf2e-effect-badge", attrs: { "aria-live": "polite" }, text: String(record.badgeValue) });
     controls.push(value,
-      action(text(commands, "DecreaseEffect", "Decrease effect value"), "fa-minus", () => run(C.EDIT_PF2E_EFFECT, payload("decrease")), scope, !record.canDecrease),
-      action(text(commands, "IncreaseEffect", "Increase effect value"), "fa-plus", () => run(C.EDIT_PF2E_EFFECT, payload("increase")), scope, !record.canIncrease));
+      action(text(commands, "DecreaseEffect", "Decrease effect value"), "fa-minus", () => run(ACTOR_COMMANDS.EDIT_PF2E_EFFECT, payload("decrease")), scope, !record.canDecrease),
+      action(text(commands, "IncreaseEffect", "Increase effect value"), "fa-plus", () => run(ACTOR_COMMANDS.EDIT_PF2E_EFFECT, payload("increase")), scope, !record.canIncrease));
   } else if (record.badgeType && record.badgeValue !== null) {
     controls.push(node("span", { className: "ve-pf2e-effect-badge", text: String(record.badgeValue) }));
   }
@@ -83,7 +89,7 @@ export function effectControls(item, actor, commands, scope, run) {
         remove.setAttribute("aria-label", remove.title);
         return;
       }
-      run(C.EDIT_PF2E_EFFECT, { ...payload("remove"), confirmed: true });
+      run(ACTOR_COMMANDS.EDIT_PF2E_EFFECT, { ...payload("remove"), confirmed: true });
     }, scope);
     const confirmText = node("span", { className: "ve-pf2e-effect-remove-confirmation", text: confirmLabel });
     confirmText.hidden = true;

@@ -15,6 +15,7 @@ export function bindPf2eShortcutIcons(root, actor, commands, scope) {
   let promptScope = null;
   let anchor = null;
 
+  // Remove prompt DOM and release its child scope whenever focus moves away.
   const dismiss = () => {
     prompt?.remove();
     prompt = null;
@@ -22,6 +23,7 @@ export function bindPf2eShortcutIcons(root, actor, commands, scope) {
     promptScope?.dispose();
     promptScope = null;
   };
+  // Re-read preferences and capability before building a prompt for this descriptor.
   const show = candidate => {
     preferences = readPreferences(commands);
     const descriptor = readDescriptor(candidate);
@@ -45,7 +47,8 @@ export function bindPf2eShortcutIcons(root, actor, commands, scope) {
         disabled: full,
         "aria-label": full ? fullLabel : `${addLabel}: ${descriptor.label}`
       },
-      on: full ? undefined : { click: async event => {
+      // Revalidate current ownership and configuration immediately before the add action.
+      on: full ? undefined : { /* Recheck current shortcut eligibility and choose the configured native hotbar or VE Quickbar before saving. */ click: async event => {
         event.preventDefault?.();
         const currentPrompt = prompt;
         if (!currentPrompt || currentPrompt.disabled || scope.disposed) return;
@@ -97,6 +100,7 @@ export function bindPf2eShortcutIcons(root, actor, commands, scope) {
   scope.own(dismiss);
 }
 
+// Decide whether the selected quickbar supports this item or skill descriptor.
 function canAdd(descriptor, actor, commands, preferences) {
   if (!preferences?.quickbarEnabled || !actor?.capabilities?.owner) return false;
   if (preferences.quickbarSource === "foundry") {
@@ -105,16 +109,19 @@ function canAdd(descriptor, actor, commands, preferences) {
   return typeof commands.addQuickbarAction === "function";
 }
 
+// Treat unavailable preference reads as disabled instead of guessing a source.
 function readPreferences(commands) {
   try { return commands.readCharacterPreferences?.() ?? null; }
   catch { return null; }
 }
 
+// Guard delayed shortcut work against an ended scope or replaced Actor context.
 function isCurrent(commands, actor, scope) {
   return !scope?.disposed && typeof commands.pf2eActionCurrent === "function"
     && commands.pf2eActionCurrent(actor.sourceUuid) === true;
 }
 
+// Parse and bound the inert DOM descriptor before it crosses into a command.
 function readDescriptor(candidate) {
   let value;
   try { value = JSON.parse(candidate?.dataset?.pf2eShortcut ?? ""); }
@@ -122,17 +129,18 @@ function readDescriptor(candidate) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const kind = value.kind;
   const label = typeof value.label === "string" ? value.label.trim().slice(0, 120) : "";
-  const img = typeof value.img === "string" ? value.img.slice(0, 500) : "";
+  const imageSource = typeof value.img === "string" ? value.img.slice(0, 500) : "";
   if (!label || !["item", "skill"].includes(kind)) return null;
   if (kind === "item" && typeof value.itemId === "string" && value.itemId.length > 0 && value.itemId.length <= 100) {
-    return Object.freeze({ kind, itemId: value.itemId, label, img });
+    return Object.freeze({ kind, itemId: value.itemId, label, img: imageSource });
   }
   if (kind === "skill" && typeof value.skill === "string" && /^[a-z0-9][a-z0-9-]{0,99}$/u.test(value.skill)) {
-    return Object.freeze({ kind, skill: value.skill, label, img });
+    return Object.freeze({ kind, skill: value.skill, label, img: imageSource });
   }
   return null;
 }
 
+// Replace the add affordance with an inline message until the prompt closes.
 function showError(prompt, message) {
   prompt.disabled = false;
   prompt.removeAttribute("aria-busy");
@@ -140,6 +148,7 @@ function showError(prompt, message) {
   prompt.classList.add("is-error");
 }
 
+// Place the prompt near its shortcut while keeping it inside the character screen.
 function positionPrompt(root, candidate, prompt) {
   const rootRect = root.getBoundingClientRect();
   const anchorRect = candidate.getBoundingClientRect();

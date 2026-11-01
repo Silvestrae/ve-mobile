@@ -9,6 +9,8 @@ export function createFoundrySessionStatusGateway({
   let latestMetrics = Object.freeze({ latency: null, fps: null });
 
   const snapshot = () => {
+    // Status is presentation data only: latency/FPS are attached to this client,
+    // while Foundry does not provide corresponding remote-client measurements.
     const game = getGame();
     const currentId = String(game?.user?.id ?? game?.userId ?? "");
     const users = [...(game?.users ?? [])]
@@ -29,7 +31,10 @@ export function createFoundrySessionStatusGateway({
   return Object.freeze({
     snapshot,
     watch(scope, onUpdate) {
+      // Publish once, then deduplicate user and local-metric events by snapshot
+      // content; every hook is owned by the supplied lifecycle scope.
       let last = "";
+      // Publish connection and session status changes to the current session owner.
       const publish = () => {
         const next = snapshot();
         const signature = JSON.stringify(next);
@@ -50,11 +55,13 @@ export function createFoundrySessionStatusGateway({
   });
 }
 
+// Normalize an optional finite session metric for the public status record.
 function finiteMetric(value) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? Math.round(number) : null;
 }
 
+// Resolve a safe display color for the current Foundry user.
 function userColor(user) {
   const value = user?.color?.css ?? user?.color;
   return /^#[0-9a-f]{3,8}$/iu.test(String(value ?? "")) ? String(value) : "#888888";

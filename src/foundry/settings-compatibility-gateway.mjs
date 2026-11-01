@@ -36,23 +36,27 @@ export function createFoundrySettingsCompatibilityGateway({
   let enabled = false;
   let session = null;
   const layerListeners = new Set();
+  // Publish the updated shared layer assignments for admitted native applications.
   const publishLayers = () => { for (const listener of layerListeners) listener(); };
   let endTimer = null;
   let diceActivity = null;
   let diceTimer = null;
 
+  // Clear the timer that ends a temporary native-application admission.
   const clearEndTimer = () => {
     if (endTimer === null) return;
     cancel(endTimer);
     endTimer = null;
   };
 
+  // Clear the Dice So Nice activity timeout when its current session ends.
   const clearDiceTimer = () => {
     if (diceTimer === null) return;
     cancel(diceTimer);
     diceTimer = null;
   };
 
+  // Release the Dice So Nice activity claim and restore its host when no roll remains active.
   const releaseDiceActivity = () => {
     clearDiceTimer();
     if (!diceActivity) return;
@@ -60,6 +64,7 @@ export function createFoundrySettingsCompatibilityGateway({
     diceActivity = null;
   };
 
+  // Recompute Dice So Nice’s layer position from the current Foundry and VE surfaces.
   const refreshDiceLayer = () => {
     if (!diceActivity || !session) return;
     const host = currentDiceHost(getGame(), getDocument());
@@ -72,6 +77,7 @@ export function createFoundrySettingsCompatibilityGateway({
     diceActivity.host.style?.setProperty?.(DICE_LAYER_PROPERTY, String(highestLayer + 1));
   };
 
+  // Check whether Dice So Nice still owns a visible, active roll interaction.
   const checkDiceActivity = () => {
     diceTimer = null;
     if (!diceActivity || !session) return releaseDiceActivity();
@@ -87,6 +93,7 @@ export function createFoundrySettingsCompatibilityGateway({
     releaseDiceActivity();
   };
 
+  // Register Dice So Nice as temporarily admitted while a native roll is active.
   const activateDiceActivity = () => {
     if (!session) return false;
     const host = currentDiceHost(getGame(), getDocument());
@@ -102,6 +109,7 @@ export function createFoundrySettingsCompatibilityGateway({
     return true;
   };
 
+  // End an admission session and release all associated listeners, timers, and style claims.
   const releaseSession = () => {
     clearEndTimer();
     releaseDiceActivity();
@@ -117,6 +125,7 @@ export function createFoundrySettingsCompatibilityGateway({
     publishLayers();
   };
 
+  // Defer closing the temporary session until its admitted application and pending interaction are idle.
   const finishWhenIdle = () => {
     clearEndTimer();
     if (!session || session.apps.size || session.pendingRoots.size) return;
@@ -128,6 +137,7 @@ export function createFoundrySettingsCompatibilityGateway({
     }, delay);
   };
 
+  // Capture the native application and current presentation owner for a bounded admission session.
   const beginSession = (root) => {
     releaseSession();
     const bodyStyle = getDocument()?.body?.style;
@@ -149,6 +159,7 @@ export function createFoundrySettingsCompatibilityGateway({
     return session;
   };
 
+  // Admit an intentional native application above the mobile renderer and register its cleanup with the owner.
   const admit = (app, suppliedElement) => {
     if (!session || !app) return false;
     const element = applicationElement(app, suppliedElement);
@@ -173,6 +184,7 @@ export function createFoundrySettingsCompatibilityGateway({
     return true;
   };
 
+  // Classify each rendered Foundry application and update its mobile admission state.
   const onRender = (app, suppliedElement, context, options) => {
     if (!session || !app) return false;
     if (session.apps.has(app) || session.pendingRoots.has(app)) {
@@ -194,6 +206,7 @@ export function createFoundrySettingsCompatibilityGateway({
     return false;
   };
 
+  // Release an application’s admission when Foundry closes its window.
   const onClose = (app) => {
     if (!session || !app) return;
     const record = session.apps.get(app);
@@ -208,6 +221,7 @@ export function createFoundrySettingsCompatibilityGateway({
     publishLayers();
   };
 
+  // Extend or release admission based on interaction with the current native application.
   const onInteraction = (event) => {
     if (!session) return;
     const target = event?.target;
@@ -225,6 +239,7 @@ export function createFoundrySettingsCompatibilityGateway({
     clearEndTimer();
   };
 
+  // Reconcile admitted applications after relevant native DOM roots are inserted or removed.
   const onMutations = (records) => {
     if (!session) return;
     for (const mutation of records) {
@@ -249,6 +264,7 @@ export function createFoundrySettingsCompatibilityGateway({
     finishWhenIdle();
   };
 
+  // End stale admission state after pointer cancellation, page hiding, or native interaction teardown.
   const onPointerLifecycle = (event) => {
     if (!session) return;
     const source = event?.target?.closest?.(`.${SETTINGS_CLASS}`);
@@ -257,6 +273,7 @@ export function createFoundrySettingsCompatibilityGateway({
     if (record) refreshScrollOwner(record);
   };
 
+  // Open the requested native configuration surface only after checking its current role and availability.
   const open = async (app, renderOptions) => {
     if (!enabled) throw new Error(localizeFoundry("VEMOBILE.Interface.SettingsCompatibilityGateway.NativeSettingsCompatibilityIsNotActive", "Native settings compatibility is not active."));
     if (!app || typeof app.render !== "function") throw new Error(localizeFoundry("VEMOBILE.Interface.SettingsCompatibilityGateway.ThatNativeSettingsApplicationIsUnavailable", "That native settings application is unavailable."));
@@ -275,6 +292,7 @@ export function createFoundrySettingsCompatibilityGateway({
     }
   };
 
+  // Wait for a candidate application to be registered and admitted before returning its native root.
   const waitForAdmission = (openingSession, app) => {
     if (session !== openingSession) return Promise.resolve(false);
     if (openingSession.apps.has(app)) return Promise.resolve(true);
@@ -284,12 +302,14 @@ export function createFoundrySettingsCompatibilityGateway({
   return Object.freeze({
     get layers() { return [...(session?.apps?.keys() ?? [])].map((_, index) => `settings-app:${index}`); },
     watch(listener) { layerListeners.add(listener); return () => layerListeners.delete(listener); },
+    // Return the highest connected settings application admitted by the current compatibility session.
     topmost() {
       if (!enabled || !session) return null;
       const entries = [...session.apps.entries()].filter(([, record]) => record.element?.isConnected !== false);
       const [application, record] = entries.sort((left, right) => (left[1].layer ?? 0) - (right[1].layer ?? 0)).at(-1) ?? [];
       return record ? Object.freeze({ application, element: record.element, layer: record.layer ?? SETTINGS_LAYER_BASE }) : null;
     },
+    // Close the top admitted settings application when it exposes Foundry's native close method.
     closeTopmost() {
       const top = this.topmost();
       if (!top || typeof top.application?.close !== "function") return false;
@@ -297,12 +317,14 @@ export function createFoundrySettingsCompatibilityGateway({
       catch { return false; }
       return true;
     },
+    // Match an application to the active settings session using registration, parentage, or opener lineage.
     ownsApplication(app, suppliedElement) {
       if (!session || !app) return false;
       return session.apps.has(app) || session.pendingRoots.has(app)
         || registeredSettingsApplication(app, getGame()) || admittedParent(app, session.apps)
         || (now() <= session.lineageUntil && settingsLineageCandidate(app, suppliedElement, getFoundry()));
     },
+    // Install native application hooks and pointer tracking under the owning mobile scope.
     enable(scope) {
       if (enabled) return;
       enabled = true;
@@ -345,6 +367,7 @@ export function createFoundrySettingsCompatibilityGateway({
       return Object.freeze({ ...result, application: "core.settings" });
     },
 
+    // Provide the localized settings entry-point labels and compatibility guidance.
     snapshot() {
       const game = getGame();
       return Object.freeze({
@@ -367,6 +390,7 @@ export function createFoundrySettingsCompatibilityGateway({
   });
 }
 
+/** Identify a live native Settings application using registered app identity. */
 export function registeredSettingsApplication(app, game = globalThis.game) {
   if (!app) return false;
   const canConfigure = Boolean(game?.user?.can?.("SETTINGS_MODIFY"));
@@ -378,6 +402,7 @@ export function registeredSettingsApplication(app, game = globalThis.game) {
   return false;
 }
 
+/** Match a just-opened settings window to the user interaction that launched it. */
 export function settingsLineageCandidate(app, suppliedElement, foundry = globalThis.foundry) {
   if (!app) return false;
   if (documentSheetApplication(app, foundry)) return false;
@@ -390,10 +415,12 @@ export function settingsLineageCandidate(app, suppliedElement, foundry = globalT
   return /(?:config|settings|preferences|options)/iu.test(signature);
 }
 
+// Resolve the admitted application parent for a child surface or scroll owner.
 function admittedParent(app, admitted) {
   return [app?.parent, app?.options?.parent, app?.options?.owner].some(parent => admitted.has(parent));
 }
 
+// Identify a document sheet by its live Foundry application capabilities and root.
 function documentSheetApplication(app, foundry) {
   const types = [
     foundry?.applications?.api?.DocumentSheetV2,
@@ -404,6 +431,7 @@ function documentSheetApplication(app, foundry) {
   return types.some(type => instanceOf(app, type));
 }
 
+// Identify a transient dialog that should remain reachable above the mobile renderer.
 function dialogApplication(app, suppliedElement, foundry) {
   if (instanceOf(app, foundry?.applications?.api?.DialogV2)
     || instanceOf(app, foundry?.appv1?.api?.Dialog)) return true;
@@ -411,10 +439,12 @@ function dialogApplication(app, suppliedElement, foundry) {
   return Boolean(element?.matches?.("dialog, [role='dialog'], .application.dialog, .app.window-app.dialog"));
 }
 
+// Check whether a control action is expected to open a native application.
 function interactionMayLaunchApplication(event) {
   return Boolean(deliberateApplicationControl(event));
 }
 
+// Resolve the current DOM root of a Foundry application instance.
 function applicationElement(app, supplied) {
   for (const candidate of [supplied, app?.element]) {
     if (elementLike(candidate)) return candidate;
@@ -438,6 +468,7 @@ function currentDiceHost(game, document) {
   return discovered?.isConnected === false ? null : discovered;
 }
 
+// Create a scoped activity record for one active Dice So Nice roll.
 function createDiceActivity(host) {
   const style = host?.style;
   host?.classList?.add?.(DICE_ACTIVE_CLASS);
@@ -450,6 +481,7 @@ function createDiceActivity(host) {
   };
 }
 
+// Restore Dice So Nice host styles only when the gateway still owns the temporary values.
 function restoreDiceHost(activity) {
   const host = activity?.host;
   host?.classList?.remove?.(DICE_ACTIVE_CLASS);
@@ -459,16 +491,19 @@ function restoreDiceHost(activity) {
   else style.removeProperty?.(DICE_LAYER_PROPERTY);
 }
 
+// Recognize the Dice So Nice test-roll surface and its temporary ownership requirements.
 function diceSoNiceTestRoll(target) {
   const control = target?.closest?.("[data-action='test']");
   const root = control?.closest?.(".dice-so-nice");
   return Boolean(control && root?.classList?.contains?.("ve-mobile-settings-app"));
 }
 
+// Check the minimal DOM element surface required by native admission logic.
 function elementLike(value) {
   return Boolean(value && (value.nodeType === 1 || value.classList));
 }
 
+// Capture the style, parent, and application identity needed to safely restore an admission.
 function createAdmissionRecord(element) {
   const style = element.style;
   return {
@@ -479,6 +514,7 @@ function createAdmissionRecord(element) {
   };
 }
 
+// Apply the shared native application layer while preserving the original inline style.
 function raiseAdmission(activeSession, record) {
   record.element.classList.add(SETTINGS_CLASS);
   const layer = (SETTINGS_LAYER_BASE - 1) + (++activeSession.layerSequence);
@@ -486,18 +522,21 @@ function raiseAdmission(activeSession, record) {
   record.layer = layer;
 }
 
+// Reconcile the backdrop layer with the currently admitted application and VE layer stack.
 function refreshBackdropLayer(activeSession, style) {
   if (!activeSession || !style?.setProperty) return;
   const lowestApplicationLayer = Math.min(SETTINGS_LAYER_BASE, ...[...activeSession.apps.values()].map(record => record.layer ?? SETTINGS_LAYER_BASE));
   style.setProperty(SETTINGS_BACKDROP_LAYER_PROPERTY, String(lowestApplicationLayer - 1));
 }
 
+// Restore one inline property only when it still contains the gateway’s assigned value.
 function restoreStyleProperty(style, property, value, priority) {
   if (!style?.setProperty) return;
   if (value) style.setProperty(property, value, priority);
   else style.removeProperty?.(property);
 }
 
+// Remove a native application admission and restore only state still owned by this gateway.
 function removeAdmission(record) {
   record.restoreInitialFocus?.();
   record.restoreInitialFocus = null;
@@ -559,6 +598,7 @@ export function settingsScrollOwner(root) {
   return content;
 }
 
+// Reconcile which admitted application currently owns touch scrolling.
 function refreshScrollOwner(record) {
   const next = settingsScrollOwner(record.element);
   if (record.scrollOwner === next) return next;
@@ -568,6 +608,7 @@ function refreshScrollOwner(record) {
   return next;
 }
 
+// Confirm an admission still refers to a live, attached application root.
 function usableAdmission(element, readComputedStyle) {
   if (!element || element.isConnected === false) return false;
   const rect = element.getBoundingClientRect?.();
@@ -580,6 +621,7 @@ function usableAdmission(element, readComputedStyle) {
     && style.pointerEvents !== "none";
 }
 
+// Check an application against a Foundry constructor without assuming the constructor exists.
 function instanceOf(value, Type) {
   if (typeof Type !== "function") return false;
   try {
@@ -589,6 +631,7 @@ function instanceOf(value, Type) {
   }
 }
 
+// Resolve a user-facing message with Foundry localization and a readable fallback.
 function localized(game, key, fallback) {
   const value = game?.i18n?.localize?.(key);
   return !value || value === key ? fallback : value;

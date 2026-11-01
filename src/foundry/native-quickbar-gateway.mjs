@@ -25,19 +25,23 @@ export function createFoundryQuickbarGateway({
   systemAdapter = null
 } = {}) {
   const pendingWrites = new Set();
+  // Persist the current quickbar record only while the Actor and user session remain current.
   const persist = async (actor, slots) => {
+    // Validate a quickbar descriptor key against the supported key shape.
     const key = actor.uuid ?? actor.id;
     if (pendingWrites.has(key)) throw new QuickbarError("BUSY", localizeFoundry("VEMOBILE.Interface.QuickbarGateway.ThisQuickbarIsAlreadyBeingSaved", "This Quickbar is already being saved."));
     pendingWrites.add(key);
     try { await actor.setFlag(moduleId, QUICKBAR_FLAG, flagValue(slots)); }
     finally { pendingWrites.delete(key); }
   };
+  // Read the quickbar snapshot for the exact currently selected Actor.
   const snapshotForActor = (actor, user = getGame()?.user) => {
     if (!actor || !canOwn(actor, user)) return emptyQuickbar();
     const descriptors = readDescriptors(actor, moduleId);
     return Object.freeze(descriptors.map((descriptor) => resolveDescriptor(actor, descriptor, getGame(), getConfig(), systemAdapter)));
   };
 
+  // Resolve the command’s exact Actor source and verify it remains available.
   const resolveActor = (actorSourceUuid, expectedSession) => {
     if (!isActive()) throw new QuickbarError("INACTIVE", localizeFoundry("VEMOBILE.Interface.HotbarGateway.MobileModeIsNotActive", "Mobile mode is not active."));
     const game = getGame();
@@ -55,6 +59,7 @@ export function createFoundryQuickbarGateway({
   return Object.freeze({
     snapshotForActor,
 
+    // Add the requested system action to the user's native quickbar after resolving its current descriptor.
     async add(request, expectedSession = {}) {
       const { actor, game } = resolveActor(request?.actorSourceUuid || (request?.actorId ? `Actor.${request.actorId}` : ""), expectedSession);
       const descriptor = descriptorForWrite(request?.descriptor);
@@ -67,6 +72,7 @@ export function createFoundryQuickbarGateway({
       return Object.freeze({ ok: true, index, slots: snapshotForActor(actor, game.user) });
     },
 
+    // Persist the requested quickbar arrangement after validating descriptors against current Actor state.
     async save(request, expectedSession = {}) {
       const { actor, game } = resolveActor(request?.actorSourceUuid || (request?.actorId ? `Actor.${request.actorId}` : ""), expectedSession);
       if (!Array.isArray(request?.slots) || request.slots.length !== QUICKBAR_SLOT_COUNT) {
@@ -82,19 +88,23 @@ export function createFoundryQuickbarGateway({
   });
 }
 
+// Return the frozen empty quickbar record used when no entries are configured.
 function emptyQuickbar() {
   return Object.freeze(Array.from({ length: QUICKBAR_SLOT_COUNT }, () => null));
 }
 
+// Build a stable signature for the current quickbar descriptors.
 function descriptorSignature(slots) {
   return JSON.stringify(slots.map((slot) => !slot ? null : slot.kind === "skill"
     ? [slot.kind, slot.skill] : [slot.kind, slot.itemId, slot.activityId ?? ""]));
 }
 
+// Read a quickbar flag from the supported Actor flag source.
 function flagValue(slots) {
   return { version: QUICKBAR_VERSION, slots: slots.map((slot) => slot ? { ...slot } : null) };
 }
 
+// Read and normalize the selected Actor’s quickbar descriptors.
 function readDescriptors(actor, moduleId) {
   let value;
   try {
@@ -114,28 +124,31 @@ function readDescriptors(actor, moduleId) {
   });
 }
 
+// Validate and normalize one requested descriptor before persisting it.
 function descriptorForWrite(value) {
   const kind = String(value?.kind ?? "");
   const label = text(value?.label, "label", 100);
-  const img = optionalText(value?.img, 1000);
+  const imageSource = optionalText(value?.img, 1000);
   if (kind === "item") {
     const itemId = identifier(value?.itemId, "itemId");
     const activityId = optionalIdentifier(value?.activityId);
-    return Object.freeze({ kind, itemId, ...(activityId ? { activityId } : {}), label, ...(img ? { img } : {}) });
+    return Object.freeze({ kind, itemId, ...(activityId ? { activityId } : {}), label, ...(imageSource ? { img: imageSource } : {}) });
   }
   if (kind === "skill") {
     const skill = key(value?.skill, "skill");
-    return Object.freeze({ kind, skill, label, ...(img ? { img } : {}) });
+    return Object.freeze({ kind, skill, label, ...(imageSource ? { img: imageSource } : {}) });
   }
   throw new QuickbarError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.QuickbarGateway.ThatActionTypeCannotBePlacedOnTheQuickbar", "That action type cannot be placed on the Quickbar."));
 }
 
+// Resolve a quickbar entry by stable ID from the current descriptor set.
 function resolveDescriptor(actor, descriptor, game, config, systemAdapter) {
   if (!descriptor) return null;
   if (!systemAdapter?.resolveDescriptor) return unavailableDescriptor(descriptor);
   return systemAdapter.resolveDescriptor(actor, descriptor, game, config, { ACTOR_COMMANDS });
 }
 
+// Reject a write when its target descriptor is missing or no longer available.
 function assertDescriptorAvailable(actor, descriptor, game, systemAdapter) {
   if (!systemAdapter?.assertDescriptorAvailable) {
     throw new QuickbarError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.QuickbarGateway.ThatActionTypeIsUnavailable", "That action type is unavailable."));
@@ -143,12 +156,14 @@ function assertDescriptorAvailable(actor, descriptor, game, systemAdapter) {
   return systemAdapter.assertDescriptorAvailable(actor, descriptor, game, { QuickbarError });
 }
 
+// Create the consistent unavailable result for a stale quickbar entry.
 function unavailableDescriptor(descriptor) {
   return Object.freeze({ ...descriptor, ...(descriptor.kind === "item" ? { itemType: "item" } : {}),
     available: false, command: descriptor.kind === "item" ? ACTOR_COMMANDS.USE_ITEM : ACTOR_COMMANDS.ROLL_SKILL,
     payload: Object.freeze(descriptor.kind === "item" ? { itemId: descriptor.itemId } : { skill: descriptor.skill }) });
 }
 
+// Check current ownership of the exact Actor, failing closed when permission APIs fail.
 function canOwn(actor, user) {
   if (!actor || !user) return false;
   try {
@@ -160,34 +175,40 @@ function canOwn(actor, user) {
   }
 }
 
+// Reject quickbar mutations from a different world, user, or session generation.
 function assertSession(game, expected) {
   if (expected.worldId && game?.world?.id !== expected.worldId) throw new QuickbarError("STALE_SESSION", localizeFoundry("VEMOBILE.Interface.HotbarGateway.TheActiveWorldChanged", "The active world changed."));
   if (expected.userId && game?.user?.id !== expected.userId) throw new QuickbarError("STALE_SESSION", localizeFoundry("VEMOBILE.Interface.HotbarGateway.TheActiveUserChanged", "The active user changed."));
 }
 
+// Normalize a required stable quickbar identifier.
 function identifier(value, field) {
   const normalized = String(value ?? "").trim();
   if (!/^[A-Za-z0-9_-]{1,128}$/u.test(normalized)) throw new QuickbarError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.CharacterSource.IsInvalid", "{field} is invalid.", { field: (field) }));
   return normalized;
 }
 
+// Normalize an optional identifier while preserving absence.
 function optionalIdentifier(value) {
   const normalized = String(value ?? "").trim();
   return normalized ? identifier(normalized, "activityId") : "";
 }
 
+// Normalize a required descriptor key to its lowercase bounded form.
 function key(value, field) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (!/^[a-z0-9_-]{1,32}$/u.test(normalized)) throw new QuickbarError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.CharacterSource.IsInvalid", "{field} is invalid.", { field: (field) }));
   return normalized;
 }
 
+// Validate a bounded nonempty text field for a quickbar descriptor.
 function text(value, field, maximum) {
   const normalized = String(value ?? "").trim();
   if (!normalized || normalized.length > maximum) throw new QuickbarError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.CharacterSource.IsInvalid", "{field} is invalid.", { field: (field) }));
   return normalized;
 }
 
+// Normalize optional descriptor text and enforce its length bound.
 function optionalText(value, maximum) {
   const normalized = String(value ?? "").trim();
   return normalized.length <= maximum ? normalized : "";

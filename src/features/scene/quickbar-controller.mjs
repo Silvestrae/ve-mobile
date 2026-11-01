@@ -25,16 +25,20 @@ export function bindQuickbarController({
   const eventWindow = getWindow() ?? bar;
   let active = null;
 
+  // Query current rendered slots for each drag so re-rendered rows stay addressable.
   const slotElements = () => Array.from(bar.querySelectorAll("[data-ve-quickbar-slot]"));
+  // Cancel a pending long-press whenever a gesture ends or is replaced.
   const clearTimer = () => {
     if (active?.timer !== null && active?.timer !== undefined) clearTimeoutFn(active.timer);
     if (active) active.timer = null;
   };
+  // Reset drag presentation and all per-pointer state together.
   const reset = () => {
     clearTimer();
     if (active?.dragging) onDragChange(active.currentIndex, false);
     active = null;
   };
+  // Start only on an enabled, pressable slot and capture its pointer for the gesture.
   const pointerDown = (event) => {
     if (event.button !== undefined && event.button !== 0) return;
     const element = event.target?.closest?.("[data-ve-quickbar-slot]");
@@ -68,6 +72,7 @@ export function bindQuickbarController({
     }
     element.setPointerCapture?.(event.pointerId);
   };
+  // Treat movement as a drag only in edit mode; otherwise cancel activation.
   const pointerMove = (event) => {
     if (!active || active.pointerId !== event.pointerId) return;
     const distance = Math.hypot(Number(event.clientX) - active.startX, Number(event.clientY) - active.startY);
@@ -89,6 +94,7 @@ export function bindQuickbarController({
     active.currentIndex = targetIndex;
     onDragChange(targetIndex, true);
   };
+  // Commit a deferred swap or a tap/long-press action, then release gesture state.
   const pointerEnd = (event, cancelled = false) => {
     if (!active || active.pointerId !== event.pointerId) return;
     event.preventDefault?.();
@@ -124,6 +130,7 @@ export function bindQuickbarController({
   return Object.freeze({ reset });
 }
 
+// Find the slot whose current screen rectangle contains the pointer coordinates.
 function slotIndexAt(elements, x, y) {
   for (const element of elements) {
     const rect = element.getBoundingClientRect();

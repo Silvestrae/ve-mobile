@@ -87,7 +87,7 @@ export function createActorViewRecord(actor, user, capabilitiesForActor = () => 
       return [slug, { value: Math.max(0, finite(counter?.value)), max: Math.max(0, finite(counter?.max)) }];
     })) : null,
     availableConditions: availableConditionRecords(),
-    resources: typeof actor.getResource === "function" ? pf2eResourceRecords(actor).filter(r => r.max > 0 || r.slug === "hero-points").map(r => ({ ...r, id: r.slug === "hero-points" ? "heroPoints" : r.slug, label: localizeFoundry(r.label, r.label) })) : resourceRecords(system),
+    resources: typeof actor.getResource === "function" ? pf2eResourceRecords(actor).filter(resource => resource.max > 0 || resource.slug === "hero-points").map(resource => ({ ...resource, id: resource.slug === "hero-points" ? "heroPoints" : resource.slug, label: localizeFoundry(resource.label, resource.label) })) : resourceRecords(system),
     limitedUses: pf2eLimitedUseRecords(actor)
   };
   const record = {
@@ -118,6 +118,7 @@ export function createActorViewRecord(actor, user, capabilitiesForActor = () => 
   return record;
 }
 
+// Select the character's presentation theme from its actor type and class mix.
 function actorThemeKey(actor, classes) {
   if (actor?.type === "npc") return "bestiary";
   if (actor?.type !== "character") return "neutral";
@@ -126,6 +127,8 @@ function actorThemeKey(actor, classes) {
   return pf2eClassThemeKey(slug);
 }
 
+// Prefer the prepared character level, with class levels as the fallback for
+// records that expose only class-item data.
 function actorLevel(actor, system, classes) {
   if (actor?.type === "character") {
     return firstFinite(system.details?.level?.value, system.details?.level, classes.reduce((sum, item) => sum + finite(item?.system?.levels ?? item?.system?.level?.value), 0));
@@ -133,6 +136,8 @@ function actorLevel(actor, system, classes) {
   return firstFinite(system.details?.level?.value, system.details?.level?.value, system.details?.level);
 }
 
+// Project PF2e ancestry, heritage, background, class, and level into the
+// compact identity record shown at the top of the character view.
 function identityRecord(actor, system, classes) {
   const ancestry = actor?.ancestry;
   const heritage = actor?.heritage;
@@ -205,6 +210,8 @@ function supplementaryRecords(actor, system, user, items) {
   };
 }
 
+// Convert PF2e ability entries into stable presentation records, accepting the
+// active system's prepared Actor shape and its system-data fallback.
 function abilityRecords(actor) {
   const abilities = actor?.abilities ?? actor?.system?.abilities;
   if (!abilities || typeof abilities !== "object") return [];
@@ -218,6 +225,7 @@ function abilityRecords(actor) {
   })).filter((ability) => ability.modifier !== null);
 }
 
+// Read the prepared class DC and label when PF2e exposes the statistic.
 function classDcRecord(actor) {
   const statistic = actor?.classDC;
   if (!statistic) return null;
@@ -225,6 +233,8 @@ function classDcRecord(actor) {
   return value === null ? null : { label: string(statistic?.label), value };
 }
 
+// Normalize shield identity, hardness, HP, and raised state from the prepared
+// Actor or system attributes.
 function shieldRecord(actor, system) {
   const shield = actor?.attributes?.shield ?? system?.attributes?.shield;
   if (!shield || typeof shield !== "object") return null;
@@ -245,6 +255,8 @@ function shieldRecord(actor, system) {
   };
 }
 
+// Preview the Actor's total AC with the shield raised, using PF2e's modifier
+// stack when its prepared AC does not already include the raised shield.
 function raisedShieldArmorClass(actor, shield) {
   if (shield.broken || shield.destroyed) return null;
   if (shield.raised) return firstFinite(actor.attributes?.ac?.value, actor.system?.attributes?.ac?.value);
@@ -262,6 +274,7 @@ function raisedShieldArmorClass(actor, shield) {
   return firstFinite(10 + statistic.totalModifier);
 }
 
+// Project current and maximum inventory Bulk using PF2e's prepared values.
 function bulkRecord(actor) {
   const bulk = actor?.inventory?.bulk;
   if (!bulk) return null;
@@ -274,16 +287,20 @@ function bulkRecord(actor) {
   };
 }
 
+// Map PF2e's numeric proficiency rank to its standard display label.
 function proficiencyKey(rank) {
   return ["Untrained", "Trained", "Expert", "Master", "Legendary"][Math.trunc(rank)] ?? null;
 }
 
+// Resolve a PF2e configured label through Foundry localization, falling back to
+// a readable form of the trait slug when the configuration has no entry.
 function configLabel(configKey, slug) {
   const key = globalThis.CONFIG?.PF2E?.[configKey]?.[slug];
   if (typeof key !== "string") return humanize(slug);
   return localizeFoundry(key, humanize(slug));
 }
 
+// Convert configured PF2e trait slugs or sets into unique localized labels.
 function traitLabels(value, configKey) {
   const config = globalThis.CONFIG?.PF2E?.[configKey] ?? {};
   const traits = Array.isArray(value) ? value : value instanceof Set ? [...value] : [];
@@ -297,6 +314,7 @@ function traitLabels(value, configKey) {
   }).filter(Boolean);
 }
 
+// Normalize PF2e action-cost variants into the icon/count data used by controls.
 function actionCostRecord(cost) {
   if (!cost || typeof cost !== "object") return null;
   const type = string(cost.type ?? cost.value?.type);
@@ -314,6 +332,8 @@ function actionCostRecord(cost) {
   return { type: type || "action", value, label };
 }
 
+// Parse a spell's human-readable casting time into the same action-cost shape
+// used for strike and feat controls.
 function spellActionCostRecord(time) {
   const value = string(time).trim();
   if (!value) return null;
@@ -328,10 +348,13 @@ function spellActionCostRecord(time) {
   return { type: "time", value: null, label: value };
 }
 
+// Render the common one-to-three action counts as words for casting-time labels.
 function numberWord(value) {
   return ["", "One", "Two", "Three"][Math.trunc(value)] ?? String(value);
 }
 
+// Project available rank slots from one spellcasting entry while retaining its
+// category and stable entry/slot identifiers.
 function spellSlotRecords(entry, category) {
   const slots = entry?.system?.slots ?? {};
   return Object.entries(slots).map(([key, slot]) => {
@@ -347,6 +370,7 @@ function spellSlotRecords(entry, category) {
   }).filter(Boolean).sort((a, b) => a.rank - b.rank);
 }
 
+// Read PF2e NPC level and trait identity without exposing its live system record.
 function npcIdentity(system) {
   const traits = system.traits?.value;
   return {
@@ -358,6 +382,8 @@ function npcIdentity(system) {
   };
 }
 
+// Return the Actor's folder ancestry, stopping if malformed data contains a
+// parent cycle.
 function folderPath(actor) {
   const names = [];
   const seen = new Set();
@@ -370,11 +396,13 @@ function folderPath(actor) {
   return names;
 }
 
+// Convert a PF2e statistic map or object into the common statistic records.
 function statisticMap(value, actorType) {
   const entries = value instanceof Map ? [...value.entries()] : Object.entries(value ?? {});
   return entries.map(([slug, statistic]) => statisticRecord(statistic, slug, actorType)).filter(Boolean);
 }
 
+// Project prepared skill statistics and their ability associations.
 function skillRecords(value, actorType) {
   const entries = value instanceof Map ? [...value.entries()] : Object.entries(value ?? {});
   return entries.map(([slug, statistic]) => {
@@ -383,6 +411,8 @@ function skillRecords(value, actorType) {
   }).filter(Boolean);
 }
 
+// Serialize a PF2e statistic's check, DC, rank, and modifier breakdown into a
+// plain record suitable for character and NPC views.
 function statisticRecord(statistic, slug = "", actorType = "") {
   if (!statistic) return null;
   const check = statistic.check;
@@ -398,6 +428,8 @@ function statisticRecord(statistic, slug = "", actorType = "") {
   };
 }
 
+// Convert prepared PF2e strikes into token-safe action records with their
+// associated Item, traits, action cost, and roll options.
 function strikeRecords(actor) {
   const actions = Array.from(actor?.system?.actions ?? []);
   return actions.filter((action) => action && action.item).map((action) => {
@@ -500,6 +532,8 @@ function spellcastingRecords(actor) {
   });
 }
 
+// Build a browsable spell list from owned spells and entries, including
+// rituals and other spells that are not represented by prepared slots.
 function spellBrowsingRecords(actor) {
   const rituals = collectionValues(actor?.itemTypes?.spell)
     .filter((spell) => spell?.isRitual === true || Boolean(spell?.system?.ritual))
@@ -533,12 +567,15 @@ function spellBrowsingRecords(actor) {
   return { rituals, activations };
 }
 
+// Flatten PF2e's nested feat groups into ordered view records while preserving
+// group headings and each feat's parent relationship.
 function featGroupRecords(actor) {
   const groups = collectionValues(actor?.feats);
   if (actor?.feats?.bonus) groups.push(actor.feats.bonus);
   const ownedIds = new Set(collectionValues(actor?.items).map((item) => string(item?.id)).filter(Boolean));
   return groups.flatMap((group) => {
     const entries = [];
+    // Walk each nested feat slot once, recording ancestry and depth for the UI.
     const visit = (slot, parentId = "", depth = 0) => {
       const item = slot?.feat;
       const id = string(item?.id);
@@ -561,6 +598,8 @@ function featGroupRecords(actor) {
   });
 }
 
+// Describe one spell choice for a specific entry and rank, retaining whether
+// its slot is expended and the native cast action cost.
 function spellOption(spell, entry, rank, slotId, expended) {
   const traits = spell?.system?.traits?.value;
   const time = string(spell?.system?.time?.value);
@@ -587,11 +626,14 @@ function spellOption(spell, entry, rank, slotId, expended) {
   };
 }
 
+// Resolve the displayed spell rank from the prepared document or source fields.
 function spellRank(spell) {
   const rank = firstFinite(spell?.rank, spell?.system?.location?.heightenedLevel, spell?.system?.level?.value) ?? 0;
   return Math.max(1, rank);
 }
 
+// Ask PF2e for its cast rank when available, with heightened and innate-spell
+// rules as compatibility fallbacks.
 function spellCastRank(spell, slotRank) {
   if (typeof spell?.computeCastRank === "function") return finite(spell.computeCastRank(slotRank));
   const traits = spell?.system?.traits?.value;
@@ -599,6 +641,8 @@ function spellCastRank(spell, slotRank) {
   return scalesAutomatically ? spellRank(spell) : Math.max(spellRank(spell), slotRank);
 }
 
+// Project a PF2e owned Item into the inventory row record, including physical
+// condition, usage, bulk, traits, and container capacity where relevant.
 function itemRecord(item) {
   const system = item?.system ?? {};
   const category = string(system.category);
@@ -624,6 +668,7 @@ function itemRecord(item) {
   };
 }
 
+// Normalize a PF2e container capacity record into value and unit fields.
 function preparedContainerCapacity(capacity) {
   if (!capacity || typeof capacity !== "object") return null;
   const value = preparedBulkString(capacity.value);
@@ -631,11 +676,13 @@ function preparedContainerCapacity(capacity) {
   return value || max ? { value, max } : null;
 }
 
+// Read a PF2e Bulk value through its prepared string form when one is available.
 function preparedBulkString(value) {
   if (value == null) return "";
   return typeof value?.toString === "function" ? string(value.toString()) : string(value);
 }
 
+// Serialize a nonphysical PF2e feature with its activation cost and traits.
 function featureRecord(item) {
   const system = item?.system ?? {};
   const actionType = string(system.actionType?.value ?? system.actionType);
@@ -658,11 +705,14 @@ function featureRecord(item) {
   };
 }
 
+// Extract stable slugs from PF2e trait arrays or sets.
 function traitSlugs(value) {
   const traits = Array.isArray(value) ? value : value instanceof Set ? [...value] : [];
   return traits.map(trait => string(typeof trait === "string" ? trait : trait?.slug)).filter(Boolean);
 }
 
+// Select biography fields by Actor visibility and serialize them for display;
+// NPC rich notes remain on the asynchronous native enrichment path.
 function biographyRecord(actor, system, user) {
   if (actor?.type === "npc") {
     // Rich notes travel only through asynchronous native enrichment, which
@@ -672,6 +722,7 @@ function biographyRecord(actor, system, user) {
   if (actor?.type !== "character") return null;
   const details = system.details ?? {};
   const biography = details.biography ?? {};
+  // Apply current Actor ownership and PF2e section visibility for each field.
   const visible = section => actor.testUserPermission?.(user, "OWNER") === true || user?.isGM === true
     || (biography.visibility?.[section] ?? (section === "appearance")) === true;
   return {
@@ -691,6 +742,8 @@ function biographyRecord(actor, system, user) {
   };
 }
 
+// Project active condition Items and their severity/expiry details for the
+// character record.
 function conditionRecords(actor, items) {
   const conditions = Array.from(actor?.itemTypes?.condition ?? items.filter((item) => item?.type === "condition"));
   return conditions.map((condition) => ({
@@ -704,6 +757,8 @@ function conditionRecords(actor, items) {
   }));
 }
 
+// Enumerate PF2e condition definitions that the current configuration exposes
+// as applicable player-facing conditions.
 function availableConditionRecords() {
   const types = globalThis.CONFIG?.PF2E?.conditionTypes ?? {};
   const nativeConditions = globalThis.game?.pf2e?.ConditionManager?.conditions;
@@ -717,6 +772,7 @@ function availableConditionRecords() {
   });
 }
 
+// Gather the Actor's Focus Points and other supported PF2e resource counters.
 function resourceRecords(system) {
   const resources = system.resources ?? {};
   return [
@@ -725,11 +781,13 @@ function resourceRecords(system) {
   ].filter(Boolean);
 }
 
+// Convert one optional resource counter to a bounded plain record.
 function resourceRecord(id, label, value) {
   if (!value || typeof value !== "object") return null;
   return { id, label, value: finite(value.value), max: finite(value.max) };
 }
 
+// Normalize the Actor's prepared movement modes and units for the sheet.
 function speedRecord(actor, system) {
   const speeds = actor?.movement?.speeds ?? system.movement?.speeds ?? {};
   const land = speeds.land ?? speeds.walk ?? system.attributes?.speed;
@@ -739,14 +797,19 @@ function speedRecord(actor, system) {
   return land === undefined ? null : { value: finite(land), unit: string(system.movement?.units, "ft") };
 }
 
+// Recognize physical inventory Items through PF2e's type API or supported type
+// identifiers for older documents.
 function isPhysical(item) {
   return Boolean(item?.isOfType?.("physical") || ["weapon", "armor", "shield", "equipment", "consumable", "treasure", "backpack", "ammo", "kit", "melee"].includes(item?.type));
 }
 
+// Resolve a stable Item ID from either Foundry's indexed collection API or an
+// iterable collection fallback.
 function collectionGet(collection, id) {
   return collection?.get?.(id) ?? Array.from(collection ?? []).find((item) => item?.id === id) ?? null;
 }
 
+// Convert PF2e collections and arrays into a safe list for projection helpers.
 function collectionValues(collection) {
   if (!collection) return [];
   if (Array.isArray(collection.contents)) return collection.contents;
@@ -754,6 +817,7 @@ function collectionValues(collection) {
   return Array.from(collection);
 }
 
+// Return the first finite number among prepared and source-data candidates.
 function firstFinite(...values) {
   for (const value of values) {
     if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -762,22 +826,28 @@ function firstFinite(...values) {
   return null;
 }
 
+// Preserve missing/non-numeric values as null instead of treating them as zero.
 function nullableFinite(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+// Normalize absent numeric data to zero for counters that require a number.
 function finite(value) {
   return firstFinite(value) ?? 0;
 }
 
+// Preserve strings, stringify present values, and use the supplied fallback
+// only when the source is absent.
 function string(value, fallback = "") {
   return typeof value === "string" ? value : value == null ? fallback : String(value);
 }
 
+// Normalize an optional string list and discard empty entries.
 function stringArray(value) {
   return Array.isArray(value) ? value.map((entry) => string(entry)).filter(Boolean) : [];
 }
 
+// Turn a PF2e slug into a readable fallback label.
 function humanize(value) {
   return string(value).replace(/[-_]+/gu, " ").replace(/\b\w/gu, (letter) => letter.toUpperCase());
 }

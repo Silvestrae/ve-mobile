@@ -1,5 +1,7 @@
+// Resolve catalogue artwork from plain character records; image loading belongs to the presenters.
 import { HEADER_BANNERS, HEADER_BANNER_BY_ID } from "./header-banner-catalogue.mjs";
 
+// Match catalogue names consistently without changing their displayed spelling.
 const key = (value) => String(value ?? "").trim().toLocaleLowerCase("en");
 const byType = new Map(HEADER_BANNERS.filter((entry) => entry.kind === "creature-type").map((entry) => [key(entry.parentType), entry]));
 const byClass = new Map(HEADER_BANNERS.filter((entry) => entry.kind === "class").map((entry) => [key(entry.label), entry]));
@@ -32,11 +34,13 @@ export function normalizeBannerSpecies(species, classification = {}) {
   return Object.freeze({ parentType, tags: Object.freeze(tag ? [tag] : []) });
 }
 
+// Fall back to Automatic when an old or invalid preference reaches the resolver.
 export function normalizedHeaderArtwork(value) {
   const choice = key(value);
   return ["automatic", "race", "heroic1", "heroic2", "heroic3", "heroic4", "off"].includes(choice) ? choice : "automatic";
 }
 
+// Return ordered image candidates for the chosen preference; Off produces no image requests.
 export function resolveHeaderBanner(actor, headerArtwork = "automatic") {
   const choice = normalizedHeaderArtwork(headerArtwork);
   const candidates = choice === "off" ? [] : heroicIds[choice]
@@ -45,11 +49,13 @@ export function resolveHeaderBanner(actor, headerArtwork = "automatic") {
   return Object.freeze({ choice, candidates: Object.freeze(candidates) });
 }
 
+// Append stable heroic fallbacks after the actor's specific class, species or creature matches.
 export function automaticBanners(actor, { ignoreClass = false } = {}) {
   const matched = classifiedBanners(actor, { ignoreClass });
   return Object.freeze(appendHeroicFallback(actor, matched));
 }
 
+// Prefer a character's first recognised class; NPCs use their exact type/tag classification.
 function classifiedBanners(actor, { ignoreClass = false } = {}) {
   const classification = actor.header?.bannerClassification ?? {};
   const parentType = key(classification.parentType);
@@ -69,6 +75,7 @@ function classifiedBanners(actor, { ignoreClass = false } = {}) {
   return [...exact, ...(generic ? [generic] : [])];
 }
 
+// Add each generic fallback once so a failed specific image still has somewhere to go.
 function appendHeroicFallback(actor, candidates) {
   const existing = new Set(candidates.map((entry) => entry.id));
   const offset = stableHeroicOffset(actor);
@@ -79,6 +86,7 @@ function appendHeroicFallback(actor, candidates) {
   return candidates;
 }
 
+// Give each exact actor source a repeatable fallback rotation instead of changing artwork on every render.
 function stableHeroicOffset(actor) {
   // sourceUuid preserves token/synthetic provenance; id supports older plain records.
   const identity = String(actor?.sourceUuid ?? actor?.uuid ?? actor?.id ?? "");
@@ -90,6 +98,7 @@ function stableHeroicOffset(actor) {
   return (hash >>> 0) % heroicPool.length;
 }
 
+// Match tags only inside their parent creature type and preserve the catalogue's priority order.
 function matchingTags(parentType, tags = []) {
   // Catalogue source order remains the stable tie-break for multiple tags.
   return HEADER_BANNERS.filter((entry) => entry.kind === "creature-tag"

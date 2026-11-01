@@ -17,15 +17,18 @@ export function createSceneCameraIntentCoordinator({ trace = () => {}, localize 
   let sequence = 0;
   let explicit = null;
 
+  // Complete all listeners attached to an intent, then release their registrations.
   const settlePresentationWaiters = (intent, method, value) => {
     for (const waiter of [...intent.presentationWaiters]) waiter[method](value);
     intent.presentationWaiters.clear();
   };
 
+  // Reject presentation waits with the same typed cancellation used by Scene callers.
   const cancelIntent = (intent, reason) => {
     settlePresentationWaiters(intent, "reject", new SceneInteractionCancelledError(String(reason || "The camera intent was cancelled."), localize));
   };
 
+  // Send a plain trace record to the injected observer without retaining Scene documents.
   const record = (event, details = {}) => trace(Object.freeze({
     event,
     sequence,
@@ -34,6 +37,7 @@ export function createSceneCameraIntentCoordinator({ trace = () => {}, localize 
   }));
 
   return Object.freeze({
+    // Replace the prior camera request and give the new one its own presentation acknowledgement waiters.
     beginExplicit(details = {}) {
       if (explicit) cancelIntent(explicit, "A newer explicit camera intent replaced this one.");
       const intent = { id: ++sequence, presentationAcknowledged: false, presentationWaiters: new Set(), ...details };
@@ -42,6 +46,7 @@ export function createSceneCameraIntentCoordinator({ trace = () => {}, localize 
       return Object.freeze({
         id: intent.id,
         get current() { return explicit?.id === intent.id; },
+        // Await the map layout acknowledgement while preserving abort cleanup and exact intent ownership.
         waitForPresentation({ signal } = {}) {
           if (explicit?.id !== intent.id) return Promise.reject(new SceneInteractionCancelledError(undefined, localize));
           if (intent.presentationAcknowledged) return Promise.resolve(true);
@@ -57,6 +62,7 @@ export function createSceneCameraIntentCoordinator({ trace = () => {}, localize 
                 reject(error);
               }
             };
+            // Remove this wait from its owner before rejecting it with the cancellation reason.
             const onAbort = () => {
               intent.presentationWaiters.delete(waiter);
               waiter.reject(abortReason(signal, localize));
@@ -65,6 +71,7 @@ export function createSceneCameraIntentCoordinator({ trace = () => {}, localize 
             signal?.addEventListener?.("abort", onAbort, { once: true });
           });
         },
+        // Release only this camera intent and reject any waiter that outlived its completed action.
         finish() {
           if (explicit?.id !== intent.id) return false;
           explicit = null;
@@ -74,6 +81,7 @@ export function createSceneCameraIntentCoordinator({ trace = () => {}, localize 
         }
       });
     },
+    // Revoke camera priority and reject the old intent's pending layout waits.
     cancelExplicit(reason = "cancelled") {
       if (!explicit) return false;
       const intent = explicit;
@@ -83,6 +91,7 @@ export function createSceneCameraIntentCoordinator({ trace = () => {}, localize 
       record("explicit-cancelled", { intent, reason });
       return true;
     },
+    // Tell the active explicit action that the renderer has reconciled its map presentation.
     acknowledgePresentation(details = {}) {
       if (!explicit) {
         record("presentation-acknowledged", { presentation: details, matched: false });
@@ -93,11 +102,13 @@ export function createSceneCameraIntentCoordinator({ trace = () => {}, localize 
       record("presentation-acknowledged", { presentation: details, matched: true });
       return true;
     },
+    // Admit automatic camera movement only when no explicit user camera request owns priority.
     allowsAutomatic(details = {}) {
       const allowed = !explicit;
       record(allowed ? "automatic-allowed" : "automatic-suppressed", { automatic: details });
       return allowed;
     },
+    // Expose a plain description of the current intent without leaking its mutable waiter set.
     get active() {
       if (!explicit) return null;
       const { presentationWaiters, ...details } = explicit;
@@ -121,12 +132,14 @@ export function createSceneInteractionReadiness({
   let disposed = false;
   const pending = new Set();
 
+  // Retire the readiness owner and reject every outstanding action instead of leaving promises pending.
   const cancelAll = () => {
     disposed = true;
     for (const cancel of [...pending]) cancel(new SceneInteractionCancelledError("VE Mobile stopped before the Scene became ready.", localize));
   };
   scope?.own?.(cancelAll);
 
+  // Navigate only when needed, then subscribe until the Scene is usable or the request loses ownership.
   const ensure = ({ signal } = {}) => {
     if (disposed || scope?.disposed) return Promise.reject(new SceneInteractionCancelledError("VE Mobile is not active.", localize));
     if (signal?.aborted) return Promise.reject(abortReason(signal, localize));
@@ -138,6 +151,7 @@ export function createSceneInteractionReadiness({
       let navigationRequested = false;
       let sceneWasExposed = false;
 
+      // Settle a readiness request once and always release its subscription and abort listener.
       const finish = (callback, value) => {
         if (settled) return;
         settled = true;
@@ -147,8 +161,11 @@ export function createSceneInteractionReadiness({
         signal?.removeEventListener?.("abort", onAbort);
         callback(value);
       };
+      // Reject this readiness wait through the same cleanup path used by success.
       const cancel = (reason = new SceneInteractionCancelledError(undefined, localize)) => finish(reject, reason);
+      // Remove this wait from its owner before rejecting it with the cancellation reason.
       const onAbort = () => cancel(abortReason(signal, localize));
+      // Reinspect current presentation and cancel if the user has moved away from the map while it was settling.
       const check = () => {
         if (settled) return;
         if (disposed || scope?.disposed) return cancel(new SceneInteractionCancelledError("VE Mobile stopped before the Scene became ready.", localize));
@@ -186,6 +203,7 @@ export function createSceneInteractionReadiness({
   return Object.freeze({ ensure, cancelAll });
 }
 
+// Require both visible geometry and mounted Canvas interactions; a surviving DOM node alone is not enough.
 export function sceneInteractionIsReady(presentation) {
   return Boolean(
     presentation?.sceneExposed
@@ -198,6 +216,7 @@ export function sceneInteractionIsReady(presentation) {
   );
 }
 
+// Preserve a deliberate Scene cancellation reason while wrapping unrelated abort reasons consistently.
 function abortReason(signal, localize = null) {
   return signal?.reason instanceof SceneInteractionCancelledError
     ? signal.reason

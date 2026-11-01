@@ -91,10 +91,12 @@ export const PF2E_CLASS_ACCENTS = Object.freeze(Object.fromEntries(
   Object.values(PF2E_CLASS_APPEARANCES).filter(entry => entry.accent).map(entry => [entry.themeKey, entry.accent])
 ));
 
+// Resolve a native class slug to VE's own theme, using the neutral fallback for an unknown class.
 export function pf2eClassThemeKey(slug) {
   return PF2E_CLASS_APPEARANCES[String(slug ?? "").toLowerCase()]?.themeKey ?? "neutral";
 }
 
+// Prefer mapped PF2e class artwork, then reuse header-banner.mjs for the remaining user choices/fallbacks.
 export function resolvePf2eHeaderBanner(actor, headerArtwork = "automatic") {
   const identity = actor?.pf2e?.identity ?? {};
   const appearance = PF2E_CLASS_APPEARANCES[String(identity.classSlug ?? "").toLowerCase()];

@@ -1,3 +1,4 @@
+// Plain Scene asset metadata and memory estimates; the Foundry asset gateway owns scans, persistence and file generation.
 import { localizedText } from "../ui/localized-text.mjs";
 export const MOBILE_ASSET_CATALOG_VERSION = 1;
 export const MOBILE_DERIVATIVE_SCHEMA_VERSION = 1;
@@ -6,6 +7,7 @@ export const MIPMAP_ESTIMATE_FACTOR = 1.33;
 const RASTER_EXTENSIONS = new Set(["avif", "bmp", "gif", "jpeg", "jpg", "png", "webp"]);
 const VIDEO_EXTENSIONS = new Set(["m4v", "mp4", "ogg", "ogv", "webm"]);
 
+// Give shared asset references one stable key, excluding temporary URLs and dropping cache-busting query/hash parts.
 export function canonicalAssetSource(value, baseHref = globalThis.document?.baseURI ?? "") {
   const source = String(value ?? "").trim().replace(/\\/gu, "/");
   if (!source || source.startsWith("#") || /^(?:data|blob):/iu.test(source)) return "";
@@ -20,11 +22,13 @@ export function canonicalAssetSource(value, baseHref = globalThis.document?.base
   }
 }
 
+// Read a path's extension without confusing query parameters with a file type.
 export function assetFileType(source) {
   const match = String(source ?? "").split(/[?#]/u, 1)[0].match(/\.([a-z0-9]+)$/iu);
   return match ? match[1].toLowerCase() : "";
 }
 
+// Distinguish known raster/video sources so unsupported formats are not offered for image conversion.
 export function assetMediaKind(source) {
   const type = assetFileType(source);
   if (RASTER_EXTENSIONS.has(type)) return "raster";
@@ -32,6 +36,7 @@ export function assetMediaKind(source) {
   return "unknown";
 }
 
+// Estimate the uncompressed four-channel texture footprint only for safe positive pixel dimensions.
 export function decodedRgbaBytes(width, height) {
   const w = Math.floor(Number(width));
   const h = Math.floor(Number(height));
@@ -40,11 +45,13 @@ export function decodedRgbaBytes(width, height) {
   return Number.isSafeInteger(bytes) ? bytes : null;
 }
 
+// Estimate additional mipmap memory separately from the original decoded texture size.
 export function mipmappedBytes(decodedBytes) {
   const bytes = Number(decodedBytes);
   return Number.isFinite(bytes) && bytes >= 0 ? Math.round(bytes * MIPMAP_ESTIMATE_FACTOR) : null;
 }
 
+// Classify known decoded memory while keeping missing measurements explicitly unknown.
 export function assetRiskBand(decodedBytes) {
   if (decodedBytes === null || decodedBytes === undefined) return "unknown";
   const mib = Number(decodedBytes) / 1048576;
@@ -55,6 +62,7 @@ export function assetRiskBand(decodedBytes) {
   return "very-high";
 }
 
+// Deduplicate asset sources across Scene roles while preserving which Scenes/layers use each source.
 export function collectSceneAssetReferences(scenes, { baseHref = "" } = {}) {
   const assets = new Map();
   const sceneRecords = [];
@@ -63,6 +71,7 @@ export function collectSceneAssetReferences(scenes, { baseHref = "" } = {}) {
     if (!sceneId) continue;
     const sceneName = String(scene?.name || "Unnamed Scene");
     const references = [];
+    // Record this Scene reference and merge its role/Scene membership into the shared asset index.
     const add = (value, role, extra = {}) => {
       const canonicalSource = canonicalAssetSource(value, baseHref);
       if (!canonicalSource) return;
@@ -100,6 +109,7 @@ export function collectSceneAssetReferences(scenes, { baseHref = "" } = {}) {
   return Object.freeze({ assets: Object.freeze(assetRecords), scenes: Object.freeze(sceneRecords) });
 }
 
+// Combine scanned metadata with current references and retain a previous derivative only through source validation.
 export function buildCatalog({ references, metadata = new Map(), previous = null, generatedAt = Date.now() } = {}) {
   const priorAssets = previous?.schemaVersion === MOBILE_ASSET_CATALOG_VERSION && previous?.assets && typeof previous.assets === "object"
     ? previous.assets
@@ -142,6 +152,7 @@ export function buildCatalog({ references, metadata = new Map(), previous = null
   return freezeCatalog(catalog);
 }
 
+// Aggregate original/effective image memory and layer counts once for each supplied Scene.
 export function buildSceneCatalog(scenes, assets) {
   const result = {};
   for (const scene of scenes ?? []) {
@@ -194,6 +205,7 @@ export function buildSceneCatalog(scenes, assets) {
   return result;
 }
 
+// Describe effective risk using actual derivative substitution/cached-source state, not catalogue intent alone.
 export function sceneRiskRecord(catalog, sceneId, {
   devicePolicy = null,
   priorGraphicsLoss = false,
@@ -410,6 +422,7 @@ export function recommendSceneMemoryProfile(sceneRisk, {
   });
 }
 
+// Choose aspect-preserving output dimensions from the selected profile without upscaling the source.
 export function targetDimensions(width, height, { profile = "balanced", longEdge = null, aggregateDecodedBytes = 0, localize = null } = {}) {
   const sourceWidth = positiveInteger(width);
   const sourceHeight = positiveInteger(height);
@@ -437,6 +450,7 @@ export function targetDimensions(width, height, { profile = "balanced", longEdge
   });
 }
 
+// Give matching source/output parameters a repeatable optimized-copy filename.
 export function deterministicDerivativeName(sourceHash, width, height, localize = null) {
   const hash = normalizedHash(sourceHash);
   const w = positiveInteger(width);
@@ -445,6 +459,7 @@ export function deterministicDerivativeName(sourceHash, width, height, localize 
   return `${hash.slice(0, 24)}-${w}x${h}.webp`;
 }
 
+// Reject derivatives whose schema, source hash or source dimensions no longer match the scanned original.
 export function mappingIsStale(mapping, { sourceHash, width, height } = {}) {
   if (!mapping || Number(mapping.schemaVersion) !== MOBILE_DERIVATIVE_SCHEMA_VERSION) return true;
   const hash = normalizedHash(sourceHash);
@@ -454,6 +469,7 @@ export function mappingIsStale(mapping, { sourceHash, width, height } = {}) {
     || Number(mapping.sourceHeight) !== positiveInteger(height);
 }
 
+// Validate a new mapping before rebuilding and freezing the catalogue's effective Scene totals.
 export function activateDerivative(catalog, canonicalSource, derivative, localize = null) {
   if (catalog?.schemaVersion !== MOBILE_ASSET_CATALOG_VERSION || !catalog.assets?.[canonicalSource]) {
     throw new Error(localizedText(localize, "VEMOBILE.Errors.Asset5", "The source asset is no longer present in the catalog."));
@@ -466,6 +482,7 @@ export function activateDerivative(catalog, canonicalSource, derivative, localiz
   return freezeCatalog({ ...catalog, assets, scenes: buildSceneCatalog(sceneReferenceRecords(catalog, assets), assets) });
 }
 
+// Enable, disable or remove a mapping without modifying the original Scene asset references.
 export function updateDerivativeState(catalog, canonicalSource, { enabled, remove = false, localize = null } = {}) {
   const current = catalog?.assets?.[canonicalSource];
   if (!current) throw new Error(localizedText(localize, "VEMOBILE.Errors.Asset7", "The source asset is no longer present in the catalog."));
@@ -479,6 +496,7 @@ export function updateDerivativeState(catalog, canonicalSource, { enabled, remov
   return freezeCatalog({ ...catalog, assets, scenes: buildSceneCatalog(sceneReferenceRecords(catalog, assets), assets) });
 }
 
+// Count a derivative only when enabled, active and still matched to its source.
 function effectiveAssetRecord(asset) {
   const derivative = asset?.derivative;
   const active = derivative?.enabled !== false && derivative?.status === "active" && !mappingIsStale(derivative, {
@@ -490,6 +508,7 @@ function effectiveAssetRecord(asset) {
   return { decodedBytes, mipmappedBytes: mipmappedBytes(decodedBytes), derivativeActive: active };
 }
 
+// Combine known image pressure conservatively; missing measurements must not imply a low-risk Scene.
 function aggregateRisk(totalBytes, surfaceCount, known, unknownCount) {
   if (!known.length) return "unknown";
   if (unknownCount > 0 && totalBytes < 96 * 1048576) return "unknown";
@@ -501,10 +520,12 @@ function aggregateRisk(totalBytes, surfaceCount, known, unknownCount) {
   return "low";
 }
 
+// Recover an older Scene record's known assets when explicit layer references are unavailable.
 function buildSceneReferenceAssets(scene, assets) {
   return (scene.sources ?? []).map((source) => assets[source]).filter(Boolean);
 }
 
+// Preserve detailed layer references during rebuilds, with a fallback for older catalogues.
 function sceneReferenceRecords(catalog, assets) {
   return Object.values(catalog.scenes ?? {}).map((scene) => ({
     id: scene.id,
@@ -515,6 +536,7 @@ function sceneReferenceRecords(catalog, assets) {
   }));
 }
 
+// Accept only complete mapping metadata and derive its active/disabled/stale status against the current source.
 function normalizeDerivative(value, source) {
   if (!value || typeof value !== "object") return null;
   const width = positiveInteger(value.width);
@@ -577,55 +599,66 @@ export function repairDerivativeStatuses(catalog, onWork = () => {}) {
   return freezeCatalog({ ...catalog, assets, scenes });
 }
 
+// Accept the supported iterable/array input shapes and treat an unreadable collection as empty.
 function collectionValues(value) {
   if (!value) return [];
   if (Array.isArray(value)) return value;
   try { return typeof value.values === "function" ? [...value.values()] : [...value]; } catch { return []; }
 }
 
+// Sum one metric from records already selected as known by the caller.
 function sumKnown(values, key) {
   return values.reduce((sum, value) => sum + Number(value?.[key] ?? 0), 0);
 }
 
+// Admit only safe positive integral dimensions/counts into catalogue records.
 function positiveInteger(value) {
   const number = Number(value);
   return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
+// Normalize measured non-negative byte values to whole numbers, retaining null for invalid data.
 function finiteNonNegative(value) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? Math.round(number) : null;
 }
 
+// Convert known bytes to MiB without turning an absent measurement into zero.
 function finiteMib(value) {
   if (value === null || value === undefined || value === "") return null;
   const bytes = Number(value);
   return Number.isFinite(bytes) && bytes >= 0 ? bytes / 1048576 : null;
 }
 
+// Use a whole non-negative count for pressure calculations.
 function finiteCount(value) {
   const count = Number(value);
   return Number.isFinite(count) && count >= 0 ? Math.floor(count) : 0;
 }
 
+// Rank known protection profiles from Normal to Maximum, treating unknown names as the lowest level.
 function memoryProfileLevel(profile) {
   const index = ["normal", "balanced", "strong", "maximum"].indexOf(String(profile ?? "").toLowerCase());
   return Math.max(0, index);
 }
 
+// Keep explanatory risk metrics compact with one decimal place.
 function roundOne(value) {
   return Math.round(Number(value) * 10) / 10;
 }
 
+// Admit only a complete SHA-256 hex digest as source/derivative identity.
 function normalizedHash(value) {
   const hash = String(value ?? "").toLowerCase();
   return /^[a-f0-9]{64}$/u.test(hash) ? hash : "";
 }
 
+// Keep transparency as an explicit yes/no/unknown scan result.
 function normalizeTransparency(value) {
   return value === true ? "yes" : value === false ? "no" : "unknown";
 }
 
+// Publish only the device facts used by risk presentation, with no live browser objects.
 function plainDevicePolicy(value) {
   return Object.freeze({
     family: String(value?.family ?? "unknown"),
@@ -637,6 +670,7 @@ function plainDevicePolicy(value) {
   });
 }
 
+// Keep unavailable device hints null and reject booleans masquerading as numeric measurements.
 function finiteOptionalNumber(value) {
   if (value === null || value === undefined || value === "" || typeof value === "boolean") return null;
   const number = Number(value);

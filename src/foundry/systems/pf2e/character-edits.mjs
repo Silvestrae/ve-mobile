@@ -7,10 +7,14 @@ const sections = Object.freeze({
   personality: { attitude: "text", beliefs: "text", edicts: "list", anathema: "list", likes: "text", dislikes: "text", catchphrases: "text" },
   campaign: { campaignNotes: "rich", allies: "rich", enemies: "rich", organizations: "rich" }
 });
+// Resolve an allowed PF2e update path from the supported edit field.
 const path = key => ["height", "weight"].includes(key) ? `system.details.${key}.value` : `system.details.biography.${key}`;
+// Raise a localized PF2e character-edit command error.
 const fail = (code, key, fallback) => { throw new CommandError(code, localizeFoundry(key, fallback)); };
+// Raise the validation error for unsupported PF2e edit input.
 const invalid = () => fail("INVALID_INPUT", "VEMOBILE.PF2E.InvalidInput", "This PF2e action is invalid or has changed. Refresh and try again.");
 
+/** Return the editable text for one supported biography section. */
 export function biographyEditorData(actor, section) {
   if (actor.type !== "character" || !Object.hasOwn(sections, section)) return null;
   const details = actor._source?.system?.details ?? actor.system?.details ?? {};
@@ -20,6 +24,7 @@ export function biographyEditorData(actor, section) {
   });
 }
 
+/** Save one supported biography field after checking its submitted original. */
 export function updateBiography(actor, payload, context) {
   const fields = biographyEditorData(actor, payload.section);
   if (!fields || typeof actor.update !== "function") invalid();
@@ -45,6 +50,7 @@ export function updateBiography(actor, payload, context) {
   return actor.update(update);
 }
 
+// Read custom AC modifiers from committed PF2e source data.
 export function customAcModifiers(actor) {
   const source = actor._source?.system?.customModifiers?.ac ?? actor.system?.customModifiers?.ac ?? [];
   return Array.isArray(source) ? source.map(modifier => ({ slug: String(modifier.slug ?? ""), label: String(modifier.label ?? ""),
@@ -70,6 +76,7 @@ export function editShield(actor, payload, context) {
   return item.update({ "system.hp.value": payload.value });
 }
 
+// Validate and update an existing custom AC modifier through the native Actor update path.
 export function editAcModifier(actor, payload, context) {
   if (!["character", "npc"].includes(actor.type)) invalid();
   const current = customAcModifiers(actor);

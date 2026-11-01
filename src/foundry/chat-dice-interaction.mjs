@@ -4,6 +4,7 @@ export function bindChatDiceInteraction({ host, input, scope, getDiceTray = () =
   const layer = host.querySelector?.(".ve-chat-dice-layer");
   if (!layer) return;
   let gesture = null;
+  // Release the temporary dice interaction claim and restore captured chat focus.
   const release = () => {
     const prior = gesture;
     gesture = null;

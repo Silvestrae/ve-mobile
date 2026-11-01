@@ -21,6 +21,7 @@ export function createFoundryHotbarGateway({
   const pendingExecutions = new Set();
   let mutationBusy = false;
 
+  // Resolve the live world and user context for a hotbar command.
   const session = (expected = {}) => {
     if (!isActive()) throw new HotbarError("INACTIVE", localizeFoundry("VEMOBILE.Interface.HotbarGateway.MobileModeIsNotActive", "Mobile mode is not active."));
     const game = getGame();
@@ -34,21 +35,25 @@ export function createFoundryHotbarGateway({
     return game;
   };
 
+  // Check whether Foundry’s hotbar is currently locked against edits.
   const locked = (game) => {
     try { return game.settings?.get?.("core", "hotbarLock") === true; }
     catch { return true; }
   };
 
+  // Check whether the current user can update their own hotbar.
   const canUpdateOwnHotbar = (user) => {
     try { return typeof user?.canUserModify === "function" && user.canUserModify(user, "update") === true; }
     catch { return false; }
   };
 
+  // Resolve a Macro by stable ID from the current world collection.
   const macroById = (game, id) => {
     try { return game.macros?.get?.(id) ?? null; }
     catch { return null; }
   };
 
+  // Verify the current user may execute this Macro before invoking it.
   const canExecute = (macro, user) => {
     try {
       const documentPermission = typeof macro?.canUserExecute === "function"
@@ -61,28 +66,33 @@ export function createFoundryHotbarGateway({
     } catch { return false; }
   };
 
+  // Check current ownership of the Macro document.
   const isOwner = (macro) => {
     try { return macro?.isOwner === true; }
     catch { return false; }
   };
 
+  // Read a hotbar slot from the current user’s saved hotbar.
   const slotValue = (user, slot) => {
     const value = user?.hotbar?.[String(slot)];
     return typeof value === "string" && value.length ? value : null;
   };
 
+  // Validate the requested hotbar slot index against Foundry’s supported slot range.
   const assertSlot = (slot) => {
     if (!Number.isInteger(slot) || slot < 1 || slot > SLOT_COUNT) {
       throw new HotbarError("INVALID_SLOT", localizeFoundry("VEMOBILE.Interface.HotbarGateway.HotbarSlotsMustBeBetweenAnd", "Hotbar slots must be between 1 and 50."));
     }
   };
 
+  // Reject a slot write if its current Macro no longer matches the captured expectation.
   const assertExpectedSlot = (user, slot, expectedMacroId) => {
     if (slotValue(user, slot) !== expectedMacroId) {
       throw new HotbarError("STALE_SLOT", localizeFoundry("VEMOBILE.Interface.HotbarGateway.ThatHotbarSlotChangedRefreshAndTryAgain", "That hotbar slot changed. Refresh and try again."));
     }
   };
 
+  // Validate a Macro identifier before resolving it from the live collection.
   const assertMacroId = (value) => {
     if (typeof value !== "string" || !value.trim() || value.length > 128) {
       throw new HotbarError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.HotbarGateway.AValidMacroIDIsRequired", "A valid macro ID is required."));
@@ -90,11 +100,13 @@ export function createFoundryHotbarGateway({
     return value;
   };
 
+  // Require edit authority and an unlocked hotbar before mutating a slot.
   const assertMutationAllowed = (game) => {
     if (locked(game)) throw new HotbarError("HOTBAR_LOCKED", localizeFoundry("VEMOBILE.Interface.HotbarGateway.TheFoundryHotbarIsLocked", "The Foundry hotbar is locked."));
     if (!canUpdateOwnHotbar(game.user)) throw new HotbarError("FORBIDDEN", localizeFoundry("VEMOBILE.Interface.HotbarGateway.YouCannotUpdateYourHotbar", "You cannot update your hotbar."));
   };
 
+  // Re-resolve the Macro and recheck execution authority at action time.
   const resolveExecutableMacro = (game, macroId) => {
     const macro = macroById(game, assertMacroId(macroId));
     if (!macro) throw new HotbarError("TARGET_MISSING", localizeFoundry("VEMOBILE.Interface.HotbarGateway.ThatMacroIsNoLongerAvailable", "That macro is no longer available."));
@@ -102,6 +114,7 @@ export function createFoundryHotbarGateway({
     return macro;
   };
 
+  // Normalize the expected Macro ID captured when the slot menu opened.
   const expectedSlotId = (request) => {
     if (!request || !Object.hasOwn(request, "expectedMacroId")) {
       throw new HotbarError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.HotbarGateway.TheExpectedHotbarSlotValueIsRequired", "The expected hotbar slot value is required."));
@@ -113,6 +126,7 @@ export function createFoundryHotbarGateway({
     return value;
   };
 
+  // Convert a Macro document into the plain record exposed to the quickbar.
   const serializeMacro = (macro, user, available) => Object.freeze({
     kind: "macro",
     macroId: String(macro.id),
@@ -122,6 +136,7 @@ export function createFoundryHotbarGateway({
     editable: isOwner(macro)
   });
 
+  // Return a consistent unavailable result when a slot is empty or no longer valid.
   const unavailableSlot = (macroId) => Object.freeze({
     kind: "macro",
     macroId,
@@ -131,14 +146,16 @@ export function createFoundryHotbarGateway({
     editable: false
   });
 
-  const withMutationLock = async (fn) => {
+  // Serialize hotbar writes for the same user so rapid taps cannot race.
+  const withMutationLock = async (mutation) => {
     if (mutationBusy) throw new HotbarError("BUSY", localizeFoundry("VEMOBILE.Interface.HotbarGateway.AHotbarChangeIsAlreadyInProgress", "A hotbar change is already in progress."));
     mutationBusy = true;
-    try { return await fn(); }
+    try { return await mutation(); }
     finally { mutationBusy = false; }
   };
 
   return Object.freeze({
+    // Project the current user's slots and executable macros into immutable plain records.
     snapshot() {
       const game = getGame();
       if (!game?.world?.id || !game?.user?.id) {
@@ -164,6 +181,7 @@ export function createFoundryHotbarGateway({
       return Object.freeze({ slots: Object.freeze(slots), macros: Object.freeze(macros), rootSorting: game.macros?.sortingMode === "a" ? "a" : "m", locked: locked(game) });
     },
 
+    // Recheck the captured slot and macro authority, then serialize duplicate execution of that Macro.
     async execute(request, expectedSession = {}) {
       const game = session(expectedSession);
       const slot = request?.slot;
@@ -182,6 +200,7 @@ export function createFoundryHotbarGateway({
       } finally { pendingExecutions.delete(macro.id); }
     },
 
+    // Resolve the selected system item, create or reuse its Macro, and assign the first free slot.
     async addItem(request, expectedSession = {}) {
       return withMutationLock(async () => {
         const game = session(expectedSession);
@@ -208,6 +227,7 @@ export function createFoundryHotbarGateway({
       });
     },
 
+    // Assign or clear one slot after checking the caller's expected prior value and write authority.
     async assign(request, expectedSession = {}) {
       return withMutationLock(async () => {
         const game = session(expectedSession);
@@ -232,6 +252,7 @@ export function createFoundryHotbarGateway({
       });
     },
 
+    // Move the expected source Macro into a destination slot through Foundry's native hotbar API.
     async move(request, expectedSession = {}) {
       return withMutationLock(async () => {
         const game = session(expectedSession);
@@ -258,6 +279,7 @@ export function createFoundryHotbarGateway({
       });
     },
 
+    // Open the native Macro editor only while the captured slot still points to an owned Macro.
     async edit(request, expectedSession = {}) {
       const game = session(expectedSession);
       const slot = request?.slot;
@@ -276,6 +298,7 @@ export function createFoundryHotbarGateway({
   });
 }
 
+// Return a Macro’s folder ancestry without looping on malformed parent data.
 function macroFolderPath(macro) {
   const path = [];
   const seen = new Set();
@@ -288,6 +311,7 @@ function macroFolderPath(macro) {
   return Object.freeze(path);
 }
 
+// Read Foundry collections and arrays into a safe list.
 function collectionValues(collection) {
   if (!collection) return [];
   try { return Array.from(typeof collection.values === "function" ? collection.values() : collection); }

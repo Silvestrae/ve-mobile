@@ -63,6 +63,7 @@ export function restoreVisibleSceneAnchor(canvas, anchor, bounds) {
   return true;
 }
 
+/** Convert a visible-scene anchor back into camera scale and stage position. */
 export function cameraViewForVisibleAnchor(anchor, client, stagePosition) {
   const scale = Number(anchor.scale);
   return Object.freeze({
@@ -72,6 +73,7 @@ export function cameraViewForVisibleAnchor(anchor, client, stagePosition) {
   });
 }
 
+/** Return a finite center point for a Scene viewport rectangle. */
 export function boundsCenter(bounds) {
   return Object.freeze({
     x: Number(bounds.left) + Number(bounds.width) / 2,
@@ -79,15 +81,18 @@ export function boundsCenter(bounds) {
   });
 }
 
+// Accept a viewport rectangle only when its dimensions and coordinates are finite and usable.
 function usableBounds(bounds) {
   return [bounds?.left, bounds?.top, bounds?.width, bounds?.height].every(Number.isFinite)
     && bounds.width > 0 && bounds.height > 0;
 }
 
+// Validate a saved Scene viewport anchor against the current viewport dimensions.
 function usableAnchor(anchor) {
   return [anchor?.worldX, anchor?.worldY, anchor?.scale].every(Number.isFinite) && anchor.scale > 0;
 }
 
+// Validate a fixed anchor point before applying a restore or camera adjustment.
 function usableFixedAnchor(anchor) {
   return usableAnchor(anchor) && [anchor.clientX, anchor.clientY, anchor.pivotX, anchor.pivotY].every(Number.isFinite);
 }

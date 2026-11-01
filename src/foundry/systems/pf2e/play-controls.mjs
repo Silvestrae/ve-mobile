@@ -1,16 +1,22 @@
 import { CommandError } from "../../command-support.mjs";
 import { localizeFoundry } from "../../localization.mjs";
 
+// Raise the localized error shared by PF2e play-control actions.
 const fail = () => { throw new CommandError("STALE_VALUE", localizeFoundry("VEMOBILE.PF2E.Play.Changed", "This option changed or is unavailable. Refresh and try again.")); };
+// Resolve the exact current owned Item before dispatching a play control.
 const exactItem = (actor, id) => {
   const item = typeof id === "string" ? actor.items?.get?.(id) : null;
   if (!item || item.actor !== actor) fail();
   return item;
 };
+// Read the native PF2e toggle controls available for the Actor.
 const nativeToggles = actor => Object.values(actor.synthetics?.toggles ?? {}).flatMap(group => Object.values(group ?? {}));
+// Check whether the requested option is currently selected in the native control.
 const selected = toggle => toggle.suboptions?.find(option => option.selected)?.value ?? null;
 
 export function playControlRecord(actor) {
+  // Derive controls from the Actor's current strikes and item APIs; the record
+  // is only a menu snapshot and editPlayControl revalidates it before acting.
   return {
     toggles: nativeToggles(actor).filter(toggle => actor.items?.get?.(toggle.itemId)).map(toggle => ({
       itemId: String(toggle.itemId), domain: String(toggle.domain), option: String(toggle.option),
@@ -22,12 +28,14 @@ export function playControlRecord(actor) {
   };
 }
 
+// Resolve the native PF2e blast controller for the current Actor.
 function blastController(actor) {
   const Blast = globalThis.game?.pf2e?.ElementalBlast;
   if (actor.type !== "character" || typeof Blast !== "function"
     || !Array.from(actor.items ?? []).some(item => item.type === "action" && item.slug === "elemental-blast")) return null;
   return new Blast(actor);
 }
+// Project available blast options into plain records for the play-controls surface.
 function blastRecords(actor) {
   const controller = blastController(actor);
   return Array.from(controller?.configs ?? []).map(config => ({
@@ -51,6 +59,8 @@ export function ammunitionRecord(strike) {
 }
 
 export async function editPlayControl(actor, payload, context) {
+  // Re-resolve the strike/item and compare the submitted original values before
+  // applying any toggle or consuming a native action.
   context?.assertCurrent();
   if (payload.operation === "toggle") {
     exactItem(actor,payload.itemId);
@@ -88,6 +98,7 @@ export async function editPlayControl(actor, payload, context) {
     const compatible = new Set(record.options.map(option => option.id));
     const empty = new Set(record.options.filter(option => option.quantity <= 0).map(option => option.id));
     const ordered = source.filter(item => !empty.has(item._id)).sort((a,b) => (a.sort ?? 0)-(b.sort ?? 0));
+    // Normalize a PF2e action category to its supported display group.
     const category = item => !compatible.has(item._id) ? 0 : item._id === payload.ammoId ? 1 : 2;
     ordered.sort((a,b) => category(a)-category(b)).forEach((item,index) => {item.sort=index;});
     return weapon.update({"system.subitems":ordered});

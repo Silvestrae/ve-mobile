@@ -5,10 +5,14 @@ const SUPPORTED_TYPES = new Set(["character", "npc", "group", "vehicle"]);
 /** D&D5e 5.3.x prepared model values, never PC-shaped substitutes. These
  * projections read only referenced identities/vitals; no member Item graph. */
 export function collectiveActorData(actor, user) {
+  // Prepared Group/Vehicle data is projected only after each referenced Actor
+  // is independently checked for visibility; unreadable member aggregates hide.
   return actor.type === "group" ? groupData(actor, user) : vehicleData(actor, user);
 }
 
 export function canNavigateReferencedActor(actor, user) {
+  // Navigation is stricter for NPCs: ordinary observers cannot open one unless
+  // they are a GM or have explicit OWNER permission.
   return Boolean(actor && SUPPORTED_TYPES.has(actor.type)
     && (actor.type === "npc" ? user?.isGM || permitted(actor, user, "OWNER") : permitted(actor, user)));
 }
@@ -27,10 +31,12 @@ export function collectiveReferenceUuids(actor) {
     .filter(value => typeof value === "string" && value.length <= 512);
 }
 
+// Read the Group’s member references from its supported system-data shapes.
 function groupReferences(actor) {
   return values(actor.system?._source?.members ?? actor._source?.system?.members ?? actor.system?.members);
 }
 
+// Extract a stable Actor UUID from either a reference string or reference record.
 function groupReferenceUuid(reference) {
   const value = reference?.actor ?? reference;
   if (value && typeof value === "object") return actorSourceUuid(value);
@@ -38,10 +44,12 @@ function groupReferenceUuid(reference) {
   return value.includes(".") ? value : `Actor.${value}`;
 }
 
+// Resolve a member UUID to its exact Actor through Foundry’s UUID lookup.
 function referenceActor(uuid) {
   try { return resolveActorSource(uuid); } catch { return null; }
 }
 
+// Serialize one Group or Vehicle member reference with current permission-safe details.
 function referenceRecord(uuid, user, { quantity = 1, vitals = false } = {}) {
   const actor = referenceActor(uuid);
   if (!actor || !permitted(actor, user)) return Object.freeze({ available: false, canNavigate: false, quantity });
@@ -69,9 +77,10 @@ function referenceRecord(uuid, user, { quantity = 1, vitals = false } = {}) {
   return Object.freeze(record);
 }
 
+// Build the D&D5e Group roster, travel, supplies, and summary data for the actor view.
 function groupData(actor, user) {
   const system = actor.system ?? {};
-  const members = groupReferences(actor).map(ref => referenceRecord(groupReferenceUuid(ref), user, { vitals: true }));
+  const members = groupReferences(actor).map(memberReference => referenceRecord(groupReferenceUuid(memberReference), user, { vitals: true }));
   // Native aggregates depend on members. Hide them when any member is unreadable
   // rather than disclose statistics indirectly through a prepared aggregate.
   const primaryVehicle = system.primaryVehicle ? referenceRecord(actorSourceUuid(system.primaryVehicle), user) : null;
@@ -94,11 +103,13 @@ function groupData(actor, user) {
   };
 }
 
+// Build the Vehicle detail record from its subtype, prepared movement, crew, capacity, and source fields.
 function vehicleData(actor, user) {
   const system = actor.system ?? {};
   const attributes = system.attributes ?? {};
   const traits = system.traits ?? {};
   const hp = attributes.hp ?? {};
+  // Read a D&D5e flag as a boolean for the current Vehicle.
   const flags = key => Boolean(actor.getFlag?.("dnd5e", key));
   const assigned = new Map();
   const components = values(actor.items).filter(item => item.system?.isMountable).map(item => {
@@ -148,6 +159,7 @@ function vehicleData(actor, user) {
   };
 }
 
+// Resolve member references into display rows, preserving unresolved references explicitly.
 function referenceRows(references, user) {
   const grouped = new Map();
   for (const uuid of values(references)) {
@@ -157,10 +169,12 @@ function referenceRows(references, user) {
   return [...grouped].map(([uuid, quantity]) => referenceRecord(uuid, user, { quantity }));
 }
 
+// Recover passenger references from legacy Vehicle data when the modern list is empty.
 function legacyPassengers(rows) {
   return values(rows).map(row => ({ name: String(row?.name ?? ""), quantity: numeric(row?.quantity) })).filter(row => row.name);
 }
 
+// Convert travel-pace values to the requested unit and period labels.
 function travelRows(data, unit, period) {
   return ["land", "water", "air"].flatMap(key => {
     const value = numeric(data?.[key]);
@@ -174,6 +188,7 @@ function travelRows(data, unit, period) {
   });
 }
 
+// Describe supported Vehicle movement modes and their speeds.
 function movementRows(movement) {
   return ["walk", "burrow", "climb", "fly", "swim"].flatMap(key => {
     const value = numeric(movement?.[key]);
@@ -185,6 +200,7 @@ function movementRows(movement) {
   });
 }
 
+// Normalize a travel or movement quantity and its associated unit.
 function measure(data, type) {
   const value = numeric(data?.value);
   if (value === null) return null;
@@ -196,18 +212,23 @@ function measure(data, type) {
   return `${value} ${units}`.trim();
 }
 
+// Accept only finite number-like values and preserve invalid values as null.
 function numeric(value) { return (typeof value !== "number" && typeof value !== "string") || value === "" || !Number.isFinite(Number(value)) ? null : Number(value); }
+// Read iterable Foundry collections into arrays without exposing the collection object.
 function values(collection) {
   if (!collection || typeof collection === "string") return [];
   try { return Array.from(collection.values?.() ?? (collection[Symbol.iterator] ? collection : Object.values(collection))); }
   catch { return []; }
 }
+// Read the active D&D5e configuration used for collective labels.
 function config() { return globalThis.CONFIG?.DND5E ?? {}; }
+// Resolve a D&D5e label with a readable fallback.
 function label(key, fallback = "") {
   if (typeof key === "object") key = key?.label;
   if (!key) return String(fallback);
   return String(globalThis.game?.i18n?.localize?.(key) ?? key);
 }
+// Check the current user's requested permission level and fail closed on errors.
 function permitted(actor, user, level = "OBSERVER") {
   try { return Boolean(actor?.testUserPermission?.(user, level) ?? (level === "OWNER" ? actor?.isOwner : actor?.visible)); } catch { return false; }
 }

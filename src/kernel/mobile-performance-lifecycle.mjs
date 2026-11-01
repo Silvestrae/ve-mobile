@@ -4,6 +4,7 @@ export function createMobilePerformanceLifecycle({ authority, gateway, handoff, 
   let sessionBegun = false;
   let transition = Promise.resolve(Object.freeze({ action: "none" }));
 
+  // Start or restore a profile session only when authority changes; each queued write checks its captured generation.
   const reconcile = () => {
     const mobile = authority.refresh();
     if (observed === mobile) return transition;

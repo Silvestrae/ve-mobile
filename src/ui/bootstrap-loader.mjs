@@ -24,6 +24,7 @@ export function suppressBootstrapSoftwareKeyboard(scope, surface, {
   getDocument = () => globalThis.document
 } = {}) {
   const document = getDocument();
+  // Blur only outside editable controls; bootstrap's own intentional inputs keep focus.
   const blurEditableOutsideBootstrap = (target) => {
     const editable = target?.closest?.("textarea, input, [contenteditable]");
     if (!editable || editable.getAttribute?.("contenteditable") === "false" || surface?.contains?.(editable)) return;
@@ -45,7 +46,9 @@ export function createMobileBootstrap({
   clearTimer = (id) => globalThis.clearTimeout(id)
 } = {}) {
   const document = getDocument();
+  // Resolve bootstrap labels without depending on a ready game session.
   const text = (key, fallback, data) => localizedText(localize, key, fallback, data);
+  // Translate a checkpoint's static key with its supplied fallback.
   const stageLabel = stage => text(stage.labelKey, stage.label);
   const root = document.createElement("section");
   root.className = "ve-mobile-bootstrap";
@@ -170,11 +173,13 @@ export function createMobileBootstrap({
   let customPhase = "";
   let recoveryCopy = null;
 
+  // Reflect the current appearance/form factor without rebuilding the loading surface.
   const updatePolicy = (policy = {}) => {
     root.dataset.theme = policy.theme === "light" || policy.theme === "dark" ? policy.theme : "system";
     root.dataset.formFactor = policy.formFactor === "tablet" ? "tablet" : "phone";
   };
 
+  // Invalidate scheduled ticks before clearing both the DOM timer and optional worker clock.
   const cancelElapsedTimer = () => {
     timerGeneration += 1;
     if (elapsedTimer !== null) clearTimer(elapsedTimer);
@@ -182,6 +187,7 @@ export function createMobileBootstrap({
     elapsedClock.stop();
   };
 
+  // Refresh elapsed/previous timing labels from the same monotonic start time.
   const renderTiming = () => {
     const current = Number(startedAt);
     const currentNow = Number(now());
@@ -194,6 +200,7 @@ export function createMobileBootstrap({
     previous.textContent = text("VEMOBILE.Boot.LastFullLoad", "Last full load · {duration}", { duration: hasPrevious ? formatDuration(prior, readLocale()) : "—" });
   };
 
+  // Keep one current tick scheduled and ignore callbacks from an earlier timer generation.
   const scheduleElapsedTimer = () => {
     if (!mounted || elapsedTimer !== null) return;
     const generation = timerGeneration;
@@ -205,6 +212,7 @@ export function createMobileBootstrap({
     }, elapsedUpdateMs);
   };
 
+  // Adopt known timing fields, then update the visible clock.
   const setTiming = (timingState = {}) => {
     if (Number.isFinite(Number(timingState.startedAt))) startedAt = Number(timingState.startedAt);
     if (timingState.lastSuccessfulMs === null || timingState.lastSuccessfulMs === undefined) lastSuccessfulMs = null;
@@ -216,16 +224,17 @@ export function createMobileBootstrap({
     elapsedClock.start(startedAt);
   };
 
+  // Update phase/progress text, hiding extra detail when it only repeats the current checkpoint.
   const setPhase = (next = {}) => {
     const value = typeof next === "string" ? { label: next } : next;
     const label = String(value?.label ?? "").trim();
     if (label) { customPhase = label; phase.textContent = label; }
     const parts = [];
-    const pct = Number(value?.pct);
+    const progressPercent = Number(value?.pct);
     const current = Number(value?.current);
     const total = Number(value?.total);
-    if (value?.pct !== null && value?.pct !== undefined && Number.isFinite(pct)) {
-      parts.push(`${Math.round(Math.max(0, Math.min(100, pct)))}%`);
+    if (value?.pct !== null && value?.pct !== undefined && Number.isFinite(progressPercent)) {
+      parts.push(`${Math.round(Math.max(0, Math.min(100, progressPercent)))}%`);
     }
     if (value?.current !== null && value?.current !== undefined
       && value?.total !== null && value?.total !== undefined
@@ -239,11 +248,12 @@ export function createMobileBootstrap({
     phase.hidden = !hasExtraDetail;
     activityIndicator.hidden = !hasExtraDetail;
     root.dataset.progress = progress.hidden ? "indeterminate" : "determinate";
-    if (value?.pct !== null && value?.pct !== undefined && Number.isFinite(pct)) {
-      activity.setAttribute("aria-valuenow", String(Math.round(Math.max(0, Math.min(100, pct)))));
+    if (value?.pct !== null && value?.pct !== undefined && Number.isFinite(progressPercent)) {
+      activity.setAttribute("aria-valuenow", String(Math.round(Math.max(0, Math.min(100, progressPercent)))));
     } else activity.removeAttribute("aria-valuenow");
   };
 
+  // Replace progress with a retryable recovery surface using the supplied failure copy.
   const showRecovery = (copy = {}) => {
     recoveryCopy = {
       title: copy.title ?? text("VEMOBILE.Boot.LoadingInterrupted", "Loading interrupted"),
@@ -262,6 +272,7 @@ export function createMobileBootstrap({
     root.classList.add("is-failed");
   };
 
+  // Reuse one pending screen-awake choice rather than mounting duplicate prompts.
   const promptForWakeChoice = () => {
     if (!mounted) return Promise.resolve(null);
     if (wakePromptWaiter) return wakePromptWaiter.promise;
@@ -279,6 +290,7 @@ export function createMobileBootstrap({
     return promise;
   };
 
+  // Settle the current wake choice and remove its temporary prompt state.
   const resolveWakePrompt = (keepAwake) => {
     const waiter = wakePromptWaiter;
     if (!waiter) return false;
@@ -310,6 +322,7 @@ export function createMobileBootstrap({
     get wakePromptChoiceControl() {
       return wakePromptChoice;
     },
+    // Attach the loading surface and start timing only while startup still needs this owner.
     mount(policy = {}) {
       if (!root.isConnected) (document.body ?? document.documentElement).append(root);
       document.body?.classList.add("ve-mobile-booting");
@@ -334,6 +347,7 @@ export function createMobileBootstrap({
       elapsedClock.start(startedAt);
     },
     updatePolicy,
+    // Refresh every retained label, including recovery/wake controls, after localization is ready.
     refreshLocalization() {
       root.setAttribute("aria-label", text("VEMOBILE.Boot.LoadingLabel", "VE Mobile is loading"));
       activity.setAttribute("aria-label", text("VEMOBILE.Boot.ProgressLabel", "Loading progress"));
@@ -356,6 +370,7 @@ export function createMobileBootstrap({
     },
     setTiming,
     setPhase,
+    // Move the visible checkpoint to the stage actually reached by startup.
     advance(stageId) {
       const stage = BOOTSTRAP_STAGES.find((candidate) => candidate.id === stageId);
       if (stage) {
@@ -365,6 +380,7 @@ export function createMobileBootstrap({
         setPhase({ label: stageLabel(stage) });
       }
     },
+    // Keep the wake toggle's capability, accessible checked state and prompt-dependent visibility in agreement.
     setWakeState(state = "pending", {
       checked = wake.getAttribute("aria-checked") === "true",
       disabled = false,
@@ -378,6 +394,7 @@ export function createMobileBootstrap({
     setWakePromptChecked(checked) {
       wakePromptChoice.setAttribute("aria-checked", String(Boolean(checked)));
     },
+    // Show completion and settle the loading presentation before the caller retires its owner.
     complete({ beforeDismiss } = {}) {
       renderTiming();
       checkpoints.update(activeStage, { complete: true });
@@ -393,6 +410,7 @@ export function createMobileBootstrap({
     fail(message = text("VEMOBILE.Boot.LoadFailed", "VE Mobile could not finish loading.")) {
       showRecovery({ title: message });
     },
+    // Release timers, worker clock, pending wake choice and loading DOM together.
     unmount() {
       cancelElapsedTimer();
       if (wakePromptWaiter) {
@@ -410,6 +428,7 @@ export function createMobileBootstrap({
   });
 }
 
+// Present non-negative durations in localized milliseconds or seconds, depending on their size.
 export function formatDuration(value, locale = "en") {
   const milliseconds = Math.max(0, Number(value) || 0);
   if (milliseconds < 1_000) return `${localizedNumber(Math.round(milliseconds), locale)} ms`;

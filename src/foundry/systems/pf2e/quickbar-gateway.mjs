@@ -12,7 +12,8 @@ export function createPf2eQuickbarGateway(options = {}) {
 export const createFoundryQuickbarGateway = createPf2eQuickbarGateway;
 
 const pf2eQuickbarAdapter = Object.freeze({
-  resolveDescriptor(actor, descriptor) {
+    // Resolve a PF2e quickbar descriptor from the current Actor's supported actions and items.
+    resolveDescriptor(actor, descriptor) {
     if (descriptor.kind === "item") {
       const item = getItem(actor, descriptor.itemId);
       return Object.freeze({
@@ -35,7 +36,8 @@ const pf2eQuickbarAdapter = Object.freeze({
       payload: Object.freeze({ skill: descriptor.skill })
     });
   },
-  assertDescriptorAvailable(actor, descriptor, _game, { QuickbarError: ErrorType }) {
+    // Reject descriptors whose PF2e action is no longer available for this Actor.
+    assertDescriptorAvailable(actor, descriptor, _game, { QuickbarError: ErrorType }) {
     if (descriptor.kind === "item") {
       const item = getItem(actor, descriptor.itemId);
       if (!item || typeof item.toMessage !== "function") {
@@ -50,10 +52,12 @@ const pf2eQuickbarAdapter = Object.freeze({
   }
 });
 
+// Resolve the exact PF2e Item referenced by a quickbar record.
 function getItem(actor, itemId) {
   return actor?.items?.get?.(itemId) ?? collectionValues(actor?.items).find((item) => String(item?.id ?? "") === itemId) ?? null;
 }
 
+// Convert Foundry collections and arrays to a safe list.
 function collectionValues(collection) {
   if (!collection) return [];
   if (Array.isArray(collection.contents)) return collection.contents;

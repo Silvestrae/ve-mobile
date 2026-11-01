@@ -1,9 +1,12 @@
 import { CommandError } from '../../command-support.mjs';
 import { localizeFoundry } from '../../localization.mjs';
 
+// Raise the localized error for a stale or unsupported spell reference.
 const invalid = () => { throw new CommandError('INVALID_INPUT', localizeFoundry('VEMOBILE.PF2E.InventoryEffect.Changed', 'This item changed. Refresh and try again.')); };
+// Read supported values from the PF2e spell-reference collection.
 const values = collection => Array.from(collection?.contents ?? collection?.values?.() ?? collection ?? []);
 
+/** Build a validated action reference for a spell shown outside its spellbook. */
 export function spellReferenceAction(actor, spell, collection, parentItem = null) {
   if (!collection?.id || typeof collection.entry?.cast !== 'function') return null;
   if (parentItem) {
@@ -15,12 +18,13 @@ export function spellReferenceAction(actor, spell, collection, parentItem = null
   return {kind:'ritual', collectionId:collection.id, spellId:spell.id, itemId:spell.id};
 }
 
+/** Resolve a ritual's native casting entry and produce its ritual action data. */
 export function ritualAction(actor, spell) {
-  const collection=values(actor.spellcasting?.collections).find(c=>c.entry?.category==='ritual' && c.get?.(spell.id)===spell);
+  const collection=values(actor.spellcasting?.collections).find(spellCollection=>spellCollection.entry?.category==='ritual' && spellCollection.get?.(spell.id)===spell);
   return spellReferenceAction(actor,spell,collection);
 }
 
-// Called behind USE_ITEM's current-world/owner gate and actor-wide duplicate lock.
+/** Re-resolve the referenced item and hand the requested action to PF2e APIs. */
 export function useSpellReference(actor,payload) {
   const collection=actor.spellcasting?.collections?.get?.(payload.collectionId);
   const spell=collection?.get?.(payload.spellId);

@@ -4,6 +4,7 @@ export function createNativeTokenPlacementController({ store, sceneReadiness, sc
   let current = null;
   let generation = 0;
 
+  // Release this session's resources and undo only the navigation that this session still owns.
   const clear = (session) => {
     if (current !== session) return;
     current = null;
@@ -18,6 +19,7 @@ export function createNativeTokenPlacementController({ store, sceneReadiness, sc
     }
   };
 
+  // Ask the native adapter to stop and interrupt any wait for map readiness.
   const cancel = () => {
     if (!current) return false;
     current.adapter.cancel();
@@ -25,6 +27,7 @@ export function createNativeTokenPlacementController({ store, sceneReadiness, sc
     return true;
   };
 
+  // Admit one native preview, acquire cleanup immediately, and recheck its Scene after the readiness wait.
   const begin = async (adapter) => {
     if (current || scope.disposed || !store.state.snapshot?.scene?.canvasReady
       || store.state.reconnect || store.state.modeTransition || store.state.templatePlacement
@@ -68,6 +71,7 @@ export function createNativeTokenPlacementController({ store, sceneReadiness, sc
     position: (point) => current?.adapter.position(point) ?? false,
     place: () => current?.adapter.confirm() ?? false,
     cancel,
+    // End the native preview and clear its mobile owner during runtime teardown.
     stop() {
       if (!current) return;
       current.adapter.cancel();

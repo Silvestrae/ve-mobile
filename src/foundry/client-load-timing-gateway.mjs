@@ -13,12 +13,14 @@ export function createClientLoadTimingGateway({
   try { prior = JSON.parse(getStorage()?.getItem?.(RECOVERY_SESSION_KEY) ?? "null"); } catch { /* Storage is optional. */ }
   let recent = Object.freeze(prior && typeof prior === "object"
     ? Object.fromEntries(Object.keys(initial).map(key => [key, prior[key] ?? initial[key]])) : initial);
+  // Check whether this client timing value is forced by another module.
   const isForced = (game, key) => {
     if (!game?.modules?.get?.("force-client-settings")?.active) return false;
     try {
       return Boolean(game.settings.get("force-client-settings", "forced")?.[`${MODULE_ID}.${key}`]);
     } catch { return true; }
   };
+  // Read the current client load timing record from local settings.
   const read = (key) => {
     try {
       const game = getGame();
@@ -27,6 +29,7 @@ export function createClientLoadTimingGateway({
       return Number.isFinite(value) && value > 0 ? value : null;
     } catch { return null; }
   };
+  // Persist bounded load timing values to the current user's client settings.
   const write = async (key, milliseconds) => {
     const value = Math.round(Number(milliseconds));
     if (!Number.isFinite(value) || value <= 0) return false;

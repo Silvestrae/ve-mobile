@@ -16,6 +16,7 @@ export function createLoadingCheckpoints(document, definitions, { label, followC
     return { row, marker, text, index };
   });
 
+  // Mark earlier steps complete and later steps pending without pretending the current step has finished.
   const update = (id, { failed = false, complete = false } = {}) => {
     const activeIndex = Math.max(0, definitions.findIndex((definition) => definition.id === id));
     for (const { row, marker, index } of rows) {
@@ -31,6 +32,7 @@ export function createLoadingCheckpoints(document, definitions, { label, followC
       rows[activeIndex]?.row.scrollIntoView?.({ block: "nearest" });
     }
   };
+  // Update the retained checkpoint rows when localization becomes ready.
   const refreshLabels = () => {
     for (const { text, index } of rows) {
       const definition = definitions[index];

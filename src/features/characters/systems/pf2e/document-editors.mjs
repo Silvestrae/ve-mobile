@@ -1,10 +1,13 @@
-import { ACTOR_COMMANDS as C } from "../../../../kernel/command-names.mjs";
+import { ACTOR_COMMANDS } from "../../../../kernel/command-names.mjs";
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
 
+// Map each editor kind to the capability bit that permits its action.
 const allowed = (actor, kind) => actor?.capabilities?.[kind === "spellManagement" ? "manageSpells" : kind === "preparation" ? "prepareSpells" : kind === "currency" ? "currency" : kind === "biography" ? "editBiography" : kind === "defenses" ? "editDefenses" : "editArmorClass"] === true;
+// Resolve localized copy for a PF2e document editor.
 const local = (commands, key, fallback, values) => localizedText(commands.localize, key, fallback, values);
 
+// Close editors when their Actor or editing authority is no longer current.
 export function syncDocumentEditor(shell, deferred) {
   const modal = shell.documentModal;
   if (!modal) return;
@@ -12,21 +15,24 @@ export function syncDocumentEditor(shell, deferred) {
   else { modal.refresh?.(); }
 }
 
+// Create the shared modal, lifecycle ownership, and named-command runner.
 export function editor(shell, kind, label, glyph, ownerScope, overlayHost) {
   if (ownerScope.disposed || !allowed(shell.actor, kind)) return null;
   shell.documentModal?.close(false);
   const scope = ownerScope.child(`pf2e-${kind}-editor`);
   const commands = shell.commands;
   const actor = shell.actor;
-  const t = (key, fallback, values) => local(commands, key, fallback, values);
+  // Resolve localized field and status copy for this editor.
+  const translate = (key, fallback, values) => local(commands, key, fallback, values);
   const focus = shell.screen.ownerDocument?.activeElement;
   const modal = shell.documentModal = { kind, tab: shell.screen.dataset.pf2eView, sourceUuid: actor.sourceUuid, pending: false };
-  const title = ["preparation","spellManagement"].includes(kind) ? label : t("VEMOBILE.Character.Presenter.Edit", "Edit {label}", { label });
+  const title = ["preparation","spellManagement"].includes(kind) ? label : translate("VEMOBILE.Character.Presenter.Edit", "Edit {label}", { label });
+  // Do not discard a draft while a command is still saving it.
   const close = () => { if (!modal.pending) modal.close(); };
-  const closeButton = node("button", { className: "ve-pf2e-editor-close", attrs: { type: "button", "aria-label": t("VEMOBILE.Controls.Close", "Close") }, children: [icon("fa-xmark")], on: { click: close } }, scope);
+  const closeButton = node("button", { className: "ve-pf2e-editor-close", attrs: { type: "button", "aria-label": translate("VEMOBILE.Controls.Close", "Close") }, children: [icon("fa-xmark")], on: { click: close } }, scope);
   const body = node("div", { className: "ve-pf2e-editor-body" });
   const error = node("p", { className: "ve-pf2e-editor-error", attrs: { role: "alert" } });
-  const footer = node("footer", { children: [node("button", { attrs: { type: "button" }, text: t("VEMOBILE.Scene.Template.Cancel", "Cancel"), on: { click: close } }, scope)] });
+  const footer = node("footer", { children: [node("button", { attrs: { type: "button" }, text: translate("VEMOBILE.Scene.Template.Cancel", "Cancel"), on: { click: close } }, scope)] });
   const form = node("form", { className: "ve-pf2e-document-dialog", attrs: { role: "dialog", "aria-modal": "true", "aria-label": title }, children: [
     node("header", { children: [icon(glyph), node("div", { children: [node("small", { text: actor.name }), node("h2", { text: title })] }), closeButton] }), body, error, footer
   ] });
@@ -38,6 +44,7 @@ export function editor(shell, kind, label, glyph, ownerScope, overlayHost) {
   scope.own(() => { layer.remove(); if (shell.documentModal === modal) shell.documentModal = null; });
   const viewport = shell.screen.ownerDocument?.defaultView?.visualViewport;
   const view = shell.screen.ownerDocument?.defaultView;
+  // Size the form for the available viewport, including the on-screen keyboard.
   const fit = () => {
     layer.style.top = `${viewport?.offsetTop ?? 0}px`; layer.style.left = `${viewport?.offsetLeft ?? 0}px`;
     layer.style.width = `${viewport?.width ?? view?.innerWidth ?? 0}px`; layer.style.height = `${viewport?.height ?? view?.innerHeight ?? 0}px`;
@@ -58,6 +65,7 @@ export function editor(shell, kind, label, glyph, ownerScope, overlayHost) {
   });
   scope.listen(form, "submit", event => { event.preventDefault(); });
   closeButton.focus?.({ preventScroll: true });
+  // Submit through the injected command and keep late results tied to this editor.
   const run = async (command, payload, closeAfter = true) => {
     if (modal.pending || scope.disposed || shell.actor?.sourceUuid !== actor.sourceUuid || !allowed(shell.actor, kind)) return;
     modal.pending = true;
@@ -70,7 +78,7 @@ export function editor(shell, kind, label, glyph, ownerScope, overlayHost) {
       await shell.commands.execute(command, { ...payload, actorSourceUuid: actor.sourceUuid });
       if (!scope.disposed && closeAfter) modal.close();
     } catch (failure) {
-      if (!scope.disposed) error.textContent = failure?.message ?? t("VEMOBILE.PF2E.Character.ActionFailed", "That action could not be completed.");
+      if (!scope.disposed) error.textContent = failure?.message ?? translate("VEMOBILE.PF2E.Character.ActionFailed", "That action could not be completed.");
     } finally {
       modal.pending = false;
       if (!scope.disposed) { controls.forEach((control, index) => {
@@ -79,15 +87,17 @@ export function editor(shell, kind, label, glyph, ownerScope, overlayHost) {
       }); form.removeAttribute("aria-busy"); modal.refresh?.(); }
     }
   };
-  return { modal, scope, commands, actor, t, body, footer, form, run };
+  return { modal, scope, commands, actor, t: translate, body, footer, form, run };
 }
 
+// Share the editor's pending and error behavior for form submissions.
 function submitButton(context, onSubmit) {
-  const { scope, t, form, footer } = context;
-  footer.append(node("button", { className: "is-primary", attrs: { type: "submit" }, text: t("VEMOBILE.Character.Presenter.SaveChanges", "Save Changes") }));
+  const { scope, t: translate, form, footer } = context;
+  footer.append(node("button", { className: "is-primary", attrs: { type: "submit" }, text: translate("VEMOBILE.Character.Presenter.SaveChanges", "Save Changes") }));
   scope.listen(form, "submit", event => { event.preventDefault(); if (form.reportValidity()) void onSubmit(); });
 }
 
+// Edit the Actor's currency totals using the shared exact-source editor shell.
 export function openCurrencyEditor(shell, ownerScope, overlayHost) {
   const context = editor(shell, "currency", local(shell.commands, "VEMOBILE.PF2E.Character.Supplement.Currency", "Currency"), "fa-coins", ownerScope, overlayHost);
   if (!context) return;
@@ -97,13 +107,16 @@ export function openCurrencyEditor(shell, ownerScope, overlayHost) {
   for (const key of ["pp", "gp", "sp", "cp"]) {
     const input = node("input", { attrs: { type: "number", min: "0", max: "999999", step: "1", inputmode: "numeric", value: originalValues[key], "aria-label": key.toUpperCase() } });
     inputs.set(key, input);
+    // Apply a bounded signed currency step to the draft amount.
     const step = delta => { input.value = String(Math.min(999999, Math.max(0, Math.trunc(Number(input.value) || 0) + delta))); };
+    // Create an accessible plus/minus control for one currency denomination.
     const stepButton = delta => node("button", { attrs: { type: "button", "aria-label": context.t(delta < 0 ? "VEMOBILE.Character.Presenter.Decrease" : "VEMOBILE.Character.Presenter.Increase", delta < 0 ? "Decrease {denomination}" : "Increase {denomination}", { denomination: key.toUpperCase() }) }, children: [icon(delta < 0 ? "fa-minus" : "fa-plus")], on: { click: () => step(delta) } }, context.scope);
     context.body.append(node("label", { className: `ve-currency-editor-row is-${key}`, children: [node("span", { children: [icon("fa-coins"), node("strong", { text: key.toUpperCase() })] }), stepButton(-1), input, stepButton(1)] }));
   }
-  submitButton(context, () => context.run(C.UPDATE_CURRENCY, { values: Object.fromEntries([...inputs].map(([key, input]) => [key, Number(input.value)])), originalValues }));
+  submitButton(context, () => context.run(ACTOR_COMMANDS.UPDATE_CURRENCY, { values: Object.fromEntries([...inputs].map(([key, input]) => [key, Number(input.value)])), originalValues }));
 }
 
+// Edit one biography section or structured field through the named command.
 export function openBiographyEditor(shell, section, label, fieldLabels, ownerScope, overlayHost) {
   const fields = section.editorFields;
   if (!Array.isArray(fields)) return;
@@ -150,7 +163,7 @@ export function openBiographyEditor(shell, section, label, fieldLabels, ownerSco
     inputs.set(field.key, input);
     context.body.append(node("label", { children: [node("span", { text: fieldLabel }), input] }));
   }
-  submitButton(context, () => context.run(C.UPDATE_BIOGRAPHY_SECTION, { section: section.id, originalValues,
+  submitButton(context, () => context.run(ACTOR_COMMANDS.UPDATE_BIOGRAPHY_SECTION, { section: section.id, originalValues,
     values: Object.fromEntries(fields.map(field => {
       if (field.kind === "rich") {
         const rich = richFields.get(field.key);
@@ -160,13 +173,14 @@ export function openBiographyEditor(shell, section, label, fieldLabels, ownerSco
     })) }));
 }
 
+// Provide safe inline formatting actions for biography content.
 function richToolbar(input, context) {
-  const { t, scope } = context;
-  const toolbar = node("div", { className: "ve-pf2e-biography-rich-toolbar", attrs: { role: "toolbar", "aria-label": t("VEMOBILE.Character.Presenter.RichTextToolbar", "Text formatting") } });
+  const { t: translate, scope } = context;
+  const toolbar = node("div", { className: "ve-pf2e-biography-rich-toolbar", attrs: { role: "toolbar", "aria-label": translate("VEMOBILE.Character.Presenter.RichTextToolbar", "Text formatting") } });
   for (const [command, labelKey, label, glyph] of [
     ["bold", "VEMOBILE.Character.Presenter.RichTextBold", "Bold", "fa-bold"], ["italic", "VEMOBILE.Character.Presenter.RichTextItalic", "Italic", "fa-italic"], ["insertUnorderedList", "VEMOBILE.Character.Presenter.RichTextBulletedList", "Bulleted list", "fa-list-ul"]
   ]) {
-    const localizedLabel = t(labelKey, label);
+    const localizedLabel = translate(labelKey, label);
     const button = node("button", { className: "ve-pf2e-biography-rich-tool", attrs: { type: "button", "aria-label": localizedLabel, title: localizedLabel }, children: [icon(glyph)], on: {
       mousedown: event => event.preventDefault(),
       click: () => { input.focus(); input.ownerDocument.execCommand?.(command); }
@@ -179,9 +193,11 @@ function richToolbar(input, context) {
 const SAFE_RICH_TAGS = new Set("a abbr b blockquote br cite code dd del div dl dt em h1 h2 h3 h4 h5 h6 hr i li ol p pre q s small span strong sub sup table tbody td tfoot th thead tr u ul".split(" "));
 const ACTIVE_RICH_TAGS = new Set("applet audio base button canvas embed fencedframe form frame frameset iframe input link meta object portal script select source style svg template textarea track video webview".split(" "));
 
+// Preserve supported biography formatting while dropping unsafe markup.
 function sanitizeBiographyHtml(document, value) {
   const template = document.createElement("template");
   template.innerHTML = String(value ?? "");
+  // Walk descendants, remove active content, and unwrap unsupported markup.
   const cleanChildren = parent => {
     for (const child of [...parent.childNodes]) {
       if (child.nodeType === 8) { child.remove(); continue; }
@@ -206,6 +222,7 @@ function sanitizeBiographyHtml(document, value) {
   return template.innerHTML;
 }
 
+// Insert toolbar markup or escaped text at the current selection range.
 function insertSafeHtmlAtSelection(input, html, plainText) {
   const document = input.ownerDocument;
   const selection = document.getSelection?.();
@@ -221,6 +238,7 @@ function insertSafeHtmlAtSelection(input, html, plainText) {
   if (last) { range.setStartAfter(last); range.collapse(true); selection.removeAllRanges(); selection.addRange(range); }
 }
 
+// Accept only safe web URLs for biography link insertion.
 function safeBiographyLink(document, value) {
   const link = String(value).trim().replace(/[\u0000-\u0020\u007f]/gu, "");
   if (!link) return false;
@@ -231,10 +249,11 @@ function safeBiographyLink(document, value) {
   } catch { return false; }
 }
 
+// Edit armor class and shield HP using supported PF2e fields and commands.
 export function openAcEditor(shell, ownerScope, overlayHost) {
   const context = editor(shell, "armorClass", local(shell.commands, "VEMOBILE.PF2E.Character.ArmorClass", "Armor Class"), "fa-shield", ownerScope, overlayHost);
   if (!context) return;
-  const { body, commands, scope, actor, t, modal, run } = context;
+  const { body, commands, scope, actor, t: translate, modal, run } = context;
   context.form.classList.add("ve-pf2e-ac-dialog");
   const acPanel = node("section", { className: "ve-pf2e-ac-panel", attrs: { role: "tabpanel" } });
   const shieldPanel = node("section", { className: "ve-pf2e-shield-panel", attrs: { role: "tabpanel", hidden: true } });
@@ -243,7 +262,7 @@ export function openAcEditor(shell, ownerScope, overlayHost) {
   const tabs = node("div", { className: "ve-pf2e-ac-tabs", attrs: { role: "tablist" } });
   let shieldSave;
   const tabButtons = [
-    ["AC", acPanel, false], [t("VEMOBILE.PF2E.Character.Shield.Tab", "Shield"), shieldPanel, !hasShield]
+    ["AC", acPanel, false], [translate("VEMOBILE.PF2E.Character.Shield.Tab", "Shield"), shieldPanel, !hasShield]
   ].map(([label, panel, disabled], index) => node("button", { text: label, attrs: { type: "button", role: "tab", disabled, "aria-selected": index === 0 ? "true" : "false" }, on: { click: () => {
     for (const [i, target] of [acPanel, shieldPanel].entries()) { target.hidden = target !== panel; tabButtons[i].setAttribute("aria-selected", target === panel ? "true" : "false"); }
     if (shieldSave) shieldSave.hidden = panel !== shieldPanel;
@@ -251,44 +270,49 @@ export function openAcEditor(shell, ownerScope, overlayHost) {
   tabs.append(...tabButtons);
   body.append(tabs, acPanel, shieldPanel);
   if (hasShield) {
-    const input = node("input", { attrs: { type: "number", min: "0", max: shield.hp.max, step: "1", inputmode: "numeric", value: shield.hp.value, disabled: !actor.capabilities?.editShield, "aria-label": t("VEMOBILE.PF2E.Character.Shield.HP", "Shield HP") } });
-    const perform = operation => run(C.EDIT_PF2E_SHIELD, { operation, itemId: shield.itemId, ...(operation === "set-hp" ? { value: Number(input.value), originalValue: shield.hp.value } : {}) }, true);
+    const input = node("input", { attrs: { type: "number", min: "0", max: shield.hp.max, step: "1", inputmode: "numeric", value: shield.hp.value, disabled: !actor.capabilities?.editShield, "aria-label": translate("VEMOBILE.PF2E.Character.Shield.HP", "Shield HP") } });
+    // Route shield actions through the shared command runner.
+    const perform = operation => run(ACTOR_COMMANDS.EDIT_PF2E_SHIELD, { operation, itemId: shield.itemId, ...(operation === "set-hp" ? { value: Number(input.value), originalValue: shield.hp.value } : {}) }, true);
     const fill = node("span");
+    // Reflect the draft shield HP as a clamped percentage.
     const updateFill = () => { fill.style.width = `${Math.max(0, Math.min(100, shield.hp.max > 0 ? Number(input.value) / shield.hp.max * 100 : 0)) || 0}%`; };
     scope.listen(input, "input", updateFill); updateFill();
+    // Add or subtract shield HP while honoring the current edit capability.
     const step = delta => node("button", { className: "ve-pf2e-shield-step", attrs: { type: "button", disabled: !actor.capabilities?.editShield,
-      "aria-label": t(delta < 0 ? "VEMOBILE.Character.Presenter.Decrease" : "VEMOBILE.Character.Presenter.Increase", delta < 0 ? "Decrease {denomination}" : "Increase {denomination}", { denomination: t("VEMOBILE.PF2E.Character.Shield.HP", "Shield HP") }) },
+      "aria-label": translate(delta < 0 ? "VEMOBILE.Character.Presenter.Decrease" : "VEMOBILE.Character.Presenter.Increase", delta < 0 ? "Decrease {denomination}" : "Increase {denomination}", { denomination: translate("VEMOBILE.PF2E.Character.Shield.HP", "Shield HP") }) },
       children: [icon(delta < 0 ? "fa-minus" : "fa-plus")], on: { click: () => { input.value = String(Math.max(0, Math.min(shield.hp.max, Math.trunc(Number(input.value) || 0) + delta))); updateFill(); } }
     }, scope);
     const state = shield.destroyed ? "Destroyed" : shield.broken ? "Broken" : "Intact";
-    const stat = (label, value) => node("div", { children: [node("small", { text: label }), node("strong", { text: value == null ? "—" : String(value) })] });
+    // Render one labeled armor statistic in the shield editor.
+    const createStatCell = (label, value) => node("div", { children: [node("small", { text: label }), node("strong", { text: value == null ? "—" : String(value) })] });
     shieldPanel.append(node("div", { className: "ve-pf2e-shield-card", children: [
       node("header", { className: "ve-pf2e-shield-identity", children: [icon("fa-shield"), node("div", { children: [
-        node("h3", { text: shield.name }), node("span", { className: `ve-pf2e-shield-state${shield.broken || shield.destroyed ? " is-damaged" : ""}`, text: t(`VEMOBILE.PF2E.Character.Shield.${state}`, state) })
+        node("h3", { text: shield.name }), node("span", { className: `ve-pf2e-shield-state${shield.broken || shield.destroyed ? " is-damaged" : ""}`, text: translate(`VEMOBILE.PF2E.Character.Shield.${state}`, state) })
       ] })] }),
       node("div", { className: "ve-pf2e-shield-health", children: [
-        node("span", { className: "ve-pf2e-shield-hp-label", text: t("VEMOBILE.PF2E.Character.Shield.HP", "Shield HP") }),
+        node("span", { className: "ve-pf2e-shield-hp-label", text: translate("VEMOBILE.PF2E.Character.Shield.HP", "Shield HP") }),
         node("div", { className: "ve-pf2e-shield-hp-controls", children: [step(-1), node("div", { className: "ve-pf2e-shield-hp-editor", children: [input, node("span", { text: `/ ${shield.hp.max}` })] }), step(1)] }),
         node("div", { className: "ve-pf2e-shield-hp-track", attrs: { "aria-hidden": "true" }, children: [fill] })
       ] }),
       node("div", { className: "ve-pf2e-shield-editor-stats", children: [
-        stat(t("VEMOBILE.PF2E.Character.Hardness", "Hardness"), shield.hardness), stat(t("VEMOBILE.PF2E.Character.Shield.BreakThreshold", "Break threshold"), shield.hp.brokenThreshold)
+        createStatCell(translate("VEMOBILE.PF2E.Character.Hardness", "Hardness"), shield.hardness), createStatCell(translate("VEMOBILE.PF2E.Character.Shield.BreakThreshold", "Break threshold"), shield.hp.brokenThreshold)
       ] })
     ] }), node("button", { className: "ve-pf2e-shield-repair", attrs: { type: "button", disabled: !actor.capabilities?.repairShield },
-      children: [icon("fa-hammer"), node("span", { text: t("VEMOBILE.PF2E.Character.Shield.Repair", "Attempt to Repair") })], on: { click: () => void perform("repair") }
+      children: [icon("fa-hammer"), node("span", { text: translate("VEMOBILE.PF2E.Character.Shield.Repair", "Attempt to Repair") })], on: { click: () => void perform("repair") }
     }, scope));
     shieldSave = node("button", { className: "is-primary ve-pf2e-shield-save", attrs: { type: "button", hidden: true, disabled: !actor.capabilities?.editShield },
-      children: [icon("fa-check"), node("span", { text: t("VEMOBILE.Character.Presenter.SaveChanges", "Save Changes") })], on: { click: () => { if (input.reportValidity()) void perform("set-hp"); } }
+      children: [icon("fa-check"), node("span", { text: translate("VEMOBILE.Character.Presenter.SaveChanges", "Save Changes") })], on: { click: () => { if (input.reportValidity()) void perform("set-hp"); } }
     }, scope);
     context.footer.append(shieldSave);
   }
   const list = node("div", { className: "ve-pf2e-ac-modifiers" });
-  const label = node("input", { attrs: { type: "text", maxlength: "100", required: true, "aria-label": t("VEMOBILE.PF2E.Character.ModifierName", "Modifier name"), placeholder: t("VEMOBILE.PF2E.Character.ModifierName", "Modifier name") } });
-  const value = node("input", { attrs: { type: "number", min: "-999", max: "999", step: "1", value: "1", required: true, inputmode: "numeric", "aria-label": t("VEMOBILE.PF2E.Character.ModifierValue", "Modifier value") } });
-  const type = node("select", { attrs: { "aria-label": t("VEMOBILE.PF2E.Character.ModifierType", "Modifier type") }, children:
-    ["circumstance", "item", "status", "untyped"].map(key => node("option", { attrs: { value: key }, text: t(`VEMOBILE.PF2E.Character.ModifierTypes.${key}`, key[0].toUpperCase() + key.slice(1)) })) });
-  const add = node("button", { className: "is-primary", attrs: { type: "submit" }, text: t("VEMOBILE.PF2E.Character.Action.Add", "Add") });
+  const label = node("input", { attrs: { type: "text", maxlength: "100", required: true, "aria-label": translate("VEMOBILE.PF2E.Character.ModifierName", "Modifier name"), placeholder: translate("VEMOBILE.PF2E.Character.ModifierName", "Modifier name") } });
+  const value = node("input", { attrs: { type: "number", min: "-999", max: "999", step: "1", value: "1", required: true, inputmode: "numeric", "aria-label": translate("VEMOBILE.PF2E.Character.ModifierValue", "Modifier value") } });
+  const type = node("select", { attrs: { "aria-label": translate("VEMOBILE.PF2E.Character.ModifierType", "Modifier type") }, children:
+    ["circumstance", "item", "status", "untyped"].map(key => node("option", { attrs: { value: key }, text: translate(`VEMOBILE.PF2E.Character.ModifierTypes.${key}`, key[0].toUpperCase() + key.slice(1)) })) });
+  const add = node("button", { className: "is-primary", attrs: { type: "submit" }, text: translate("VEMOBILE.PF2E.Character.Action.Add", "Add") });
   acPanel.append(list, node("div", { className: "ve-pf2e-ac-add", children: [label, value, type, add] }));
+  // Refresh shield controls from the current snapshot while preserving dialog scroll.
   const draw = () => {
     if (modal.pending || scope.disposed || shell.actor?.sourceUuid !== actor.sourceUuid) return;
     modal.listScope?.dispose();
@@ -297,13 +321,13 @@ export function openAcEditor(shell, ownerScope, overlayHost) {
     const custom = ac?.customModifiers ?? [];
     list.replaceChildren(...(ac?.modifiers ?? []).map(modifier => node("div", { className: `ve-pf2e-ac-modifier${modifier.enabled ? "" : " is-suppressed"}`, children: [
       node("strong", { text: `${modifier.value >= 0 ? "+" : ""}${modifier.value}` }),
-      node("div", { children: [node("span", { text: modifier.label }), node("small", { text: t(`VEMOBILE.PF2E.Character.ModifierTypes.${modifier.type}`, modifier.type) })] }),
-      custom.some(entry => entry.slug === modifier.slug) ? node("button", { attrs: { type: "button", "aria-label": t("VEMOBILE.PF2E.Character.RemoveModifier", "Remove {label}", { label: modifier.label }) }, children: [icon("fa-trash")], on: { click: () => run(C.EDIT_PF2E_AC_MODIFIER, { operation: "remove", slug: modifier.slug, originalModifiers: custom }, false) } }, listScope) : null
+      node("div", { children: [node("span", { text: modifier.label }), node("small", { text: translate(`VEMOBILE.PF2E.Character.ModifierTypes.${modifier.type}`, modifier.type) })] }),
+      custom.some(entry => entry.slug === modifier.slug) ? node("button", { attrs: { type: "button", "aria-label": translate("VEMOBILE.PF2E.Character.RemoveModifier", "Remove {label}", { label: modifier.label }) }, children: [icon("fa-trash")], on: { click: () => run(ACTOR_COMMANDS.EDIT_PF2E_AC_MODIFIER, { operation: "remove", slug: modifier.slug, originalModifiers: custom }, false) } }, listScope) : null
     ] })));
     // Suppressed custom modifiers can be absent from the prepared AC list.
     for (const modifier of custom.filter(entry => !(ac?.modifiers ?? []).some(row => row.slug === entry.slug))) {
       list.append(node("div", { className: "ve-pf2e-ac-modifier is-suppressed", children: [node("strong", { text: String(modifier.value) }), node("span", { text: modifier.label }),
-        node("button", { attrs: { type: "button", "aria-label": t("VEMOBILE.PF2E.Character.RemoveModifier", "Remove {label}", { label: modifier.label }) }, children: [icon("fa-trash")], on: { click: () => run(C.EDIT_PF2E_AC_MODIFIER, { operation: "remove", slug: modifier.slug, originalModifiers: custom }, false) } }, listScope)] }));
+        node("button", { attrs: { type: "button", "aria-label": translate("VEMOBILE.PF2E.Character.RemoveModifier", "Remove {label}", { label: modifier.label }) }, children: [icon("fa-trash")], on: { click: () => run(ACTOR_COMMANDS.EDIT_PF2E_AC_MODIFIER, { operation: "remove", slug: modifier.slug, originalModifiers: custom }, false) } }, listScope)] }));
     }
   };
   modal.refresh = draw;
@@ -311,7 +335,7 @@ export function openAcEditor(shell, ownerScope, overlayHost) {
     event.preventDefault();
     if (acPanel.hidden) return;
     if (!context.form.reportValidity()) return;
-    void run(C.EDIT_PF2E_AC_MODIFIER, { operation: "add", label: label.value, value: Number(value.value), modifierType: type.value,
+    void run(ACTOR_COMMANDS.EDIT_PF2E_AC_MODIFIER, { operation: "add", label: label.value, value: Number(value.value), modifierType: type.value,
       originalModifiers: shell.actor.pf2e?.armorClass?.customModifiers ?? [] }, false);
   });
   draw();
@@ -343,14 +367,14 @@ export function openDefenseEditor(shell, category, ownerScope, overlayHost) {
     exceptions: [...(entry.exceptions ?? [])],
     doubleVs: [...(entry.doubleVs ?? [])]
   }));
-  const t = context.t;
+  const translate = context.t;
   const list = node("div", { className: "ve-pf2e-defense-list" });
   const derived = node("section", { className: "ve-pf2e-defense-derived" });
-  const addButton = node("button", { className: "ve-pf2e-defense-add is-primary", attrs: { type: "button" }, children: [icon("fa-plus"), node("span", { text: t("VEMOBILE.PF2E.Character.Defenses.Add", "Add {category}", { category: label.toLocaleLowerCase() }) })] });
+  const addButton = node("button", { className: "ve-pf2e-defense-add is-primary", attrs: { type: "button" }, children: [icon("fa-plus"), node("span", { text: translate("VEMOBILE.PF2E.Character.Defenses.Add", "Add {category}", { category: label.toLocaleLowerCase() }) })] });
   context.body.classList.add("ve-pf2e-defense-editor");
   context.body.append(list, addButton);
   if (derivedEntries.length) {
-    derived.append(node("h3", { text: t("VEMOBILE.PF2E.Character.Defenses.Derived", "Derived from feats and effects") }));
+    derived.append(node("h3", { text: translate("VEMOBILE.PF2E.Character.Defenses.Derived", "Derived from feats and effects") }));
     for (const entry of derivedEntries) derived.append(node("div", { className: "ve-pf2e-defense-derived-row", children: [
       node("strong", { text: entry.label }), node("small", { text: entry.source })
     ] }));
@@ -364,48 +388,50 @@ export function openDefenseEditor(shell, category, ownerScope, overlayHost) {
       for (const value of [...(entry.exceptions ?? []), ...(entry.doubleVs ?? [])]) if (!allTags.has(String(value))) allTags.set(String(value), String(value));
     }
   }
+  // Rebuild defense choices from the latest prepared record.
   const render = () => {
     if (context.modal.pending || context.scope.disposed) return;
     context.modal.rowsScope?.dispose();
     const rowsScope = context.modal.rowsScope = context.scope.child("defense-editor-rows");
+    // Use a known option label or preserve the raw value for legacy categories.
     const typeLabel = value => typeOptions.find(option => option.value === value)?.label ?? value;
     const rows = [];
     for (const entry of originalEntries.filter(item => item.editable !== true)) rows.push(node("div", {
       className: "ve-pf2e-defense-row is-readonly", children: [node("strong", { text: entry.label ?? entry.type ?? "—" }),
         ...(entry.value == null ? [] : [node("span", { text: String(entry.value) })]),
-        ...(entry.exceptions ?? []).map(value => node("small", { text: t("VEMOBILE.PF2E.Character.Defenses.Exception", "Except {value}", { value }) }))]
+        ...(entry.exceptions ?? []).map(value => node("small", { text: translate("VEMOBILE.PF2E.Character.Defenses.Exception", "Except {value}", { value }) }))]
     }));
     for (const [index, draft] of drafts.entries()) {
-      const type = node("select", { attrs: { required: true, "aria-label": t("VEMOBILE.PF2E.Character.Defenses.Type", "Defense type") }, children: [
-        node("option", { attrs: { value: "" }, text: t("VEMOBILE.PF2E.Character.Defenses.ChooseType", "Choose type") }),
+      const type = node("select", { attrs: { required: true, "aria-label": translate("VEMOBILE.PF2E.Character.Defenses.Type", "Defense type") }, children: [
+        node("option", { attrs: { value: "" }, text: translate("VEMOBILE.PF2E.Character.Defenses.ChooseType", "Choose type") }),
         ...typeOptions.map(option => node("option", { attrs: { value: option.value }, text: option.label }))
       ] });
       if (draft.type && !typeOptions.some(option => option.value === draft.type)) type.append(node("option", { attrs: { value: draft.type }, text: typeLabel(draft.type) }));
       type.value = draft.type ?? "";
-      const fields = [node("label", { className: "ve-pf2e-defense-type", children: [node("span", { text: t("VEMOBILE.PF2E.Character.Defenses.Type", "Defense type") }), type] })];
+      const fields = [node("label", { className: "ve-pf2e-defense-type", children: [node("span", { text: translate("VEMOBILE.PF2E.Character.Defenses.Type", "Defense type") }), type] })];
       if (category !== "immunities") {
-        const value = node("input", { attrs: { type: "number", min: "1", max: "999", step: "1", required: true, inputmode: "numeric", value: draft.value ?? "", "aria-label": t("VEMOBILE.PF2E.Character.Defenses.Value", "Value") } });
-        fields.push(node("label", { className: "ve-pf2e-defense-value", children: [node("span", { text: t("VEMOBILE.PF2E.Character.Defenses.Value", "Value") }), value] }));
+        const value = node("input", { attrs: { type: "number", min: "1", max: "999", step: "1", required: true, inputmode: "numeric", value: draft.value ?? "", "aria-label": translate("VEMOBILE.PF2E.Character.Defenses.Value", "Value") } });
+        fields.push(node("label", { className: "ve-pf2e-defense-value", children: [node("span", { text: translate("VEMOBILE.PF2E.Character.Defenses.Value", "Value") }), value] }));
         rowsScope.listen(value, "input", () => { draft.value = value.value === "" ? null : Number(value.value); });
       }
       rowsScope.listen(type, "change", () => { draft.type = type.value; });
-      const remove = node("button", { className: "ve-pf2e-defense-remove", attrs: { type: "button", "aria-label": t("VEMOBILE.PF2E.Character.Defenses.Remove", "Remove {type}", { type: typeLabel(draft.type) }) }, children: [icon("fa-trash")], on: { click: () => { drafts.splice(index, 1); render(); } } }, rowsScope);
+      const remove = node("button", { className: "ve-pf2e-defense-remove", attrs: { type: "button", "aria-label": translate("VEMOBILE.PF2E.Character.Defenses.Remove", "Remove {type}", { type: typeLabel(draft.type) }) }, children: [icon("fa-trash")], on: { click: () => { drafts.splice(index, 1); render(); } } }, rowsScope);
       fields.push(remove);
       const row = node("div", { className: "ve-pf2e-defense-row", children: fields });
 
-      const details = node("details", { className: "ve-pf2e-defense-more", children: [node("summary", { text: t("VEMOBILE.PF2E.Character.Defenses.More", "More") })] });
+      const details = node("details", { className: "ve-pf2e-defense-more", children: [node("summary", { text: translate("VEMOBILE.PF2E.Character.Defenses.More", "More") })] });
       for (const [field, titleKey, fallback] of [["exceptions", "VEMOBILE.PF2E.Character.Defenses.Exceptions", "Exceptions"], ...(category === "resistances" ? [["doubleVs", "VEMOBILE.PF2E.Character.Defenses.DoubleVs", "Double resistance against"]] : [])]) {
         const selected = draft[field];
-        const picker = node("select", { attrs: { "aria-label": t(titleKey, fallback), disabled: selected.length >= 6 }, children: [
-          node("option", { attrs: { value: "" }, text: t("VEMOBILE.PF2E.Character.Defenses.ChooseTag", "Choose a tag") }),
+        const picker = node("select", { attrs: { "aria-label": translate(titleKey, fallback), disabled: selected.length >= 6 }, children: [
+          node("option", { attrs: { value: "" }, text: translate("VEMOBILE.PF2E.Character.Defenses.ChooseTag", "Choose a tag") }),
           ...tagOptions.filter(option => !selected.includes(option.value)).map(option => node("option", { attrs: { value: option.value }, text: option.label }))
         ] });
         const chips = node("div", { className: "ve-pf2e-defense-tags", children: selected.map(value => node("span", { className: "ve-pf2e-defense-tag", children: [
           node("span", { text: allTags.get(value) ?? value }),
-          node("button", { attrs: { type: "button", "aria-label": t("VEMOBILE.PF2E.Character.Defenses.RemoveTag", "Remove {tag}", { tag: allTags.get(value) ?? value }) }, children: [icon("fa-xmark")], on: { click: () => { draft[field] = selected.filter(tag => tag !== value); render(); } } }, rowsScope)
+          node("button", { attrs: { type: "button", "aria-label": translate("VEMOBILE.PF2E.Character.Defenses.RemoveTag", "Remove {tag}", { tag: allTags.get(value) ?? value }) }, children: [icon("fa-xmark")], on: { click: () => { draft[field] = selected.filter(tag => tag !== value); render(); } } }, rowsScope)
         ] })) });
         rowsScope.listen(picker, "change", () => { if (picker.value && selected.length < 6) { draft[field].push(picker.value); render(); } });
-        details.append(node("label", { className: "ve-pf2e-defense-tag-picker", children: [node("span", { text: t(titleKey, fallback) }), picker] }), chips);
+        details.append(node("label", { className: "ve-pf2e-defense-tag-picker", children: [node("span", { text: translate(titleKey, fallback) }), picker] }), chips);
       }
       row.append(details);
       rows.push(row);
@@ -420,11 +446,12 @@ export function openDefenseEditor(shell, category, ownerScope, overlayHost) {
     list.querySelector("select")?.focus?.({ preventScroll: true });
   });
   context.modal.refresh = render;
+  // Send only changed defense values through the scoped command runner.
   const submit = () => {
     const retained = originalEntries.flatMap(entry => entry.editable ? drafts.filter(draft => draft.sourceIndex === entry.sourceIndex) : [entry]);
     const values = [...retained, ...drafts.filter(entry => entry.sourceIndex === null)].map(({ sourceIndex, type, value, exceptions, doubleVs }) => ({ sourceIndex, type, value,
       exceptions: [...exceptions], doubleVs: [...doubleVs] }));
-    return context.run(C.EDIT_PF2E_DEFENSES, { category, originalEntries, values });
+    return context.run(ACTOR_COMMANDS.EDIT_PF2E_DEFENSES, { category, originalEntries, values });
   };
   submitButton(context, submit);
   render();

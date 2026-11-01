@@ -2,6 +2,7 @@ import { icon, node } from "../../ui/dom.mjs";
 import { localizedText } from "../../ui/localized-text.mjs";
 import { bindDetailsDisclosure } from "../../ui/disclosure.mjs";
 
+// Builds the chooser's folder tree and lazy, lifecycle-owned menu presentation.
 export function buildCharacterMenuTree(actors) {
   const root = { folders: new Map(), actors: [] };
   for (const actor of actors) {
@@ -15,6 +16,7 @@ export function buildCharacterMenuTree(actors) {
   return root;
 }
 
+// Own the chooser element, lazy folder tree, and selected-row scroll behavior.
 export function createCharacterMenuController({ actors, selectedActor, commands, onClose, scope, embedded = false, describeActor = actor => actor.type ?? "" }) {
   const root = buildCharacterMenuTree(actors);
   const expandedFolderIds = new Set();
@@ -25,12 +27,14 @@ export function createCharacterMenuController({ actors, selectedActor, commands,
   });
   let bodyScope = null;
 
+  // Release the rendered subtree before replacing or disposing its owner.
   const unmount = () => {
     bodyScope?.dispose();
     bodyScope = null;
     element.replaceChildren();
   };
 
+  // Render only while shown, then center the selected entry after layout settles.
   const mount = () => {
     if (bodyScope || scope.disposed) return;
     for (const folder of selectedDirectoryActor?.folderPath ?? []) expandedFolderIds.add(String(folder.id));
@@ -58,6 +62,7 @@ export function createCharacterMenuController({ actors, selectedActor, commands,
   return Object.freeze({ element, expandedFolderIds, mount, unmount });
 }
 
+// Run layout-dependent work on the next frame, with a cancellable microtask fallback.
 function afterCharacterMenuLayout(scope, callback) {
   let cancelled = false;
   const requestFrame = globalThis.requestAnimationFrame;
@@ -77,6 +82,7 @@ function afterCharacterMenuLayout(scope, callback) {
   });
 }
 
+// Render one directory level in stable folder and actor sort order.
 function renderCharacterMenuBranch(branch, context, scope) {
   const folders = Array.from(branch.folders.values())
     .sort((left, right) => Number(left.folder.sort) - Number(right.folder.sort) || left.folder.name.localeCompare(right.folder.name));
@@ -88,6 +94,7 @@ function renderCharacterMenuBranch(branch, context, scope) {
   ];
 }
 
+// Render a folder disclosure and create its children only while expanded.
 function characterMenuFolder(branch, context, scope) {
   const folderId = String(branch.folder.id);
   const folderScope = scope.child(`folder:${folderId}`);
@@ -105,12 +112,14 @@ function characterMenuFolder(branch, context, scope) {
   let contents = null;
   let contentsScope = null;
 
+  // Child rows own listeners, so collapsing must dispose them with the DOM.
   const disposeContents = () => {
     contentsScope?.dispose();
     contentsScope = null;
     contents?.remove();
     contents = null;
   };
+  // Avoid duplicate mounts and do not render after this folder has closed.
   const renderContents = () => {
     if (contents || folderScope.disposed) return;
     contentsScope = folderScope.child("contents");
@@ -135,6 +144,7 @@ function characterMenuFolder(branch, context, scope) {
   return details;
 }
 
+// Bind an actor row to selection by stable source UUID, not its display label.
 function characterMenuActor(entry, selectedActor, commands, setOpen, scope, describeActor) {
   const active = characterRecordSourceUuid(entry) === characterRecordSourceUuid(selectedActor);
   return node("button", {
@@ -152,8 +162,10 @@ function characterMenuActor(entry, selectedActor, commands, setOpen, scope, desc
   }, scope);
 }
 
+// Count direct actors plus every actor nested below this folder.
 export function characterFolderCount(branch) {
   return branch.actors.length + Array.from(branch.folders.values()).reduce((total, folder) => total + characterFolderCount(folder), 0);
 }
 
+// Normalize modern source UUIDs and legacy world Actor IDs for chooser matching.
 function characterRecordSourceUuid(actor) { return String(actor?.sourceUuid ?? (actor?.id ? `Actor.${actor.id}` : "")); }

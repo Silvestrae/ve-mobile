@@ -18,6 +18,7 @@ export function createVeCloseWatcherBack({
   let pendingClose = null;
   let lastAction = "none";
 
+  // Retain the common watcher stack and replace only the layers that changed.
   const sync = (layers = getLayers?.() ?? []) => {
     if (disposed || pendingClose !== null || !isAndroid()) return;
     const window = getWindow?.();
@@ -56,6 +57,7 @@ export function createVeCloseWatcherBack({
     }
   };
 
+  // Cancel pending Back delivery and destroy every watcher owned by this bridge.
   const dispose = () => {
     if (disposed) return;
     disposed = true;
@@ -67,6 +69,7 @@ export function createVeCloseWatcherBack({
   return Object.freeze({
     sync,
     dispose,
+    // Describe supported Android Back layers without exposing live CloseWatcher handles.
     snapshot: () => Object.freeze({
       supported: isAndroid() && typeof getWindow?.()?.CloseWatcher === "function",
       activeLayers: Object.freeze(entries.filter((entry) => !entry.closed).map((entry) => entry.key.split(":", 1)[0])),

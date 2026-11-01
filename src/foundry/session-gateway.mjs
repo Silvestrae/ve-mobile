@@ -66,8 +66,11 @@ export function createFoundrySessionGateway({
   getStorage = () => globalThis.localStorage,
   systemIntegration = selectSystemIntegration(globalThis.game?.system?.id ?? "dnd5e")
 } = {}) {
+  // Cached presentation records are owned by this gateway. Hook invalidations
+  // collect affected domains and refresh them at controlled lifecycle points.
   const journalFontKey = "ve-mobile.journal-font-size.v1";
   let journalFontSize = null;
+  // Read the current journal font preference and normalize it to the supported range.
   const readJournalFontSize = () => {
     if (journalFontSize !== null) return journalFontSize;
     journalFontSize = DEFAULT_JOURNAL_FONT_SIZE;
@@ -81,6 +84,7 @@ export function createFoundrySessionGateway({
   let refreshQueued = false;
   let targetPublicationDeferred = false;
   let targetRefreshPending = false;
+  // Flush the coalesced target-count refresh when its queued owner is still active.
   let flushTargetRefresh = () => {};
   let latestSnapshot = null;
   let latestDomainSignatures = Object.freeze({});
@@ -97,7 +101,9 @@ export function createFoundrySessionGateway({
   let heldCharacterSourceUuid = "";
   let characterSourceHoldGeneration = 0;
 
+  // Increment the session gateway’s named performance counter.
   const count = (name, amount) => performanceObserver?.increment?.(name, amount);
+  // Read the requested snapshot domain from current Foundry sources.
   const readDomain = (domain, reader) => {
     count(`authoritative.read.${domain}`);
     const finish = performanceObserver?.start?.(`authoritative.read.${domain}`) ?? (() => {});
@@ -108,6 +114,7 @@ export function createFoundrySessionGateway({
     }
   };
 
+  // Project the selected exact Actor into the plain session actor record.
   const projectSelectedActor = (actor, user) => {
     selectedReferenceSources = new Set(systemIntegration.actors.references(actor));
     count("authoritative.actor.projected");
@@ -125,18 +132,21 @@ export function createFoundrySessionGateway({
     }
   };
 
+  // Create a directory-row record for an eligible Actor not selected as the active character.
   const projectDirectoryActor = (actor) => {
     count("authoritative.actor.directory.projected");
     const finish = performanceObserver?.start?.("authoritative.actor.directory.project") ?? (() => {});
     try { return systemIntegration.actors.directory(actor); } finally { finish(); }
   };
 
+  // Read and permission-filter world Actors before projecting their records.
   const readActors = () => readDomain("actors.directory", () => {
     assertSystemIntegration(systemIntegration, game);
     const user = game.user;
     return Object.freeze(visibleActors(user, systemIntegration).map(projectDirectoryActor));
   });
 
+  // Apply targeted Actor changes to the snapshot without rebuilding unchanged actor records.
   const patchActors = (previous, actorIds) => readDomain("actors.incremental", () => {
     assertSystemIntegration(systemIntegration, game);
     const user = game.user;
@@ -149,20 +159,24 @@ export function createFoundrySessionGateway({
     return Object.freeze([...records.values()].sort((left, right) => Number(right.id === user?.character?.id) - Number(left.id === user?.character?.id) || left.name.localeCompare(right.name)));
   });
 
+  // Choose the preferred world Actor ID from current session selection inputs.
   const preferredActorId = (actors) => actors.some((actor) => actor.id === game.user?.character?.id)
     ? game.user.character.id
     : "";
 
+  // Resolve the preferred exact Actor source UUID, including synthetic token Actor identity.
   const preferredActorSourceUuid = (actors) => {
     const preferredId = preferredActorId(actors);
     return actors.find((actor) => actor.id === preferredId)?.sourceUuid ?? "";
   };
 
+  // Return the source UUID of the currently controlled token Actor when available.
   const controlledSourceUuid = () => {
     const token = Array.from(globalThis.canvas?.tokens?.controlled ?? [])[0]?.document ?? null;
     return actorSourceUuid(token?.actor);
   };
 
+  // Resolve the current selection against the active world and exact Actor source.
   const resolveSelectedActor = (actors, user) => {
     let actor = selectedActorSourceUuid ? resolveActorSource(selectedActorSourceUuid) : null;
     if (!isActorEligible(actor, user, systemIntegration)) {
@@ -172,6 +186,7 @@ export function createFoundrySessionGateway({
     return actor && isActorEligible(actor, user, systemIntegration) ? projectSelectedActor(actor, user) : null;
   };
 
+  // Project the active Scene and canvas movement state into a plain snapshot domain.
   const readScene = () => readDomain("scene", () => {
     const scene = sceneForSnapshot();
     if (!scene) return scene;
@@ -185,6 +200,7 @@ export function createFoundrySessionGateway({
     });
   });
 
+  // Build a full snapshot from the current world, user, actor selection, and requested domains.
   const read = () => {
     count("authoritative.read.full");
     count("snapshot.build.full");
@@ -230,6 +246,7 @@ export function createFoundrySessionGateway({
     }
   };
 
+  // Rebuild only the requested snapshot domains and reuse valid unchanged records.
   const readIncremental = (domains, actorIds, fullActorRead, refreshSelectedActor, refreshControlledSelection, resetSceneSelection) => {
     if (!latestSnapshot) return read();
     count("snapshot.build.incremental");
@@ -279,12 +296,14 @@ export function createFoundrySessionGateway({
   return Object.freeze({
     read,
     readJournalFontSize,
+    // Persist the bounded client preference used when journal pages are rendered.
     setJournalFontSize(value) {
       if (!Number.isFinite(value)) return readJournalFontSize();
       journalFontSize = clampJournalFontSize(value);
       try { getStorage()?.setItem(journalFontKey, String(journalFontSize)); } catch { /* Retain the in-memory preference. */ }
       return journalFontSize;
     },
+    // Adopt a supplied session snapshot only when its captured world and user still match.
     adopt(snapshot) {
       if (!snapshot || snapshot === latestSnapshot) return;
       latestSnapshot = snapshot;
@@ -296,6 +315,7 @@ export function createFoundrySessionGateway({
       if (!game.user.isGM) throw new Error(localizeFoundry("VEMOBILE.Navigation.PauseDenied", "You do not have permission to pause the game."));
       return game.togglePause(!game.paused, { broadcast: true });
     },
+    // Select an eligible Actor source and replace only the actor portion of the current snapshot.
     selectCharacterSource(sourceUuid, expectedSession = {}) {
       assertSession(expectedSession);
       const uuid = validSourceUuid(sourceUuid);
@@ -315,6 +335,7 @@ export function createFoundrySessionGateway({
       latestDomainSignatures = Object.freeze({ ...latestDomainSignatures, actors: snapshotDomainSignature(snapshot, "actors") });
       return snapshot;
     },
+    // Follow a reference only when it still belongs to the currently selected Actor.
     selectReferencedCharacterSource({ originSourceUuid, targetSourceUuid }, expectedSession = {}) {
       assertSession(expectedSession);
       const origin = resolveActorSource(validSourceUuid(originSourceUuid));
@@ -323,6 +344,7 @@ export function createFoundrySessionGateway({
         || !systemIntegration.actors.references(origin).includes(target)) throw new Error(localizeFoundry("VEMOBILE.Interface.SessionGateway.ThisReferenceIsNoLongerAvailable", "This reference is no longer available."));
       return this.selectCharacterSource(target, expectedSession);
     },
+    // Temporarily pin an Actor source and clear it only if this release still owns the hold.
     holdCharacterSource(sourceUuid) {
       const uuid = validSourceUuid(sourceUuid);
       const generation = ++characterSourceHoldGeneration;
@@ -344,6 +366,7 @@ export function createFoundrySessionGateway({
         selectedActorSourceUuid = "";
       }
       const generation = ++watchGeneration;
+      // Coalesce Foundry hook updates, refresh only affected domains, and reject async work owned by a replaced session.
       const queueRefresh = (invalidation) => {
         if (invalidation.tokenActorChanged || invalidation.replacementTokenUuid) {
           const token = latestSnapshot?.scene?.movement?.tokens?.find((entry) =>
@@ -431,6 +454,7 @@ export function createFoundrySessionGateway({
           }
         });
       };
+      // Queue one target-count refresh after a burst of token-target changes.
       const queueTargetRefresh = () => {
         if (targetPublicationDeferred) {
           targetRefreshPending = true;
@@ -439,6 +463,7 @@ export function createFoundrySessionGateway({
         }
         queueRefresh({ hook: "targetToken", domains: ["targets"] });
       };
+      // Read and publish the latest target count when the pending refresh is still current.
       const localFlushTargetRefresh = () => {
         if (!targetRefreshPending) return;
         targetRefreshPending = false;
@@ -493,6 +518,7 @@ export function createFoundrySessionGateway({
       latestDomainSignatures = snapshotDomainSignatures(latestSnapshot);
       return latestSnapshot;
     },
+    // Return visible, permission-checked Journal pages as plain records after asynchronous enrichment.
     async readJournal(journalId, expectedSession = {}) {
       assertSession(expectedSession);
       const id = identifier(journalId, "journalId");
@@ -528,6 +554,7 @@ export function createFoundrySessionGateway({
       return Object.freeze({ id, name: String(journal.name ?? "Journal"), img: String(journal.img ?? ""),
         canEdit: canOwn(journal, game.user), pages: Object.freeze(currentPages) });
     },
+    // Open Foundry's native Journal editor for the owned entry or eligible embedded page.
     async openNativeJournalEditor(journalId, pageId = "", expectedSession = {}) {
       assertSession(expectedSession);
       const id = identifier(journalId, "journalId");
@@ -548,6 +575,7 @@ export function createFoundrySessionGateway({
       assertSession(expectedSession);
       return Object.freeze({ opened: true });
     },
+    // Create a native chat message after validating its text and optional Actor speaker source.
     async sendChat(content, sourceUuid = "") {
       const text = String(content ?? "").trim();
       if (!text || text.length > 5000) throw new Error(localizeFoundry("VEMOBILE.Interface.SessionGateway.ChatMessagesMustContainBetweenAndCharacters", "Chat messages must contain between 1 and 5,000 characters."));
@@ -559,6 +587,9 @@ export function createFoundrySessionGateway({
   });
 }
 
+/** Translate one Foundry hook into the narrow snapshot domains and exact Actor
+ * identities that need refreshing. Token geometry-only edits are intentionally
+ * ignored by the character/session projection. */
 export function sessionInvalidationForHook(hook, document, changes = {}, systemIntegration = selectSystemIntegration(globalThis.game?.system?.id ?? "dnd5e")) {
   if (hook === "updateUser") return Object.freeze({ hook, domains: SESSION_INVALIDATION_MAP.updateUser, fullDirectoryRead: true, refreshSelectedActor: true });
   if (hook === "updateActor") {
@@ -623,6 +654,7 @@ export function sessionInvalidationForHook(hook, document, changes = {}, systemI
   });
 }
 
+// Resolve the replacement Token after a document update without switching to its prototype Actor.
 function resolveTokenReplacement(uuid) {
   if (!/^Scene\.[^.]+\.Token\.[^.]+$/u.test(uuid)) return null;
   try {
@@ -633,6 +665,7 @@ function resolveTokenReplacement(uuid) {
   }
 }
 
+// Resolve the exact Actor affected by a hook, including synthetic token-backed records.
 function actorForHook(hook, document) {
   if (!["createActor", "updateActor", "deleteActor", "createItem", "updateItem", "deleteItem", "createActiveEffect", "updateActiveEffect", "deleteActiveEffect"].includes(hook)) return "";
   if (["createActor", "updateActor", "deleteActor"].includes(hook)) return document ?? null;
@@ -645,6 +678,7 @@ function actorForHook(hook, document) {
   return null;
 }
 
+// Extract changed document paths from Foundry’s update payload.
 function changedPaths(changes, prefix = "") {
   if (!changes || typeof changes !== "object" || Array.isArray(changes)) return prefix ? [prefix] : [];
   const paths = [];
@@ -656,6 +690,7 @@ function changedPaths(changes, prefix = "") {
   return paths;
 }
 
+// Patch only the Scene target count in an existing session snapshot.
 function patchSceneTargetCount(scene, targetCount) {
   if (!scene) return scene;
   return Object.freeze({
@@ -667,11 +702,13 @@ function patchSceneTargetCount(scene, targetCount) {
   });
 }
 
+// Compute the narrow signatures used to determine which snapshot domains changed.
 function snapshotDomainSignatures(snapshot) {
   return Object.freeze(Object.fromEntries(["actors", "scene", "combat", "journals", "chat", "world", "user"]
     .map((domain) => [domain, snapshotDomainSignature(snapshot, domain)])));
 }
 
+// Build one domain’s revision signature from its current authoritative inputs.
 function snapshotDomainSignature(snapshot, domain) {
   if (domain === "actors") return JSON.stringify({
     preferredActorSourceUuid: snapshot?.preferredActorSourceUuid ?? "",
@@ -682,12 +719,14 @@ function snapshotDomainSignature(snapshot, domain) {
   return JSON.stringify(snapshot?.[domain] ?? null);
 }
 
+/** Compare presentation data without treating capture timestamps as a change. */
 export function snapshotPresentationSignature(snapshot) {
   if (!snapshot) return "null";
   const { capturedAt: _capturedAt, ...presentation } = snapshot;
   return JSON.stringify(presentation);
 }
 
+// Return Actors the current user is allowed to observe in the session directory.
 function visibleActors(user, systemIntegration) {
   return Array.from(game.actors ?? [])
     .filter((actor) => isActorEligible(actor, user, systemIntegration))
@@ -699,16 +738,19 @@ export function isActorEligible(actor, user, systemIntegration = selectSystemInt
   return systemIntegration.actors.eligible(actor, user, { canObserve, canOwn });
 }
 
+// Return only JournalEntries and pages visible to the current user.
 function visibleJournals(user) {
   return Array.from(game.journal ?? [])
     .filter((journal) => canObserve(journal, user))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Filter chat messages through Foundry’s current visibility rules.
 function visibleMessages() {
   return Array.from(game.messages ?? []).filter((message) => message.visible !== false);
 }
 
+// Check whether the current user can observe the document at the requested permission level.
 function canObserve(document, user) {
   try {
     return document.testUserPermission?.(user, "OBSERVER") ?? document.visible ?? false;
@@ -717,6 +759,7 @@ function canObserve(document, user) {
   }
 }
 
+// Check Actor ownership through Foundry while failing closed on permission errors.
 function canOwn(document, user) {
   try {
     return document.testUserPermission?.(user, "OWNER") ?? false;
@@ -725,6 +768,7 @@ function canOwn(document, user) {
   }
 }
 
+// Project a visible JournalEntry or page into its serializable presentation record.
 function journalRecord(journal) {
   return {
     id: String(journal.id ?? ""),
@@ -739,6 +783,7 @@ function journalRecord(journal) {
   };
 }
 
+// Return a Journal folder ancestry with protection against malformed cycles.
 function journalFolderPath(journal) {
   const folders = [];
   const seen = new Set();
@@ -756,10 +801,12 @@ function journalFolderPath(journal) {
   return folders;
 }
 
+// Read the configured Scene or Journal sorting mode for stable record order.
 function sortingMode(value) {
   return value === "a" ? "a" : "m";
 }
 
+// Enrich journal markup through Foundry’s text editor while the request owner remains current.
 async function enrichJournalHtml(page, journal) {
   const editor = globalThis.TextEditor?.implementation ?? globalThis.foundry?.applications?.ux?.TextEditor?.implementation;
   const content = String(page.text?.content ?? "");
@@ -774,22 +821,26 @@ async function enrichJournalHtml(page, journal) {
   }));
 }
 
+// Escape plain text inserted into journal preview markup.
 function escapeHtml(value) {
   return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
+// Reject work when the captured world, user, or session generation is no longer active.
 function assertSession(expected) {
   if (!game?.user || !game?.world) throw new Error(localizeFoundry("VEMOBILE.Interface.CombatGateway.TheFoundrySessionIsNotReady", "The Foundry session is not ready."));
   if (expected.worldId && expected.worldId !== game.world.id) throw new Error(localizeFoundry("VEMOBILE.Interface.CombatGateway.TheActiveFoundryWorldHasChanged", "The active Foundry world has changed."));
   if (expected.userId && expected.userId !== game.user.id) throw new Error(localizeFoundry("VEMOBILE.Interface.CombatGateway.TheActiveFoundryUserHasChanged", "The active Foundry user has changed."));
 }
 
+// Normalize a stable document identifier from a supported value.
 function identifier(value, field) {
   const id = String(value ?? "").trim();
   if (!id || id.length > 128) throw new Error(localizeFoundry("VEMOBILE.Interface.CharacterSource.IsRequired", "{field} is required.", { field: (field) }));
   return id;
 }
 
+// Project a visible chat message into the serializable message record.
 function chatRecord(message) {
   const source = message._source ?? message;
   return {
@@ -801,6 +852,7 @@ function chatRecord(message) {
   };
 }
 
+// Strip markup and normalize text for non-HTML journal or chat summaries.
 function plainText(html) {
   const holder = document.createElement("div");
   holder.innerHTML = String(html ?? "");

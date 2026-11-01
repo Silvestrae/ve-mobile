@@ -39,6 +39,7 @@ export function mountChatComposerDock({ form, input, host, document, scope, getS
     form.style.flexBasis = original.flexBasis;
     form.hidden = original.hidden;
   });
+  // Position the native dice tray relative to the mobile chat composer.
   const placeDiceTray = () => {
     if (disposed) return;
     const tray = content.querySelector?.(".dice-tray") ?? form.querySelector?.(".dice-tray");
@@ -53,19 +54,23 @@ export function mountChatComposerDock({ form, input, host, document, scope, getS
   scope.own(() => observer?.disconnect?.());
   const log = host.querySelector?.(".chat-scroll");
   const tabBar = host.querySelector?.(".damage-log-nav");
+  // Capture the composer’s current scroll anchor before resizing its dock.
   const scrollAnchor = () => {
     if (!log) return null;
     const distance = log.scrollHeight - log.clientHeight - log.scrollTop;
     return { nearBottom: distance <= 32, top: log.scrollTop };
   };
+  // Restore the saved scroll position after the composer layout changes.
   const restoreScroll = (anchor) => {
     if (!anchor || !log) return;
     log.scrollTop = anchor.nearBottom ? Math.max(0, log.scrollHeight - log.clientHeight) : anchor.top;
   };
+  // Build the localized controls used by the chat composer dock.
   const labels = () => ({
     collapse: localize("VEMOBILE.Chat.ComposerCollapse", "Hide message box"),
     expand: localize("VEMOBILE.Chat.ComposerExpand", "Show message box")
   });
+  // Reconcile the composer dock, tray position, and listeners with current chat DOM.
   const refresh = (anchor = scrollAnchor()) => {
     if (disposed) return;
     const damage = Boolean(host.querySelector?.('.damage-log-nav [data-tab="damage-log"].active'));
@@ -85,9 +90,11 @@ export function mountChatComposerDock({ form, input, host, document, scope, getS
     else form.style.height = "";
     restoreScroll(anchor);
   };
+  // Persist the selected dock preference for the current user.
   const persist = () => {
     try { getStorage()?.setItem?.(key, JSON.stringify({ collapsed })); } catch {}
   };
+  // Resolve a dock label through Foundry localization with a readable fallback.
   const localize = (key, fallback) => {
     const value = globalThis.game?.i18n?.localize?.(key);
     return !value || value === key ? fallback : value;
@@ -106,6 +113,7 @@ export function mountChatComposerDock({ form, input, host, document, scope, getS
   return Object.freeze({ get collapsed() { return collapsed; }, refresh });
 }
 
+// Read and normalize the saved dock position and visibility.
 export function readDockState(storage, key) {
   try {
     const value = JSON.parse(storage?.getItem?.(key) ?? "null");

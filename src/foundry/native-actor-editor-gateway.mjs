@@ -9,6 +9,7 @@ export function createActorEditorGateway({ getGame = () => globalThis.game, isAc
   const sessions = new Map();
   const pending = new Set();
   const owners = new Set();
+  // Resolve the exact current Actor and require permission before opening its native editor.
   const requireActor = (sourceUuid, expected, owner, original = null) => {
     const game = getGame();
     if (!owner || owner.disposed || !isActive() || !game?.ready || !game.user
@@ -25,6 +26,7 @@ export function createActorEditorGateway({ getGame = () => globalThis.game, isAc
   return Object.freeze({
     ownsApplication: application => sessions.has(application),
     closeAll: () => { for (const owner of [...owners]) owner.dispose(); },
+    // Open the native Actor editor only while the exact source and owning mobile session remain valid.
     async open({ actorSourceUuid: sourceUuid }, expected = {}, owner) {
       const actor = requireActor(sourceUuid, expected, owner);
       if (pending.has(sourceUuid) || [...sessions.values()].some(session => session.sourceUuid === sourceUuid)) {
@@ -36,6 +38,7 @@ export function createActorEditorGateway({ getGame = () => globalThis.game, isAc
       scope.own(() => owners.delete(scope));
       let application = null;
       let closed = false;
+      // Close the admitted native editor and release its temporary mobile presentation claim.
       const close = () => {
         if (closed) return;
         closed = true;
@@ -55,6 +58,7 @@ export function createActorEditorGateway({ getGame = () => globalThis.game, isAc
           sessions.delete(application);
           scope.dispose();
         });
+        // Recheck Actor identity, user authority, and editor lifetime before continuing.
         const revalidate = () => {
           try { requireActor(sourceUuid, expected, scope, actor); } catch { scope.dispose(); }
         };

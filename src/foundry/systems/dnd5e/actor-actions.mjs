@@ -38,6 +38,7 @@ const handlers = Object.freeze({
   [ACTOR_COMMANDS.USE_ITEM]: (actor, payload) => useItem(actor, payload.itemId, payload.activityId)
 });
 
+// Derive supported command capabilities from current ownership, native APIs, and writable fields.
 function capabilitiesForActor(actor, user) {
   if (!canOwn(actor, user)) return emptyActorCapabilities();
   const abilities = keysOf(actor.system?.abilities);
@@ -72,6 +73,7 @@ function capabilitiesForActor(actor, user) {
   });
 }
 
+// Re-resolve the exact owned Item and any requested activity before publishing its available actions.
 function readItemMenu(actor, payload, user) {
   const item = resolveOwnedEmbeddedItem(actor, payload.itemId);
   if (payload.activityId && !collectionValues(item.system?.activities).some(activity => String(activity.id) === String(payload.activityId))) {
@@ -80,6 +82,7 @@ function readItemMenu(actor, payload, user) {
   return Object.freeze({ item: createItemMenuRecord(actor, item, user, payload), canUse: typeof item.use === "function" });
 }
 
+// Limit published command responses to the serializable fields supported by each command.
 function resultFields(name, output) {
   const response = {};
   if (name === ACTOR_COMMANDS.ADJUST_HIT_DICE && output) response.hitDice = output;
@@ -99,6 +102,7 @@ function resultFields(name, output) {
 }
 
 
+// Keep Group and Vehicle actions within their explicitly supported command sets.
 function assertActorCommand(actor, name) {
   if ((actor.type === "group" && !COLLECTIVE_ITEM_COMMANDS.has(name))
     || (actor.type === "vehicle" && !VEHICLE_COMMANDS.has(name))) {
@@ -107,11 +111,13 @@ function assertActorCommand(actor, name) {
 }
 
 
+/** Native D&D5e Actor commands and capability checks used by the command gateway. */
 export const dnd5eActorActions = Object.freeze({
   handlers, capabilitiesForActor, readItemMenu, resultFields, assertActorCommand,
   fingerprint: commandFingerprint, resolveItem
 });
 
+// Check current HP and death-save counters before allowing the native death-save action.
 function canRollDeathSave(actor) {
   const attributes = actor?.system?.attributes ?? {};
   const hp = Number(attributes.hp?.value);
@@ -123,6 +129,7 @@ function canRollDeathSave(actor) {
     && failure < 3;
 }
 
+// Toggle character Inspiration only when its native boolean field still matches the requested action.
 async function setInspiration(actor, payload) {
   if (actor.type !== "character" || typeof actor.update !== "function" || typeof actor.system?.attributes?.inspiration !== "boolean") {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.HeroicInspirationIsNotAvailableForThisActor", "Heroic Inspiration is not available for this actor."));
@@ -135,6 +142,7 @@ async function setInspiration(actor, payload) {
   return Object.freeze({ active: intended });
 }
 
+// Route a validated biography edit to its supported characteristics, story, or text section.
 async function updateBiographySection(actor, payload) {
   if (!["character", "npc"].includes(actor.type) || typeof actor.update !== "function" || !actor.system?.details) {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ThisActorSBiographyCannotBeEdited", "This actor's biography cannot be edited."));
@@ -154,6 +162,7 @@ async function updateBiographySection(actor, payload) {
   return Object.freeze({ section, changed });
 }
 
+// Update the displayed identity fields only after rechecking every original value for stale edits.
 async function updateBiographyCharacteristics(actor, payload) {
   if (actor.type !== "character") throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.CharacteristicsAreOnlyAvailableForPlayerCharacters", "Characteristics are only available for player characters."));
   const values = exactBiographyFields(payload?.values, "values");
@@ -170,6 +179,7 @@ async function updateBiographyCharacteristics(actor, payload) {
   return Object.freeze({ section: "characteristics", changed: Object.freeze(Object.keys(updates).map((path) => path.split(".").at(-1))) });
 }
 
+// Write the currently displayed NPC or character biography field after checking its original text.
 async function updateBiographyStory(actor, payload) {
   const field = String(payload?.biographyField ?? "");
   if (!BIOGRAPHY_STORY_FIELDS.has(field) || (actor.type !== "npc" && field !== "value")) {
@@ -188,6 +198,7 @@ async function updateBiographyStory(actor, payload) {
   return Object.freeze({ section: "biography", field, changed });
 }
 
+// Require exactly the editor fields allowed by this command so hidden keys cannot broaden the update.
 function exactBiographyFields(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.MustContainTheDisplayedCharacteristics", "{label} must contain the displayed characteristics.", { label: (label) }));
   const keys = Object.keys(value);
@@ -197,6 +208,7 @@ function exactBiographyFields(value, label) {
   return Object.freeze(Object.fromEntries(BIOGRAPHY_CHARACTERISTICS.map((field) => [field, biographyText(value[field], field, 200)])));
 }
 
+// Normalize and bound biography text before comparing or writing it.
 function biographyText(value, label, maximum, trim = true) {
   if (typeof value !== "string") throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.MustBeText", "{label} must be text.", { label: (label) }));
   const normalized = value.replace(/\r\n?/gu, "\n");
@@ -205,6 +217,7 @@ function biographyText(value, label, maximum, trim = true) {
   return result;
 }
 
+// Toggle a configured D&D5e condition through the native Actor status API.
 async function toggleCondition(actor, payload) {
   if (typeof actor.toggleStatusEffect !== "function") {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ConditionsAreNotAvailableForThisActor", "Conditions are not available for this actor."));
@@ -220,6 +233,7 @@ async function toggleCondition(actor, payload) {
   return Object.freeze({ conditionId, active });
 }
 
+// Apply an exhaustion level within the active D&D5e condition definition and current Actor state.
 async function setExhaustionLevel(actor, payload) {
   const maximum = globalThis.CONFIG?.DND5E?.conditionTypes?.exhaustion?.levels;
   const current = actor.system?.attributes?.exhaustion;
@@ -238,6 +252,7 @@ async function setExhaustionLevel(actor, payload) {
   return Object.freeze({ level });
 }
 
+// Recheck death-save eligibility and invoke the Actor’s native death-save method.
 async function rollDeathSave(actor) {
   if (!canRollDeathSave(actor)) {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ADeathSavingThrowIsNotCurrentlyAvailable", "A death saving throw is not currently available."));
@@ -245,6 +260,7 @@ async function rollDeathSave(actor) {
   return actor.rollDeathSave({ legacy: false });
 }
 
+// Return an immutable all-disabled capability record when authority is unavailable.
 function emptyActorCapabilities() {
   return Object.freeze({
     rollAbility: Object.freeze([]),
@@ -269,11 +285,13 @@ function emptyActorCapabilities() {
   });
 }
 
+// Collect validated system keys as an immutable capability list.
 function keysOf(record) {
   if (!record || typeof record !== "object") return Object.freeze([]);
   return Object.freeze(Object.keys(record).filter(validKey).sort());
 }
 
+// Combine configured D&D5e tools with tool entries already present on the Actor.
 function availableTools(actor) {
   const tools = { ...(actor.system?.tools ?? {}) };
   for (const key of collectionValues(actor.system?.traits?.toolProf?.value)) {
@@ -282,6 +300,7 @@ function availableTools(actor) {
   return tools;
 }
 
+// List only spell-slot keys that exist on an Actor with an update API.
 function editableSpellSlotKeys(actor) {
   if (typeof actor?.update !== "function") return Object.freeze([]);
   return Object.freeze(Object.entries(actor.system?.spells ?? {})
@@ -290,6 +309,7 @@ function editableSpellSlotKeys(actor) {
     .sort());
 }
 
+// Return valid keys for the tools this Actor can currently roll.
 function toolKeys(actor) {
   const tools = availableTools(actor);
   return Object.freeze(Object.keys(tools)
@@ -298,6 +318,7 @@ function toolKeys(actor) {
     .sort());
 }
 
+// Validate a requested ability, skill, or tool against its live system record.
 function commandKey(value, available, field) {
   const key = String(value ?? "").trim().toLowerCase();
   if (!validKey(key) || !Object.hasOwn(available ?? {}, key)) {
@@ -306,16 +327,19 @@ function commandKey(value, available, field) {
   return key;
 }
 
+// Restrict system identifiers to a bounded key alphabet.
 function validKey(value) {
   return /^[a-z0-9_-]{1,32}$/u.test(value);
 }
 
+// Validate a requested spell-slot identifier before using it in a system path.
 function spellSlotKey(value) {
   const key = String(value ?? "").trim();
   if (!/^spell[1-9]$/u.test(key)) throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.ChooseADisplayedLevelSpellSlotResource", "Choose a displayed level spell-slot resource."));
   return key;
 }
 
+// Build duplicate-protection keys from the target and intent fields of each command.
 function commandFingerprint(name, actorId, payload) {
   let option = payload.ability;
   if (name === ACTOR_COMMANDS.USE_ITEM || name === ACTOR_COMMANDS.OPEN_ITEM_SHEET) option = payload.itemId;
@@ -338,6 +362,7 @@ function commandFingerprint(name, actorId, payload) {
   return `${name}:${actorId}:${String(option ?? "")}`;
 }
 
+// Expose IDs only for currently embedded Items with a supported use action.
 function usableItemIds(actor) {
   return Object.freeze(collectionValues(actor.items)
     .filter((item) => typeof item?.use === "function")
@@ -345,6 +370,7 @@ function usableItemIds(actor) {
     .filter(Boolean));
 }
 
+// Read arrays and Foundry collections into a list while safely handling malformed adapters.
 function collectionValues(collection) {
   if (!collection) return [];
   if (Array.isArray(collection.contents)) return collection.contents;
@@ -355,14 +381,18 @@ function collectionValues(collection) {
   }
 }
 
+// Detect the ability-check API provided by this D&D5e Actor.
 function supportsAbilityCheck(actor) {
   return typeof actor.rollAbilityCheck === "function" || typeof actor.rollAbilityTest === "function";
 }
 
+// Detect the saving-throw API provided by this D&D5e Actor.
 function supportsAbilitySave(actor) {
   return typeof actor.rollSavingThrow === "function" || typeof actor.rollAbilitySave === "function";
 }
 
+// Resolve the requested ability and dispatch through the native check or save pipeline.
+// Resolve an ability key and dispatch through the Actor’s native ability-check or save API.
 async function rollAbility(actor, requestedAbility, save) {
   const ability = commandKey(requestedAbility, actor.system?.abilities, "ability");
   if (save) {
@@ -375,6 +405,8 @@ async function rollAbility(actor, requestedAbility, save) {
   throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ThisActorCannotPerformThatRoll", "This actor cannot perform that roll."));
 }
 
+// Validate the skill identifier and invoke the Actor’s native skill roll.
+// Resolve a current skill key and use D&D5e’s native skill-roll pipeline.
 async function rollSkill(actor, requestedSkill) {
   const skill = commandKey(requestedSkill, actor.system?.skills, "skill");
   if (typeof actor.rollSkill !== "function") {
@@ -383,6 +415,8 @@ async function rollSkill(actor, requestedSkill) {
   return actor.rollSkill({ skill });
 }
 
+// Validate the configured tool and invoke D&D5e’s native tool-check method.
+// Resolve a configured tool key and use the Actor’s native tool-check API.
 async function rollTool(actor, requestedTool) {
   if (typeof actor.rollToolCheck !== "function") {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ThisActorCannotRollTools", "This actor cannot roll tools."));
@@ -391,6 +425,7 @@ async function rollTool(actor, requestedTool) {
   return actor.rollToolCheck({ tool });
 }
 
+// Request initiative through the Actor’s native roll workflow.
 function rollInitiative(actor) {
   if (typeof actor.rollInitiative !== "function") {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ThisActorCannotRollInitiative", "This actor cannot roll initiative."));
@@ -398,6 +433,7 @@ function rollInitiative(actor) {
   return actor.rollInitiative();
 }
 
+// Apply one explicit HP or temporary-HP operation after validating current values.
 async function editHitPoints(actor, payload) {
   const operation = String(payload?.operation ?? "");
   const hp = actor.system?.attributes?.hp;
@@ -430,6 +466,7 @@ async function editHitPoints(actor, payload) {
   });
 }
 
+// Adjust the character’s XP through its supported system field with bounded input.
 async function addExperience(actor, payload) {
   const xp = actor.system?.details?.xp;
   if (actor.type !== "character" || typeof actor.update !== "function" || !xp) {
@@ -449,6 +486,7 @@ async function addExperience(actor, payload) {
   return Object.freeze({ previous: current, added: amount, value });
 }
 
+// Validate and update only the supported D&D5e coin denominations.
 async function updateCurrency(actor, payload) {
   if (typeof actor.update !== "function" || !actor.system?.currency) {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ThisActorSCurrencyCannotBeEdited", "This actor's currency cannot be edited."));
@@ -481,6 +519,7 @@ async function updateCurrency(actor, payload) {
   });
 }
 
+// Recheck the current slot and maximum before updating its value.
 async function setSpellSlotValue(actor, payload) {
   if (typeof actor.update !== "function") {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ThisActorSSpellSlotsCannotBeEdited", "This actor's spell slots cannot be edited."));
@@ -497,6 +536,7 @@ async function setSpellSlotValue(actor, payload) {
   return Object.freeze({ slotKey, value, max: maximum, changed: current !== value });
 }
 
+// Set equipped state on the exact owned embedded Item when the field is supported.
 async function setItemEquipped(actor, payload) {
   const item = mutableEmbeddedItem(actor, payload?.itemId);
   const intended = requiredBoolean(payload?.equipped, "equipped");
@@ -510,6 +550,7 @@ async function setItemEquipped(actor, payload) {
   return Object.freeze({ itemId: String(item.id), equipped: intended });
 }
 
+// Set attunement state on the exact owned embedded Item when supported.
 async function setItemAttuned(actor, payload) {
   const item = mutableEmbeddedItem(actor, payload?.itemId);
   const intended = requiredBoolean(payload?.attuned, "attuned");
@@ -523,6 +564,7 @@ async function setItemAttuned(actor, payload) {
   return Object.freeze({ itemId: String(item.id), attuned: intended });
 }
 
+// Update favourites for the owned Item while retaining other entries and relative UUIDs.
 async function setItemFavorite(actor, payload) {
   const item = resolveOwnedEmbeddedItem(actor, payload?.itemId);
   const intended = requiredBoolean(payload?.favorite, "favorite");
@@ -555,6 +597,7 @@ async function setItemFavorite(actor, payload) {
   return Object.freeze({ itemId: String(item.id), favorite: intended, favouriteIds: Object.freeze(intended ? [relativeUuid] : currentIds) });
 }
 
+// Normalize saved favourite identifiers into a stable list.
 function favouriteIds(value) {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 64) throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.FavouriteIdsMustBeABoundedList", "favouriteIds must be a bounded list."));
@@ -563,6 +606,7 @@ function favouriteIds(value) {
   return ids;
 }
 
+// Change preparation only when the current spell and method support the requested state.
 async function setSpellPrepared(actor, payload) {
   const item = resolveItem(actor, payload?.itemId);
   const intended = payload?.prepared;
@@ -588,6 +632,7 @@ async function setSpellPrepared(actor, payload) {
   return Object.freeze({ itemId: String(item.id), prepared: intended });
 }
 
+// Open the native sheet for the exact Item still embedded in this Actor.
 function openItemSheet(actor, payload) {
   const item = resolveOwnedEmbeddedItem(actor, payload?.itemId);
   if (typeof item.sheet?.render !== "function") {
@@ -598,6 +643,7 @@ function openItemSheet(actor, payload) {
   return Object.freeze({ itemId: String(item.id), opened: true });
 }
 
+// Resolve an owned Item and require its update method before mutation.
 function mutableEmbeddedItem(actor, itemId) {
   const item = resolveOwnedEmbeddedItem(actor, itemId);
   if (typeof item.update !== "function") {
@@ -606,6 +652,7 @@ function mutableEmbeddedItem(actor, itemId) {
   return item;
 }
 
+// Resolve the supplied Item ID within this Actor and verify current embedded ownership.
 function resolveOwnedEmbeddedItem(actor, itemId) {
   const item = resolveItem(actor, itemId);
   if (item.parent !== actor || item.isOwner === false) {
@@ -614,17 +661,20 @@ function resolveOwnedEmbeddedItem(actor, itemId) {
   return item;
 }
 
+// Require explicit boolean intent for state changes rather than inferring from truthiness.
 function requiredBoolean(value, field) {
   if (typeof value !== "boolean") throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.MustBeExplicitlyTrueOrFalse", "{field} must be explicitly true or false.", { field: (field) }));
   return value;
 }
 
+// Check class hit-die data and native rest support before enabling adjustments.
 function supportsHitDiceEditing(actor) {
   const hasClasses = collectionValues(actor.items).some(item => item?.type === "class" && Number(item.system?.hd?.max ?? item.system?.levels) > 0);
   if (hasClasses) return typeof actor.updateEmbeddedDocuments === "function";
   return Number(actor.system?.attributes?.hd?.max) > 0 && typeof actor.update === "function";
 }
 
+// Spend or restore a class hit die after rechecking current class counts and HP.
 async function adjustHitDice(actor, payload) {
   const denomination = String(payload?.denomination ?? "").trim().toLowerCase();
   const direction = String(payload?.direction ?? "");
@@ -654,20 +704,21 @@ async function adjustHitDice(actor, payload) {
     return Object.freeze({ denomination, value, max });
   }
 
-  const hd = actor.system?.attributes?.hd;
-  const rawDenomination = String(hd?.denomination ?? "");
+  const hitDice = actor.system?.attributes?.hd;
+  const rawDenomination = String(hitDice?.denomination ?? "");
   const actorDenomination = rawDenomination.startsWith("d") ? rawDenomination.toLowerCase() : `d${Number(rawDenomination) || 0}`;
-  if (!hd || actorDenomination !== denomination || typeof actor.update !== "function") {
+  if (!hitDice || actorDenomination !== denomination || typeof actor.update !== "function") {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ThatHitDiePoolIsNoLongerAvailable", "That hit-die pool is no longer available."));
   }
-  const max = Math.max(0, Number(hd.max) || 0);
-  const current = Math.max(0, Math.min(max, Number(hd.value) || 0));
+  const max = Math.max(0, Number(hitDice.max) || 0);
+  const current = Math.max(0, Math.min(max, Number(hitDice.value) || 0));
   const value = current + (direction === "increase" ? 1 : -1);
   if (value < 0 || value > max) throw new CommandError("INVALID_INPUT", value > max ? localizeFoundry("VEMOBILE.Character.CommandGateway.ThoseHitDiceAreAlreadyFull", "Those hit dice are already full.") : localizeFoundry("VEMOBILE.Character.CommandGateway.NoMoreOfThoseHitDiceAreAvailable", "No more of those hit dice are available."));
   await actor.update({ "system.attributes.hd.spent": max - value });
   return Object.freeze({ denomination, value, max });
 }
 
+// Dispatch an explicit short or long rest through the native Actor workflow.
 function takeRest(actor, payload) {
   const type = String(payload?.type ?? "");
   if (type === "short" && typeof actor.shortRest === "function") return actor.shortRest();
@@ -676,6 +727,7 @@ function takeRest(actor, payload) {
   throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ThisActorCannotTakeARest", "This actor cannot take this rest: {type}.", { type: localizeFoundry(type === "short" ? "VEMOBILE.Character.Copy.ShortRest" : "VEMOBILE.Character.Copy.LongRest", type === "short" ? "Short Rest" : "Long Rest") }));
 }
 
+// Use the exact current embedded Item through D&D5e’s native action API.
 function useItem(actor, requestedItemId, requestedActivityId) {
   const item = resolveItem(actor, requestedItemId);
   if (requestedActivityId !== undefined) {
@@ -693,6 +745,7 @@ function useItem(actor, requestedItemId, requestedActivityId) {
   return item.use();
 }
 
+// Resolve a requested Item identifier against the Actor’s current embedded collection.
 function resolveItem(actor, requestedItemId) {
   const itemId = identifier(requestedItemId, "itemId");
   const item = actor.items?.get?.(itemId)
@@ -701,6 +754,7 @@ function resolveItem(actor, requestedItemId) {
   return item;
 }
 
+// Parse finite integer input within the command’s requested bounds.
 function wholeNumber(value, field, minimum, maximum) {
   const numeric = Number(value);
   if (!Number.isSafeInteger(numeric) || numeric < minimum || numeric > maximum) {
@@ -709,6 +763,7 @@ function wholeNumber(value, field, minimum, maximum) {
   return numeric;
 }
 
+// Parse finite integer input that cannot reduce a counter below zero.
 function nonNegativeWholeNumber(value, field) {
   const numeric = Number(value);
   if (!Number.isSafeInteger(numeric) || numeric < 0) {

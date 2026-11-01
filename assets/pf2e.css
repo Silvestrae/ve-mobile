@@ -1,6 +1,6 @@
 @import url("./pf2e-list-refinements.css");
 
-/* PF2e visual composition. Scoped to its retained sheet and the active Character navigation. */
+/* PF2e visual composition. Scoped to its retained sheet and supporting surfaces. */
 @layer ve-mobile-style-authority {
   .ve-mobile-app[data-ve-style-authority][data-form-factor][data-theme][data-character-theme="custom"] :is(.ve-pf2e-character-screen,.ve-pf2e-conditions-layer,.ve-pf2e-header-editor-layer,.ve-pf2e-document-layer) {
     --ve-bg: var(--ve-custom-bg) !important;
@@ -387,11 +387,6 @@
   & .ve-pf2e-actor-choice img { width: 40px !important; height: 40px !important; object-fit: cover !important; }
 }
 .ve-mobile-app[data-ve-style-authority][data-form-factor][data-theme="light"] :is(.ve-pf2e-character-screen,.ve-pf2e-conditions-layer,.ve-pf2e-header-editor-layer,.ve-pf2e-document-layer) { --ve-bg: #eee8dc !important; --ve-surface: #faf5e9 !important; --ve-surface-up: #e5ddcb !important; --ve-text: #282b23 !important; --ve-subtle: #565b48 !important; --ve-border: color-mix(in srgb,var(--ve-character-accent) 28%,#aaa38a) !important; }
-.ve-mobile-app[data-route="characters"]:has(.ve-pf2e-character-screen) .ve-bottom-nav { background: #1c1c17 !important; border-top: 1px solid color-mix(in srgb,var(--ve-red-bright) 65%,#49473a) !important; padding: 4px 5px calc(4px + var(--ve-safe-bottom)) !important; min-height: calc(60px + var(--ve-safe-bottom)) !important; }
-.ve-mobile-app[data-route="characters"]:has(.ve-pf2e-character-screen) .ve-main-nav-item { color: #d9cba7 !important; border-radius: 7px !important; }
-.ve-mobile-app[data-route="characters"]:has(.ve-pf2e-character-screen) .ve-main-nav-item.is-active { border: 1px solid var(--ve-red-bright) !important; background: linear-gradient(110deg,color-mix(in srgb,var(--ve-red-bright) 28%,#181915),#20251a) !important; color: #fff4d8 !important; box-shadow: inset 0 0 8px color-mix(in srgb,var(--ve-red-bright) 24%,transparent) !important; }
-.ve-mobile-app[data-route="characters"]:has(.ve-pf2e-character-screen) .ve-bottom-nav .ve-main-nav-item > span { font: 400 11px/1.1 "Signika",sans-serif !important; }
-.ve-mobile-app[data-route="characters"]:has(.ve-pf2e-character-screen) .ve-bottom-nav .ve-main-nav-item > :is(i,svg) { font-size: 20px !important; width: 22px !important; height: 22px !important; }
 
 }
 

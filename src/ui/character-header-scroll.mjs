@@ -21,8 +21,11 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
   let xp = null;
   let spacer = null, ownedSpacer = null, contentObserver = null, observedContent = null;
   let expansionAllowed = false, gesture = null, lastWheelAt = -Infinity, touchY = null;
+  // Rebase after programmatic scroll restoration so it is not mistaken for a new collapse gesture.
   const update = () => { baseline = scroller.scrollTop; expansionAllowed = false; gesture = null; };
+  // Allow expansion only when the current user gesture started at the top boundary.
   const beginGesture = kind => { gesture = kind; expansionAllowed = scroller.scrollTop <= 1; };
+  // Spend an upward boundary gesture on expanding the header before trying to scroll above the pane.
   const expandAtBoundary = delta => {
     if (reducedMotion.matches || !expansionAllowed || scroller.scrollTop > 1 || delta >= 0 || offset <= 0) return false;
     offset = Math.max(0, offset + delta);
@@ -30,6 +33,7 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     baseline = scroller.scrollTop;
     return true;
   };
+  // Publish collapse progress to CSS and disable the mostly-hidden XP control without a layout read.
   const paint = () => {
     if (scope.disposed || !heading.isConnected) return;
     heading.style.setProperty("--ve-header-progress", String(range ? offset / range : 0));
@@ -37,6 +41,7 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     // Let the shared heading follow this intrinsic geometry without a layout read.
     if (xp) xp.inert = offset > range * 0.05;
   };
+  // Add only enough tail space to reach the compact header, preserving the current scroll position.
   const ensureFiller = () => {
     if (scope.disposed || !scroller.isConnected) return;
     const previousScrollTop = scroller.scrollTop;
@@ -69,6 +74,7 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     scroller.scrollTop = Math.min(previousScrollTop, maximum);
     baseline = scroller.scrollTop;
   };
+  // Follow the current pane content rather than retaining a ResizeObserver on a replaced child.
   const observeContent = () => {
     const content = spacer?.previousElementSibling ?? scroller.firstElementChild;
     if (content === observedContent) return;
@@ -76,6 +82,7 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     observedContent = content;
     if (content) contentObserver?.observe(content);
   };
+  // Measure expanded/compact endpoints on geometry changes, then preserve the user's proportional collapse progress.
   const measure = () => {
     if (scope.disposed || !heading.isConnected) return;
     const band = heading.querySelector(".ve-character-identity-band");
@@ -140,6 +147,7 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
     baseline = next;
     paint();
   }, { passive: true });
+  // Leave nested scrollable controls alone; only the shared character pane may drive the header.
   const ownsGesture = event => {
     for (const element of event.composedPath()) {
       if (element === scroller) return true;
@@ -238,6 +246,7 @@ export function bindCharacterHeaderScroll({ scroller, screen, scope }) {
   return {
     update,
     prepareScrollRestore: update,
+    // Rebase or remeasure after the pane's content/geometry changes rather than treating restoration as a user gesture.
     refresh() {
       if (selector === heading.firstElementChild && tabs === heading.querySelector(".ve-sheet-tabs") && revision === heading.dataset.headerRevision) return;
       revision = heading.dataset.headerRevision;

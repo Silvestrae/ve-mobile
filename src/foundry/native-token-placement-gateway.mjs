@@ -15,6 +15,7 @@ export function createNativeTokenPlacementGateway({
   let sequence = 0;
   const stagePatches = new Set();
 
+  // Restore the canvas stage and context-menu state captured before native placement.
   const restoreStage = () => {
     for (const patch of stagePatches) {
       const { stage, original, observed, hadOwn } = patch;
@@ -27,6 +28,7 @@ export function createNativeTokenPlacementGateway({
     }
   };
 
+  // Start the native token-placement workflow under a task scope, forwarding accepted placements and releasing every interception on completion.
   const enable = (scope, onRequest) => {
     if (enabled) return true;
     const prototype = getPlacementClass()?.prototype;
@@ -47,6 +49,7 @@ export function createNativeTokenPlacementGateway({
       const stageOn = stage.on;
       if (typeof stageOn !== "function") return;
       const hadOwn = Object.hasOwn(stage, "on");
+      // Observe each native placement result while checking that its Scene, user, and exact token target remain current.
       function observed(event, listener, ...rest) {
         const result = stageOn.call(this, event, listener, ...rest);
         if (!enabled || active || this !== stage || event !== "mousedown") return result;
@@ -82,6 +85,7 @@ export function createNativeTokenPlacementGateway({
     attachStage();
     scope?.hook?.("canvasReady", attachStage);
 
+    // Invoke Foundry’s native token placement operation for the resolved Actor and destination point.
     async function place(...args) {
       if (!enabled) return original.apply(this, args);
       if (active) throw new Error(localizeFoundry("VEMOBILE.Interface.NativeTokenPlacementGateway.ANativeTokenPlacementIsAlreadyInProgress", "A native token placement is already in progress."));
@@ -133,11 +137,15 @@ export function createCrosshairPlacementRequest({ id, preview, canvas,
   let positioned = false;
   let finished = false;
   let chosenPosition = null;
+  // Publish preview changes to the owning controller.
   let onChange = () => {};
+  // Record native completion or cancellation and release the corresponding placement owner.
   let onFinish = () => {};
+  // Publish the current placement snapshot to the session owner.
   const publish = () => onChange(Object.freeze({ id, count: 1,
     step: finished ? 1 : 0,
     phase: cancelled ? "cancelling" : positioned ? "adjusting" : "preparing" }));
+  // Settle the placement exactly once and run its owned cleanup callbacks.
   const finish = () => {
     if (finished) return;
     finished = true;
@@ -145,6 +153,7 @@ export function createCrosshairPlacementRequest({ id, preview, canvas,
     try { onFinish(); }
     finally { onSettle(); }
   };
+  // Confirm that the captured canvas and destination Scene are still active.
   const live = () => !finished && preview.inFlight && !preview._destroyed;
 
   return Object.freeze({
@@ -154,6 +163,7 @@ export function createCrosshairPlacementRequest({ id, preview, canvas,
     get phase() { return cancelled ? "cancelling" : positioned ? "adjusting" : "preparing"; },
     onChange(callback) { onChange = typeof callback === "function" ? callback : () => {}; publish(); },
     onFinish(callback) { onFinish = typeof callback === "function" ? callback : () => {}; },
+    // Move the current token preview to the mapped Scene point without placing it yet.
     position(clientPoint) {
       if (!live() || cancelled) return false;
       const world = getCanvas()?.canvasCoordinatesFromClient?.(clientPoint);
@@ -180,6 +190,7 @@ export function createCrosshairPlacementRequest({ id, preview, canvas,
       publish();
       return true;
     },
+    // Commit the current preview through the native placement path and release its temporary state.
     confirm() {
       if (!live() || cancelled || !positioned || !chosenPosition) return false;
       try {
@@ -198,6 +209,7 @@ export function createCrosshairPlacementRequest({ id, preview, canvas,
       if (!preview.inFlight) finish();
       return finished;
     },
+    // Cancel the current preview and restore the canvas interaction state captured at setup.
     cancel() {
       if (finished || cancelled) return false;
       cancelled = true;
@@ -218,6 +230,8 @@ export function createCrosshairPlacementRequest({ id, preview, canvas,
   });
 }
 
+/** Observe one Foundry placement workflow so VE can show its stages and feed
+ * pointer coordinates back into native listeners without replacing creation. */
 export function createPlacementRequest({ id, placement, canvas, getCanvas = () => canvas,
   getRequestFrame = () => globalThis.requestAnimationFrame,
   getCancelFrame = () => globalThis.cancelAnimationFrame }) {
@@ -233,17 +247,22 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
   let disposed = false;
   let positioned = false;
   let frame = null;
+  // Forward native token changes to the controller while this placement remains active.
   let onChange = () => {};
+  // Finish the native placement observer and resolve its pending operation.
   let onFinish = () => {};
 
+  // Send the final native placement state after the underlying operation settles.
   const publish = () => onChange(Object.freeze({ id, step, count,
     phase: cancelled ? "cancelling" : confirm ? "adjusting" : "preparing" }));
+  // Create the native PIXI pointer event expected by the placement tool.
   const nativeEvent = (world = null) => ({
     data: { getLocalPosition: () => world },
     shiftKey: false,
     preventDefault() {},
     stopPropagation() {}
   });
+  // Skip the current native placement target without accepting a stale or invalid token.
   const skipCurrent = () => {
     if (!skip || !confirm) return false;
     const listener = skip;
@@ -254,6 +273,7 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
     void Promise.resolve(listener(nativeEvent())).catch(() => {});
     return true;
   };
+  // Attach observers to the native placement tool and track their cleanup in the owner scope.
   const observedOn = function(event, listener, ...rest) {
     const result = originalOn.call(this, event, listener, ...rest);
     if (this !== stage || disposed) return result;
@@ -271,6 +291,7 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
     return result;
   };
 
+  // Remove observers and restore the stage if this placement still owns those resources.
   const dispose = () => {
     if (disposed) return;
     disposed = true;
@@ -295,6 +316,7 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
       try { return await invoke(); }
       finally { dispose(); }
     },
+    // Reposition the active native token preview from the latest client pointer location.
     position(clientPoint) {
       if (disposed || cancelled || !move || !confirm) return false;
       const world = getCanvas()?.canvasCoordinatesFromClient?.(clientPoint);
@@ -306,6 +328,7 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
       frame = getRequestFrame()?.(() => { frame = null; }) ?? null;
       return true;
     },
+    // Confirm this native placement and advance to the next queued token when applicable.
     confirm() {
       if (disposed || cancelled || !positioned || !confirm) return false;
       const listener = confirm;
@@ -316,6 +339,7 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
       void Promise.resolve(listener(nativeEvent())).catch(() => {});
       return true;
     },
+    // Cancel this native placement and let the owning queue decide whether to continue.
     cancel() {
       if (disposed || cancelled) return false;
       cancelled = true;

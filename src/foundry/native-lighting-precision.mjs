@@ -9,6 +9,7 @@ const MIN_RANGE = 22;
 const FLOAT_PRECISION = /\bprecision\s+(lowp|mediump|highp)\s+float\s*;/u;
 const LIGHTING_KEYS = Object.freeze(["backgroundShader", "colorationShader", "illuminationShader"]);
 
+/** Decide whether supported native shaders need a highp prefix on this GPU. */
 export function decideNativeLightingPrecision(medium, high) {
   if (!medium || !high) return "unavailable";
   if (medium.precision >= MIN_PRECISION && medium.rangeMin >= MIN_RANGE && medium.rangeMax >= MIN_RANGE) return "unnecessary";
@@ -16,6 +17,8 @@ export function decideNativeLightingPrecision(medium, high) {
   return "active";
 }
 
+/** Add a fragment precision declaration without changing versioned GLSL or an
+ * existing highp declaration. */
 export function addNativeLightingHighp(source) {
   if (typeof source !== "string" || source.trimStart().startsWith("#version")) return source;
   const existing = source.match(FLOAT_PRECISION);
@@ -23,6 +26,7 @@ export function addNativeLightingHighp(source) {
   return `precision highp float;\n${existing ? source.replace(FLOAT_PRECISION, "") : source}`;
 }
 
+// Project the current native lighting precision configuration into a plain diagnostic record.
 function precisionRecord(format) {
   if (!format) return null;
   const { precision, rangeMin, rangeMax } = format;
@@ -30,25 +34,28 @@ function precisionRecord(format) {
   return Object.freeze({ precision, rangeMin, rangeMax });
 }
 
+// Collect recognized native vertex/fragment source pairs eligible for the scoped precision patch.
 function nativeLightingSources(config, shaders) {
   const base = [shaders?.AdaptiveBackgroundShader, shaders?.AdaptiveColorationShader, shaders?.AdaptiveIlluminationShader];
   const nativeClasses = new Set(Object.values(shaders ?? {}));
   const animations = Object.values(config?.Canvas?.lightAnimations ?? {});
   const classes = new Set([...base, ...animations.flatMap(animation => LIGHTING_KEYS.map(key => animation?.[key]))]);
   const pairs = new Map();
-  for (const cls of classes) {
-    if (!nativeClasses.has(cls) || typeof cls !== "function" || typeof cls.vertexShader !== "string" || typeof cls.fragmentShader !== "string") continue;
-    const vertex = cls.vertexShader;
-    const fragment = cls.fragmentShader;
+  for (const shaderClass of classes) {
+    if (!nativeClasses.has(shaderClass) || typeof shaderClass !== "function" || typeof shaderClass.vertexShader !== "string" || typeof shaderClass.fragmentShader !== "string") continue;
+    const vertex = shaderClass.vertexShader;
+    const fragment = shaderClass.fragmentShader;
     // These signatures describe Foundry's native adaptive light layers, not
     // arbitrary programs that happen to mention a light or a time uniform.
     if (!vertex.includes("attribute vec2 aVertexPosition;") || !vertex.includes("attribute float aDepthValue;")) continue;
     if (!fragment.includes("uniform float time;") || !fragment.includes("uniform sampler2D primaryTexture;") || !fragment.includes("varying vec2 vUvs;") || !fragment.includes("void main()")) continue;
-    pairs.set(vertex + fragment, Object.freeze({ vertex, fragment, type: cls.name || "native lighting" }));
+    pairs.set(vertex + fragment, Object.freeze({ vertex, fragment, type: shaderClass.name || "native lighting" }));
   }
   return pairs;
 }
 
+/** Patch only recognized Foundry 13.351/PIXI 7.4.3 lighting sources, and remove
+ * the Program factory wrapper with its owner scope. */
 export function createNativeLightingPrecisionCompatibility({
   getGame = () => globalThis.game,
   getPixi = () => globalThis.PIXI,
@@ -70,6 +77,8 @@ export function createNativeLightingPrecisionCompatibility({
   let pairs = new Map();
 
   const measure = () => {
+    // Query the active renderer's existing WebGL context; do not create a probe
+    // context that would compete with Foundry's Canvas.
     if (status === "unsupported") return false;
     const gl = getRenderer()?.gl;
     if (!gl?.getShaderPrecisionFormat) return false;
@@ -89,9 +98,12 @@ export function createNativeLightingPrecisionCompatibility({
     }
   };
 
+  // Capture the current precision inputs for a later comparison.
   const snapshot = () => Object.freeze({ status, reason, glVersion, medium, high, patchedPrograms, patchedTypes: [...patchedTypes].sort() });
 
   const install = scope => {
+    // Version and shader signatures are hard gates: unknown PIXI/Foundry paths
+    // remain untouched instead of receiving a guessed source rewrite.
     if (wrapper) return status;
     const game = getGame();
     const pixi = getPixi();

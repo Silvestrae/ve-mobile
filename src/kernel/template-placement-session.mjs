@@ -16,6 +16,7 @@ export function createTemplatePlacementController({
   let current = null;
   let generation = 0;
 
+  // Expose only the current placement's UI fields, leaving the live adapter inside this controller.
   const publish = (session, phase = session.phase) => {
     session.phase = phase;
     store.dispatch({
@@ -30,6 +31,7 @@ export function createTemplatePlacementController({
     });
   };
 
+  // End this exact placement owner and resume normal target publication.
   const clear = (session) => {
     if (current !== session) return;
     current = null;
@@ -39,6 +41,7 @@ export function createTemplatePlacementController({
     sessionGateway?.setTargetPublicationDeferred?.(false);
   };
 
+  // Restore the split layout and map anchor after the native placement has settled.
   const restorePresentation = async (session) => {
     if (!session.wasSplitScreen) return;
     const before = presentation.readSceneInteractionState();
@@ -49,6 +52,7 @@ export function createTemplatePlacementController({
     if (anchor && ready.viewport) sceneGateway.restoreViewportAnchor(anchor, ready.viewport);
   };
 
+  // Settle once, handle a sequential native preview, then restore presentation and release ownership even after failure.
   const end = async (session, kind, { nativeAlreadySettled = false } = {}) => {
     if (current !== session) return false;
     if (session.ending) return session.ending;
@@ -101,6 +105,7 @@ export function createTemplatePlacementController({
     return session.ending;
   };
 
+  // Admit one supported native preview and wait for its usable map presentation before accepting gesture input.
   const begin = async (adapter) => {
     if (!adapter?.supported) return false;
     if (current) {
@@ -155,6 +160,7 @@ export function createTemplatePlacementController({
     }
   };
 
+  // Mirror native completion/cancellation only while the same adapter still belongs to this session.
   const watchNativeSettlement = (session) => {
     const adapter = session.adapter;
     adapter.settle.then(
@@ -163,6 +169,7 @@ export function createTemplatePlacementController({
     );
   };
 
+  // Cancel a removed native preview so its mobile controls cannot remain orphaned.
   const watchPreviewRemoval = (session, adapter) => {
     adapter.watchRemoval?.(session.scope, () => {
       if (current === session && session.adapter === adapter && !session.ending) void end(session, "cancel");
@@ -192,6 +199,7 @@ export function createTemplatePlacementController({
 
   return Object.freeze({
     get active() { return Boolean(current); },
+    // Establish the native origin once before exposing rotation/adjustment controls.
     setInitialPosition(clientPoint) {
       const session = current;
       if (session?.phase !== "awaiting-initial-placement") return false;
@@ -211,6 +219,7 @@ export function createTemplatePlacementController({
       if (current?.phase !== "adjusting") return null;
       return current.adapter.bindGestures(surface, owner, onOverlay);
     },
+    // Cancel native placement and release focus immediately during runtime teardown.
     stop() {
       const session = current;
       if (!session) return;

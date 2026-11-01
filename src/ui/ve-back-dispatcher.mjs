@@ -11,6 +11,7 @@ export function createVeBackDispatcher({
   nativeApplications = null,
   getRoot = () => null
 }) {
+  // Choose one highest-priority dismiss/navigation action without executing it during inspection.
   const next = () => {
     const state = getState?.() ?? {};
     const guide = getRoot?.()?.querySelector?.(".ve-controls-guide:not([hidden])");
@@ -53,6 +54,7 @@ export function createVeBackDispatcher({
   };
   return Object.freeze({
     peek: () => next()[0],
+    // Execute only the single highest-priority logical Back action selected from current state.
     back() {
       const [name, action] = next();
       action?.();
@@ -61,6 +63,7 @@ export function createVeBackDispatcher({
   });
 }
 
+// Find the last visible dismissable DOM surface inside VE's current root.
 function topmostTransient(root, dialogsOnly = false) {
   if (!root?.querySelectorAll) return null;
   const selectors = dialogsOnly ? [".ve-mobile-dialog:not([hidden])"] : [
@@ -77,6 +80,7 @@ function topmostTransient(root, dialogsOnly = false) {
   return matches.at(-1) ?? null;
 }
 
+// Let native dialogs use their own close control; VE-owned surfaces receive the ve-close event.
 function closeTransient(element) {
   if (element?.classList?.contains?.("ve-mobile-dialog")) {
     const control = element.querySelector?.([
@@ -93,16 +97,19 @@ function closeTransient(element) {
   element?.dispatchEvent?.(closeEvent(element));
 }
 
+// Create the close event in the element's own document realm for browser fixtures and embedded surfaces.
 function closeEvent(element) {
   const EventClass = element?.ownerDocument?.defaultView?.Event ?? globalThis.Event;
   return typeof EventClass === "function" ? new EventClass("ve-close") : { type: "ve-close" };
 }
 
+// Append a non-empty route while keeping the navigation history bounded.
 export function pushRouteHistory(history = [], route, limit = ROUTE_HISTORY_LIMIT) {
   const next = [...history, String(route ?? "")].filter(Boolean);
   return Object.freeze(next.slice(-Math.max(1, Number(limit) || ROUTE_HISTORY_LIMIT)));
 }
 
+// Read the last route and return a new history array without modifying the old one.
 export function popRouteHistory(history = []) {
   if (!history.length) return Object.freeze({ route: "", history: Object.freeze([]) });
   return Object.freeze({ route: history.at(-1), history: Object.freeze(history.slice(0, -1)) });

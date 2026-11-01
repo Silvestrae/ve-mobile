@@ -1,5 +1,3 @@
-const PHONE_MAX_CSS_PIXELS = 720;
-
 /**
  * Resolve the user's preference and the page-lifetime device class separately.
  * Auto detection is intentionally sticky: browser chrome, orientation changes,
@@ -11,6 +9,7 @@ export function createActivationPolicyResolver({
 } = {}) {
   let resolvedAutoMode = null;
   return Object.freeze({
+    // Resolve the requested presentation mode with its confirmation and client-capability constraints.
     resolve(preferences = {}) {
       const window = getWindow();
       const navigator = getNavigator();
@@ -62,33 +61,33 @@ export function resolveOrientation({ window = globalThis.window, navigator = glo
 }
 
 export function evaluateActivation(preferences) {
+  // Stateless convenience for callers that do not need Auto's page-lifetime latch.
   return createActivationPolicyResolver().resolve(preferences);
 }
 
+/** Classify from stable platform evidence first; ambiguous touch/viewport-only
+ * signals deliberately fall back to Desktop so a laptop is not auto-activated. */
 export function classifyRuntimeMode({ window = globalThis.window, navigator = globalThis.navigator } = {}) {
-  const width = Math.max(1, window.visualViewport?.width ?? window.innerWidth);
-  const height = Math.max(1, window.visualViewport?.height ?? window.innerHeight);
-  const screenWidth = Number(window.screen?.width);
-  const screenHeight = Number(window.screen?.height);
-  const hasStableScreenSize = Number.isFinite(screenWidth) && screenWidth > 0
-    && Number.isFinite(screenHeight) && screenHeight > 0;
-  const deviceCompactDimension = hasStableScreenSize
-    ? Math.min(screenWidth, screenHeight)
-    : Math.min(width, height);
-  const coarse = Boolean(window.matchMedia?.("(pointer: coarse)")?.matches);
-  const touch = (navigator.maxTouchPoints ?? 0) > 0;
+  const touchPoints = Number(navigator.maxTouchPoints) || 0;
   const userAgent = String(navigator.userAgent ?? "");
-  const platform = String(navigator.userAgentData?.platform ?? navigator.platform ?? "");
+  const legacyPlatform = String(navigator.platform ?? "");
+  const hintPlatform = String(navigator.userAgentData?.platform ?? "");
   const reportsMobile = navigator.userAgentData?.mobile;
 
-  if (reportsMobile === true || /iPhone|iPod|Mobile.+Android|Android.+Mobile/iu.test(userAgent)) return "phone";
-  if (/iPad|Tablet|Silk|Kindle|PlayBook/iu.test(userAgent)) return "tablet";
-  if (/Android/iu.test(userAgent)) return /Mobile/iu.test(userAgent) ? "phone" : "tablet";
-  // iPadOS desktop-site mode identifies itself as Macintosh with touch.
-  if (/Mac/iu.test(platform || userAgent) && touch && (navigator.maxTouchPoints ?? 0) > 1) return "tablet";
-  // A positive desktop platform signal should not turn a touch-screen PC into a tablet.
-  if (/Win|Linux|Mac/iu.test(platform || userAgent)) return "desktop";
-  if (coarse || touch) return deviceCompactDimension <= PHONE_MAX_CSS_PIXELS ? "phone" : "tablet";
+  if (/iPhone|iPod|Mobile.+Android|Android.+Mobile/iu.test(userAgent)) return "phone";
+  if (/iPad/iu.test(userAgent + " " + legacyPlatform)) return "tablet";
+  if (/Android/iu.test(userAgent + " " + hintPlatform)) return /Mobile/iu.test(userAgent) ? "phone" : "tablet";
+  // Client hints identify real desktop platforms explicitly, including Chrome OS.
+  // Unknown hints must not mask a useful legacy platform or user-agent signal.
+  if (/^(?:Windows|macOS|Linux|Chrome OS|Chromium OS)$/iu.test(hintPlatform)) return "desktop";
+  if (reportsMobile === true) return "phone";
+  // iPadOS desktop-site mode has this legacy Mac identity, without desktop hints.
+  // Do not require a coarse primary pointer: an iPad may have a mouse attached.
+  if (legacyPlatform === "MacIntel" && /Macintosh/iu.test(userAgent) && touchPoints > 1) return "tablet";
+  if (/Win|Linux|Mac|CrOS|Chrome OS/iu.test(legacyPlatform + " " + userAgent)) return "desktop";
+  if (/Tablet|Silk|Kindle|PlayBook/iu.test(userAgent)) return "tablet";
+  // Touch and viewport size alone also describe PCs and privacy-reduced browsers.
+  // Ambiguous devices start in Desktop and can choose Phone/Tablet explicitly.
   return "desktop";
 }
 
@@ -105,10 +104,12 @@ export function createSessionActivationOverride() {
   });
 }
 
+// Normalize the saved activation mode to its supported values.
 function normalizedPreference(value) {
   return ["auto", "phone", "tablet", "desktop", "off"].includes(value) ? value : "auto";
 }
 
+// Resolve the selected theme from the current actor, user preference, and system profile.
 function resolveTheme(preference, window = globalThis.window) {
   if (preference === "light" || preference === "dark") return preference;
   return window.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "light" : "dark";

@@ -95,6 +95,7 @@ export function createFoundrySceneGateway({
   // Commands bypass it before/after every async boundary. Never mutate Scene
   // caches or documents, and preserve the native SceneManager override.
   const levelAccess = new Map();
+  // Read the Scene’s current PF2e Levels records and normalize them for the mobile chooser.
   const readAvailableLevels = (scene, fresh = false) => {
     const game = getGame();
     const prior = levelAccess.get(scene);
@@ -116,6 +117,7 @@ export function createFoundrySceneGateway({
       .filter(level => level?.id && scene.levels.get(level.id) === level);
   };
   return Object.freeze({
+    // Report the active Scene and whether Foundry's canvas is ready for interaction.
     snapshot() {
       const canvas = getCanvas();
       const scene = canvas?.scene ?? getGame()?.scenes?.current ?? null;
@@ -133,6 +135,7 @@ export function createFoundrySceneGateway({
       });
     },
 
+    // Build the permission-filtered Scene directory and disable level choices until the canvas is ready.
     navigationSnapshot() {
       const records = nativeSceneDirectorySnapshot(getGame(), riskForScene, risksForScenes, {
         readLevels: scene => nativeSceneLevelSnapshot(scene, () => readAvailableLevels(scene))
@@ -148,6 +151,7 @@ export function createFoundrySceneGateway({
     notifyError(error) { getUi()?.notifications?.warn?.(String(error?.message ?? error)); },
 
     watchSceneNavigation(scope, onChange) {
+      // Clear Scene navigation caches when a relevant Foundry update invalidates them.
       const invalidate = (viewChanged = false) => { levelAccess.clear(); onChange?.({ viewChanged: viewChanged === true }); };
       scope?.own?.(() => levelAccess.clear());
       for (const hook of ["createScene", "updateScene", "deleteScene"]) scope?.hook?.(hook, invalidate);
@@ -172,6 +176,7 @@ export function createFoundrySceneGateway({
       }
     },
 
+    // Build a GM-only native context menu and retain its bridge for the later selection command.
     async openSceneContextMenu(request, expected = {}) {
       const id = sceneIdentifier(request?.sceneId);
       const game = getGame();
@@ -215,6 +220,7 @@ export function createFoundrySceneGateway({
       });
     },
 
+    // Revalidate the open menu, Scene, and native descriptor before invoking its callback once.
     async selectSceneContextOption(request, expected = {}) {
       const current = contextMenu;
       if (!current || String(request?.menuId ?? "") !== current.menuId) return Object.freeze({ ok: true, action: "stale" });
@@ -254,6 +260,7 @@ export function createFoundrySceneGateway({
 
     closeSceneContextMenu: closeContextMenu,
 
+    // Serialize level changes and route them through the same Scene eligibility and preflight checks.
     async viewSceneLevel(request, expected = {}) {
       const levelId = sceneIdentifier(request?.levelId);
       if (levelViewPending) throw new SceneNavigationError("COMMAND_BUSY", localizeFoundry("VEMOBILE.Scene.Levels.CanvasUnavailable", "Open the map and wait for it to load before choosing a level."));
@@ -262,6 +269,7 @@ export function createFoundrySceneGateway({
       finally { levelViewPending = false; }
     },
 
+    // Resolve and revalidate a Scene, run memory preflight, then ask Foundry to view it.
     async viewScene(sceneId, expected = {}) {
       const id = String(sceneId ?? "").trim();
       if (!id || id.length > 128) throw new SceneNavigationError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.SceneGateway.ChooseAValidScene", "Choose a valid Scene."));
@@ -269,6 +277,7 @@ export function createFoundrySceneGateway({
       if (!game?.user || !game?.scenes) throw new SceneNavigationError("SESSION_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.SceneGateway.TheFoundrySceneCollectionIsUnavailable", "The Foundry Scene collection is unavailable."));
       const session = { worldId: game.world?.id, userId: game.user.id, ...expected };
       const lifecycle = { generation: getConnectionGeneration(), mode: getMode() };
+      // Re-resolve the requested level on the current Scene before applying a level transition.
       const assertLevel = (target) => {
         if (!session.levelId) return;
         if (!target || !isSceneViewEligible(target)) {
@@ -334,6 +343,7 @@ export function createFoundrySceneGateway({
       return Object.freeze({ sceneId: id, ...(session.levelId ? { levelId: session.levelId } : {}), viewed: true });
     },
 
+    // Expose ready-state and usable camera geometry for Scene interaction owners.
     interactionState() {
       const canvas = getCanvas();
       const geometry = canvasPresentationGeometry(canvas);
@@ -351,6 +361,7 @@ export function createFoundrySceneGateway({
       return captureFixedSceneAnchor(usableCanvas(getCanvas()), bounds);
     },
 
+    // Restore the visible Scene point after layout changes, containing native camera errors.
     restoreViewportAnchor(anchor, bounds) {
       try {
         return restoreVisibleSceneAnchor(usableCanvas(getCanvas()), anchor, bounds);
@@ -360,6 +371,7 @@ export function createFoundrySceneGateway({
       }
     },
 
+    // Restore a fixed screen position in the Scene after a viewport layout change.
     restoreFixedViewportAnchor(anchor, bounds) {
       try {
         return restoreFixedSceneAnchor(usableCanvas(getCanvas()), anchor, bounds);
@@ -369,12 +381,14 @@ export function createFoundrySceneGateway({
       }
     },
 
+    // Refresh canvas sizing for the current presentation generation and ignore callbacks after teardown.
     refreshPresentation(scope) {
       if (!scope?.timeout) return false;
       const generation = ++presentationGeneration;
       scope.own?.(() => {
         if (presentationGeneration === generation) presentationGeneration += 1;
       });
+      // Refresh Scene navigation from current Foundry data and publish the new snapshot to its owner.
       const refresh = () => {
         if (scope.disposed || presentationGeneration !== generation) return;
         const canvas = usableCanvas(getCanvas());
@@ -418,6 +432,7 @@ export function createFoundrySceneGateway({
       return true;
     },
 
+    // Bind owned pan, pinch, tap, hold, and native door gestures to the active canvas surface.
     bindGestures(surface, scope, onTap = () => {}, onLongPress = () => {}, onMovementAbort = null, options = {}) {
       const gestureTarget = surface;
       const gestureWindow = getWindow() ?? gestureTarget;
@@ -431,17 +446,20 @@ export function createFoundrySceneGateway({
       let selectionGestureActive = false;
       let lastTouchCompletion = null;
 
+      // Clear the pending long-press timer and any state owned by that gesture.
       const cancelLongPress = () => {
         if (longPress?.timer !== null && longPress?.timer !== undefined) clearTimeoutFn(longPress.timer);
         longPress = null;
         longPressReady = false;
       };
 
+      // Release the pending native door-tap sequence if it has not been dispatched.
       const cancelDoorTap = () => {
         if (doorTap?.timer !== null && doorTap?.timer !== undefined) clearTimeoutFn(doorTap.timer);
         doorTap = null;
       };
 
+      // Arm one door tap only after the native door target and input point have been validated.
       const armDoorTap = (pointerId, start, control) => {
         cancelDoorTap();
         const pending = { pointerId, start, control, expired: false, timer: null };
@@ -451,6 +469,7 @@ export function createFoundrySceneGateway({
         doorTap = pending;
       };
 
+      // Schedule a long-press action while retaining the gesture’s current Scene and target identity.
       const armLongPress = (pointerId, start) => {
         cancelLongPress();
         longPressFired = false;
@@ -467,6 +486,7 @@ export function createFoundrySceneGateway({
         longPress = press;
       };
 
+      // Move the native canvas camera by the requested bounded offset.
       const pan = (options) => {
         const canvas = usableCanvas(getCanvas());
         if (!canvas) return;
@@ -477,6 +497,7 @@ export function createFoundrySceneGateway({
         }
       };
 
+      // Capture the starting point and owner state for a Scene pointer gesture.
       const beginGesture = () => {
         const canvas = usableCanvas(getCanvas());
         if (!canvas || points.size === 0) {
@@ -503,6 +524,7 @@ export function createFoundrySceneGateway({
         };
       };
 
+      // Start a Scene gesture from a primary pointer event on the active canvas.
       const pointerDown = (event) => {
         if (event.target?.closest?.("button, select, [data-ve-scene-control], [data-ve-template-control]")) return;
         const canvas = usableCanvas(getCanvas());
@@ -526,6 +548,7 @@ export function createFoundrySceneGateway({
         beginGesture();
       };
 
+      // Track pointer movement and distinguish a tap from a drag or hold.
       const pointerMove = (event) => {
         if (!points.has(event.pointerId)) return;
         points.set(event.pointerId, point(event));
@@ -558,6 +581,7 @@ export function createFoundrySceneGateway({
         }
       };
 
+      // Finish the gesture and dispatch only the native action that matches its completed path.
       const pointerEnd = (event, cancelled = false) => {
         if (!points.has(event.pointerId)) return;
         const validRelease = !cancelled && !event.defaultPrevented && !multiPointerGesture && points.size === 1 && gesture?.kind === "pan" && !gesture.started;
@@ -587,7 +611,9 @@ export function createFoundrySceneGateway({
 
       const pointerEventsSupported = typeof gestureWindow?.PointerEvent === "function";
       if (!pointerEventsSupported) {
+        // Read the active touch coordinates from a pointer event or legacy touch event.
         const touchPoints = (event) => Array.from(event?.changedTouches ?? []);
+        // Convert one native touch point into the pointer shape used by Scene controls.
         const touchPointer = (event, touch) => ({
           pointerId: Number(touch.identifier) || 1,
           pointerType: "touch",
@@ -636,7 +662,9 @@ export function createFoundrySceneGateway({
       scope.listen(gestureWindow, "pointermove", pointerMove, { passive: true });
       scope.listen(gestureWindow, "pointerup", pointerEnd);
       scope.listen(gestureWindow, "pointercancel", (event) => pointerEnd(event, true));
+      // Suppress Foundry’s native hold behavior only while a mobile gesture owns the pointer.
       const preventNativeHold = (event) => event.preventDefault();
+      // Prevent selection changes while an owned mobile pointer gesture is active.
       const preventActiveSelection = (event) => {
         if (!selectionGestureActive) return;
         event.preventDefault?.();
@@ -653,6 +681,7 @@ export function createFoundrySceneGateway({
       scope.own(cancelLongPress);
       scope.own(cancelDoorTap);
       if (onMovementAbort) {
+        // Cancel the current token-movement request and release its gesture resources.
         const abortMovement = () => onMovementAbort();
         scope.hook("canvasTearDown", abortMovement);
         scope.hook("controlToken", abortMovement);
@@ -660,6 +689,7 @@ export function createFoundrySceneGateway({
       }
     },
 
+    // Dispatch a native pointer tap only when the captured Scene, user, generation, and top hit target still match.
     nativeTileTap({ sceneId, clientX, clientY, button = 0, worldId, userId, connectionGeneration }) {
       const game = getGame();
       if (!game?.world || game.world.id !== worldId || !game.user || game.user.id !== userId
@@ -677,6 +707,7 @@ export function createFoundrySceneGateway({
       const target = canvas.app?.renderer?.events?.domElement ?? canvas.app?.renderer?.canvas
         ?? canvas.app?.canvas ?? canvas.app?.view;
       if (!target?.dispatchEvent) return false;
+      // Normalize a finite pointer position from the supplied event.
       const pointer = (type, buttons) => createPointerEvent(type, {
         bubbles: true, cancelable: true, composed: true,
         pointerId: 1, pointerType: "mouse", isPrimary: true,
@@ -688,6 +719,7 @@ export function createFoundrySceneGateway({
       return true;
     },
 
+    // Apply a bounded zoom factor to the usable Scene camera.
     zoom(factor) {
       const canvas = usableCanvas(getCanvas());
       if (!canvas) return false;
@@ -701,6 +733,7 @@ export function createFoundrySceneGateway({
       }
     },
 
+    // Center the usable camera on the active Scene's dimensions.
     recenter() {
       const canvas = usableCanvas(getCanvas());
       const dimensions = canvas?.scene?.dimensions;
@@ -719,6 +752,7 @@ export function createFoundrySceneGateway({
     }
   });
 
+  // Close the active native Scene context menu when its owner is still current.
   function closeContextMenu(request) {
     if (request?.menuId && request.menuId !== contextMenu?.menuId) return;
     const current = contextMenu;
@@ -727,6 +761,7 @@ export function createFoundrySceneGateway({
   }
 }
 
+// Read Foundry collections and arrays into a safe list.
 function collectionValues(collection) {
   if (!collection) return [];
   if (Array.isArray(collection)) return collection;
@@ -735,6 +770,7 @@ function collectionValues(collection) {
   return [];
 }
 
+// Return a Scene’s folder ancestry while stopping malformed folder cycles.
 function sceneFolderPath(scene) {
   const path = [];
   const seen = new Set();
@@ -754,16 +790,19 @@ function sceneFolderPath(scene) {
   return Object.freeze(path);
 }
 
+// Read the configured Scene sort mode used by the native navigation order.
 function sortingMode(value) {
   return value === "m" ? "m" : "a";
 }
 
+// Extract a stable Scene identifier from a document or reference.
 function sceneIdentifier(value) {
   const id = String(value ?? "").trim();
   if (!id || id.length > 128) throw new SceneNavigationError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.SceneGateway.ChooseAValidScene", "Choose a valid Scene."));
   return id;
 }
 
+// Reject Scene commands when their world, user, or lifecycle session is stale.
 function assertSceneSession(game, expected = {}) {
   if (!game?.user || !game?.scenes) throw new SceneNavigationError("SESSION_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.SceneGateway.TheFoundrySceneCollectionIsUnavailable", "The Foundry Scene collection is unavailable."));
   if (expected.worldId && String(game.world?.id ?? "") !== String(expected.worldId)) {
@@ -774,10 +813,12 @@ function assertSceneSession(game, expected = {}) {
   }
 }
 
+// Resolve a Scene by stable ID in the active world rather than using a stale object reference.
 function resolveScene(game, id) {
   return game?.scenes?.get?.(id) ?? collectionValues(game?.scenes).find((candidate) => String(candidate?.id ?? "") === id) ?? null;
 }
 
+// Adapt the native Scene context menu to the supported mobile actions and current permissions.
 function createSceneContextBridge(sceneId, document) {
   if (!document?.createElement) throw new SceneNavigationError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.SceneGateway.FoundrySSceneContextActionsAreUnavailable", "Foundry's Scene context actions are unavailable."));
   const host = document.createElement("div");
@@ -818,6 +859,7 @@ function nativeSceneContextDescriptors(navigation, hooks) {
   return Array.isArray(descriptors) ? descriptors : [];
 }
 
+// Check whether the current Scene and user can use the native context-menu action.
 function nativeSceneContextEligible(descriptor, anchor) {
   try {
     if (!descriptor || !(descriptor.label ?? descriptor.name) || !(typeof descriptor.onClick === "function" || typeof descriptor.callback === "function")) return false;
@@ -839,6 +881,7 @@ export function sceneContextIconClasses(value) {
   return classes.split(/\s+/u).filter(token => /^(?:fa[srlbdt]?|fa-[a-z0-9-]+)$/iu.test(token)).join(" ");
 }
 
+// Read Levels exposed by the current native Scene and canvas.
 function nativeAvailableLevels(scene) {
   if (!scene?.levels?.get || !("availableLevels" in scene)) return [];
   return Array.from(scene.availableLevels ?? []).filter(level => level?.id && scene.levels.get(level.id) === level);
@@ -866,11 +909,13 @@ function freshNativeBaseLevels(scene, game) {
       .map(token => scene.levels.get(token._source?.level)).filter(Boolean).sort((a, b) => a.index - b.index)));
 }
 
+// Resolve a Scene action label through Foundry localization with a readable fallback.
 function localizeSceneLabel(game, key) {
   const value = typeof game?.i18n?.localize === "function" ? game.i18n.localize(key) : key;
   return String(value ?? key ?? "");
 }
 
+// Accept finite Scene coordinates from a gesture or command payload.
 function finiteSceneCoordinate(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -920,6 +965,7 @@ export function tileAtCanvasPoint(canvas, point) {
   });
 }
 
+// Confirm that the requested Tile is the topmost visible canvas target at the pointer location.
 function nativeTileIsTopTarget(canvas, clientPoint, canvasPoint) {
   const events = canvas?.app?.renderer?.events;
   const tiles = Array.from(canvas?.tiles?.placeables ?? []);
@@ -971,6 +1017,7 @@ export function canvasPresentationGeometry(canvas) {
   });
 }
 
+/** Resolve the native door control hit by a client-space pointer position. */
 export function doorControlAtClientPoint(canvas, clientPoint) {
   const controls = Array.from(canvas?.controls?.doors?.children ?? []);
   if (!controls.length) return null;
@@ -998,11 +1045,13 @@ export function doorControlAtClientPoint(canvas, clientPoint) {
   return null;
 }
 
+/** Invoke Foundry's own door interaction, preserving its lock/permission rules. */
 export function invokeNativeDoorControl(control) {
   if (!visibleDoorControl(control) || typeof control?._onMouseDown !== "function") return false;
   return control._onMouseDown({ button: 0, stopPropagation() {} });
 }
 
+// Find the native door-control ancestor associated with a pointer target.
 function doorAncestor(target, controls) {
   for (let current = target; current; current = current.parent) {
     if (controls.includes(current)) return visibleDoorControl(current) ? current : null;
@@ -1010,6 +1059,7 @@ function doorAncestor(target, controls) {
   return null;
 }
 
+// Accept a door control only when it is visible, in the current canvas, and backed by a live door.
 function visibleDoorControl(control) {
   if (!control || control.visible === false || control.renderable === false || control.destroyed) return false;
   for (let parent = control.parent; parent; parent = parent.parent) {
@@ -1022,6 +1072,7 @@ function visibleDoorControl(control) {
   }
 }
 
+// Recenter the native canvas around the selected Scene point.
 function moveCamera(canvas, options, animated = false) {
   if (animated && typeof canvas.animatePan === "function") {
     const movement = canvas.animatePan({ ...options, duration: 120 });
@@ -1031,10 +1082,12 @@ function moveCamera(canvas, options, animated = false) {
   canvas.pan(options);
 }
 
+// Check that Foundry’s canvas is ready and supports the required native interaction.
 function usableCanvas(canvas) {
   return canvas?.ready && canvas?.stage && typeof canvas.pan === "function" ? canvas : null;
 }
 
+// Resolve the active renderer view used for pointer geometry.
 function canvasView(canvas) {
   return {
     x: Number(canvas.stage.pivot?.x ?? 0),
@@ -1043,6 +1096,7 @@ function canvasView(canvas) {
   };
 }
 
+// Return the screen-space center of the current renderer.
 function canvasScreenCenter(canvas) {
   const screen = canvas.app?.renderer?.screen;
   const width = Number(screen?.width ?? globalThis.innerWidth ?? 0);
@@ -1050,18 +1104,22 @@ function canvasScreenCenter(canvas) {
   return { x: width / 2, y: height / 2 };
 }
 
+// Normalize a finite coordinate point for Scene geometry calculations.
 function point(event) {
   return { x: Number(event.clientX), y: Number(event.clientY) };
 }
 
+// Calculate the midpoint between two canvas points.
 function midpoint(first, second) {
   return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
 }
 
+// Measure the Euclidean distance between two points.
 function distance(first, second) {
   return Math.hypot(second.x - first.x, second.y - first.y);
 }
 
+// Constrain a value to the provided inclusive bounds.
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }

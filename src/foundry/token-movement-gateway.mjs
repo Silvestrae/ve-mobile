@@ -3,6 +3,7 @@ import { updateFoundryCursorAtClientPoint } from "./scene-gateway.mjs";
 import { pulseHoldHaptic } from "../ui/haptics.mjs";
 import { actorSourceUuid } from "./character-source.mjs";
 
+/** Failure raised when a captured token movement request is stale or disallowed. */
 export class MovementError extends Error {
   constructor(code, message, options = {}) {
     super(message, options);
@@ -11,6 +12,7 @@ export class MovementError extends Error {
   }
 }
 
+/** Timing and movement thresholds used by the tap/hold gesture recognizer. */
 export const TOKEN_DOUBLE_TAP_MS = 250;
 export const TOKEN_DOUBLE_TAP_DISTANCE = 24;
 export const TOKEN_HOLD_MS = 500;
@@ -40,6 +42,7 @@ export function createFoundryTokenMovementGateway({
   let pendingSelection = null;
   let viewGeneration = 0;
 
+  // Reject and clear a deferred token selection when its timer or session is no longer valid.
   const cancelPendingSelection = () => {
     const pending = pendingSelection;
     if (!pending) return;
@@ -48,6 +51,7 @@ export function createFoundryTokenMovementGateway({
     pending.resolve(Object.freeze({ ok: true, action: "none" }));
   };
 
+  // Re-resolve the tapped token and actor before committing the delayed selection.
   const selectTappedToken = async ({ sceneId, tokenId, actorId }, expectedSession) => {
     const game = getGame();
     const canvas = getCanvas();
@@ -67,6 +71,7 @@ export function createFoundryTokenMovementGateway({
     return Object.freeze({ ok: true, action: "selected", tokenId });
   };
 
+  // Resolve the requested Scene, Token, and Actor IDs against the active world and current canvas.
   const resolveRequest = (request, expectedSession = {}) => {
     const game = getGame();
     const canvas = getCanvas();
@@ -88,6 +93,7 @@ export function createFoundryTokenMovementGateway({
     return { canvas, game, scene, token, tokenId };
   };
 
+  // Capture the current view identity and return a guard that detects a replaced camera or Scene.
   const captureCameraGuard = (resolved, request, expectedSession) => {
     const view = { level: resolved.canvas.level, stage: resolved.canvas.stage, generation: viewGeneration };
     const session = { ...expectedSession, worldId: resolved.game.world.id, userId: resolved.game.user.id,
@@ -101,6 +107,7 @@ export function createFoundryTokenMovementGateway({
     };
   };
 
+  // Handle an explicit token tap, validating coordinates and ownership before selection, HUD, or movement effects.
   const tap = async (request, expectedSession = {}, { deferSelection = false } = {}) => {
     const game = getGame();
     const canvas = getCanvas();
@@ -165,6 +172,7 @@ export function createFoundryTokenMovementGateway({
     });
   };
 
+  // Own the touch-to-token gesture lifecycle, synthesize native pointer input only for valid gestures, and release all listeners and timers with its scope.
   const bindTouch = (surface, scope, onResult = () => {}, onError = () => {}, expectedSession = {}) => {
     const eventWindow = surface?.ownerDocument?.defaultView ?? globalThis.window ?? surface;
     let active = null;
@@ -172,21 +180,25 @@ export function createFoundryTokenMovementGateway({
     let suppressClickUntil = 0;
     let recoverContextUntil = 0;
 
+    // Register a gesture resource with the active interaction owner for deterministic cleanup.
     const own = (event) => {
       event.preventDefault?.();
       event.stopImmediatePropagation?.();
       event.stopPropagation?.();
     };
+    // Clear the gesture timer and remove its handle from the active interaction.
     const clearTimer = (gesture = active) => {
       if (gesture?.timer === null || gesture?.timer === undefined) return;
       clearTimeoutFn(gesture.timer);
       gesture.timer = null;
     };
+    // Release pointer capture for a gesture when its target still supports it.
     const releaseCapture = (gesture) => {
       try {
         if (surface.hasPointerCapture?.(gesture.pointerId)) surface.releasePointerCapture(gesture.pointerId);
       } catch {}
     };
+    // Re-resolve the same controlled token object before continuing an asynchronous gesture.
     const currentOwnedObject = (gesture) => {
       const game = getGame();
       const canvas = getCanvas();
@@ -196,12 +208,15 @@ export function createFoundryTokenMovementGateway({
       if (!object?.document || !tokenIsVisible(object, object.document, game.user) || !canControlToken(object.document, game.user)) return null;
       return object;
     };
+    // Publish a completed movement or selection result through the injected callback.
     const report = (result) => {
       try { onResult(result); } catch {}
     };
+    // Cancel the active gesture and report its error through the injected error handler.
     const fail = (error) => {
       try { onError(error); } catch {}
     };
+    // Record bounded diagnostic details for a gesture phase without retaining the live event.
     const record = (phase, gesture = active, extra = {}) => {
       try {
         trace(Object.freeze({
@@ -213,10 +228,12 @@ export function createFoundryTokenMovementGateway({
         }));
       } catch {}
     };
+    // Find the current canvas element that should receive synthetic native pointer events.
     const nativePointerTarget = () => {
       const canvas = getCanvas();
       return canvas?.app?.renderer?.events?.domElement ?? canvas?.app?.renderer?.canvas ?? canvas?.app?.canvas ?? canvas?.app?.view;
     };
+    // Arm the long-press timer only while the captured token, Scene, user, and gesture remain current.
     const arm = (gesture = active) => {
       if (!gesture || gesture !== active || gesture.phase !== "pending") return false;
       clearTimer(gesture);
@@ -237,10 +254,12 @@ export function createFoundryTokenMovementGateway({
       report(Object.freeze({ ok: true, action: "hold-armed", tokenId: gesture.tokenId }));
       return true;
     };
+    // Start dragging once the pointer has crossed the movement threshold after the hold interval.
     const armIfElapsed = (gesture = active) => {
       if (gesture?.phase === "pending" && now() - gesture.startedAt >= TOKEN_HOLD_MS) arm(gesture);
       return gesture?.phase === "armed";
     };
+    // Dispatch a pointer event to Foundry's canvas target with the gesture's current button state.
     const dispatchNative = (type, point, buttons) => {
       const target = nativePointerTarget();
       if (!target?.dispatchEvent) return false;
@@ -260,6 +279,7 @@ export function createFoundryTokenMovementGateway({
         buttons
       }));
     };
+    // Track pointer displacement and mark the gesture as a drag only after its threshold is crossed.
     const updateMovement = (gesture, point) => {
       gesture.last = point;
       const distance = Math.hypot(point.clientX - gesture.start.clientX, point.clientY - gesture.start.clientY);
@@ -267,6 +287,7 @@ export function createFoundryTokenMovementGateway({
       if (gesture.maxDistance >= TOKEN_HOLD_MOVE_THRESHOLD) gesture.movedBeyondThreshold = true;
       return distance;
     };
+    // Begin native token dragging for the exact owned token after rechecking active gesture state.
     const startDrag = (gesture = active) => {
       if (!gesture || gesture !== active || gesture.phase !== "armed" || !gesture.movedBeyondThreshold) return false;
       let object;
@@ -290,6 +311,7 @@ export function createFoundryTokenMovementGateway({
       report(Object.freeze({ ok: true, action: "drag-started", tokenId: gesture.tokenId }));
       return true;
     };
+    // End the active gesture, clear timers and captures, and restore any native interaction it displaced.
     const cancelActive = (reason = "cancelled") => {
       const gesture = active;
       if (!gesture) return;
@@ -311,6 +333,7 @@ export function createFoundryTokenMovementGateway({
       record("touch-cancelled", gesture, { reason });
       report(Object.freeze({ ok: true, action: "touch-cancelled", reason, tokenId: gesture.tokenId }));
     };
+    // Open the native Token HUD only after re-resolving the same token and confirming current control authority.
     const openHud = (gesture) => {
       cancelPendingSelection();
       record("hud-requested", gesture);
@@ -336,6 +359,7 @@ export function createFoundryTokenMovementGateway({
       });
     };
 
+    // Start a token interaction from a primary pointer event that hits a visible, controllable canvas token.
     const pointerDown = (event) => {
       if (active) {
         if (active.pointerId !== event.pointerId && active.phase === "pending") cancelActive("pinch-before-hold");
@@ -389,6 +413,7 @@ export function createFoundryTokenMovementGateway({
         record("timer-armed", active, { durationMs: TOKEN_HOLD_MS });
       }
     };
+    // Update the active gesture from pointer movement while keeping the original token and session current.
     const pointerMove = (event) => {
       if (!active || active.pointerId !== event.pointerId) return;
       const gesture = active;
@@ -415,6 +440,7 @@ export function createFoundryTokenMovementGateway({
         dispatchNative("pointermove", gesture.last, 1);
       }
     };
+    // Finish the current gesture, distinguishing a tap from a drag and releasing native pointer state.
     const pointerUp = (event) => {
       if (!active || active.pointerId !== event.pointerId) return;
       // Scene must see the release to clear its point and pinch state. A
@@ -462,6 +488,7 @@ export function createFoundryTokenMovementGateway({
       updateFoundryCursorAtClientPoint(getCanvas(), { x: point.clientX, y: point.clientY }, createPointerEvent);
       void tap({ sceneId: gesture.sceneId, clientX: point.clientX, clientY: point.clientY }, expectedSession, { deferSelection: true }).then(report, fail);
     };
+    // Handle the canvas context-menu gesture for a currently visible token without bypassing ownership checks.
     const contextMenu = (event) => {
       if (event.target?.closest?.("button, select, [data-ve-scene-control], [data-ve-template-control]")) return;
       let gesture = active;
@@ -518,6 +545,7 @@ export function createFoundryTokenMovementGateway({
       gesture.nativeContextMenu = true;
       record("contextmenu-armed", gesture);
     };
+    // Abort pointer interaction and restore the native canvas state after cancellation.
     const pointerCancel = () => {
       const gesture = active;
       if (gesture?.phase === "armed" && gesture.nativeContextMenu && !gesture.movedBeyondThreshold) {
@@ -531,6 +559,7 @@ export function createFoundryTokenMovementGateway({
       }
       cancelActive("pointercancel");
     };
+    // Release a context-menu touch sequence and clear its suppression state.
     const touchEnd = (event) => {
       const gesture = contextRelease;
       if (!gesture) return;
@@ -538,7 +567,9 @@ export function createFoundryTokenMovementGateway({
       own(event);
       openHud(gesture);
     };
+    // Forget the pending context-menu touch when the browser cancels it.
     const touchCancel = () => { contextRelease = null; };
+    // Suppress the follow-up synthetic click generated by a handled touch gesture.
     const suppressClick = (event) => {
       if (event.target?.closest?.("button, select, [data-ve-scene-control], [data-ve-template-control]")) return;
       if (now() > suppressClickUntil) return;
@@ -605,12 +636,15 @@ export function createFoundryTokenMovementGateway({
       let active = true;
       const userId = String(getGame()?.user?.id ?? "");
       const worldId = String(getGame()?.world?.id ?? "");
+      // Check whether the exact Token document is currently controlled on the canvas.
       const controlled = token => Array.from(getCanvas()?.tokens?.controlled ?? []).some(object => object.document === token);
+      // Record a token’s original control provenance before changing the current selection.
       const remember = token => {
         if (!token?.uuid || !controlled(token) || !canControlToken(token, getGame()?.user)) return;
         provenance.set(token.uuid, { source: actorSourceUuid(token.actor), sceneId: String(token.parent?.id ?? "") });
       };
       for (const object of getCanvas()?.tokens?.controlled ?? []) remember(object.document);
+      // Restore previously controlled tokens only while the captured user and world still match.
       const restoreControl = (token, previousTokenUuid, previousSource) => {
         queueMicrotask(() => {
           const canvas = getCanvas();
@@ -660,6 +694,7 @@ export function createFoundryTokenMovementGateway({
       scope.hook("canvasTearDown", () => { viewGeneration += 1; provenance.clear(); });
       scope.own(() => { viewGeneration += 1; active = false; provenance.clear(); });
     },
+    // Project the active user's eligible movement tokens and current target state into plain records.
     snapshot() {
       const game = getGame();
       const scene = getCanvas()?.scene ?? game?.scenes?.current ?? null;
@@ -677,6 +712,7 @@ export function createFoundryTokenMovementGateway({
       });
     },
 
+    // Control only the token resolved from the request's exact Actor/token provenance.
     async controlActor(request, expectedSession = {}) {
       const game = getGame();
       const canvas = getCanvas();
@@ -700,6 +736,7 @@ export function createFoundryTokenMovementGateway({
       return Object.freeze({ ok: true, action: token.object.controlled ? "selected" : "requested", tokenId: String(token.id ?? "") });
     },
 
+    // Center the camera on the requested current token after checking its captured owner session.
     async focus(request, expectedSession = {}) {
       const cameraDetails = {
         kind: request.cameraReason ?? "token-focus",
@@ -749,6 +786,7 @@ export function createFoundryTokenMovementGateway({
     tap,
     bindTouch,
 
+    // Release control only when the requested token still matches the active controlled token.
     async release(request, expectedSession = {}) {
       const game = getGame();
       const canvas = getCanvas();
@@ -777,6 +815,7 @@ export function createFoundryTokenMovementGateway({
       return Object.freeze({ ok: true, action: object.controlled ? "requested" : "released", tokenId });
     },
 
+    // Toggle the target state for the exact resolved token under current movement authority.
     async target(request, expectedSession = {}) {
       const game = getGame();
       const canvas = getCanvas();
@@ -790,6 +829,7 @@ export function createFoundryTokenMovementGateway({
       return toggleTokenTarget(object, object.document, game.user);
     },
 
+    // Clear this user's targets only after confirming the captured mobile session is still active.
     async clearTargets(expectedSession = {}) {
       const game = getGame();
       assertSession(game, expectedSession, getConnectionGeneration);
@@ -800,6 +840,7 @@ export function createFoundryTokenMovementGateway({
       return Object.freeze({ ok: true, cleared: targets.length });
     },
 
+    // Return recent owned movement history for the token without changing its document position.
     previewHistory(request, expectedSession = {}) {
       const tokenId = identifier(request.tokenId, "tokenId");
       if (!request.active) {
@@ -830,6 +871,7 @@ export function createFoundryTokenMovementGateway({
       return Object.freeze({ ok: true, shown: true });
     },
 
+    // Move the requested token one validated grid step through the native movement path.
     async step(request, expectedSession = {}) {
       const dx = direction(request.dx, "dx");
       const dy = direction(request.dy, "dy");
@@ -915,6 +957,7 @@ export function createFoundryTokenMovementGateway({
   });
 }
 
+/** Open the native token HUD only for the currently controlled canvas object. */
 export async function openNativeTokenHud(canvas, object) {
   const hud = canvas?.hud?.token;
   if (!object?.controlled || typeof hud?.bind !== "function") {
@@ -936,12 +979,14 @@ export function setNativeMeasurementActive(document, active) {
   updateNativeHudHost(document);
 }
 
+// Mark the native Token HUD host so the mobile presentation can layer and restore it correctly.
 function updateNativeHudHost(document) {
   const active = document?.body?.classList?.contains?.("ve-mobile-native-token-hud-active")
     || document?.body?.classList?.contains?.("ve-mobile-native-measurement-active");
   document?.getElementById?.("hud")?.classList?.toggle?.("ve-mobile-native-hud-host", Boolean(active));
 }
 
+// Close the native Token HUD when it belongs to the token interaction being released.
 async function closeTokenHud(canvas) {
   const hud = canvas?.hud?.token;
   if (!hud?.object || typeof hud.close !== "function") return false;
@@ -990,6 +1035,7 @@ export function movementControlGeometry(_token, grid) {
   return Object.freeze({ shape, gridKey, directions: Object.freeze(directions) });
 }
 
+// Read the Token's source position and Foundry-snapped grid origin for movement calculations.
 function snappedTokenOrigin(token) {
   const source = token?._source ?? token;
   const position = { x: Number(source?.x), y: Number(source?.y) };
@@ -1024,14 +1070,17 @@ function nativeHexSteps(token, grid, directions) {
   return [...unique.values()];
 }
 
+// Measure the shortest angular distance between two directions.
 function angleDistance(a, b) { return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))); }
 
+// Choose the grid direction bit for one signed movement axis.
 function directionAxis(delta, value, snapped, negative, positive) {
   if (delta < 0) return value <= snapped + 0.5 ? negative : 0;
   if (delta > 0) return value >= snapped - 0.5 ? positive : 0;
   return 0;
 }
 
+// Validate a finite signed movement direction from a command payload.
 function direction(value, field) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < -1 || parsed > 1) {
@@ -1040,12 +1089,14 @@ function direction(value, field) {
   return parsed;
 }
 
+// Validate a finite client coordinate before converting it to canvas space.
 function coordinate(value, field) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new MovementError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.MustBeAFiniteNumber", "{field} must be a finite number.", { field: (field) }));
   return parsed;
 }
 
+// Extract finite client coordinates from a pointer or touch event.
 function clientEventPoint(event) {
   return Object.freeze({
     clientX: Number(event?.clientX) || 0,
@@ -1055,6 +1106,7 @@ function clientEventPoint(event) {
   });
 }
 
+// Serialize a visible Token's actor, movement, bounds, and permission-aware controls.
 function tokenRecord(token, game, config, controlled = []) {
   const action = String(token.movementAction ?? "");
   const configured = config?.Token?.movement?.actions?.[action];
@@ -1082,6 +1134,7 @@ function tokenRecord(token, game, config, controlled = []) {
 export function tokenPortraitRecord(token) {
   const source = token?._source ?? token ?? {};
   const texture = source.texture ?? token?.texture ?? {};
+  // Normalize a token dimension to a finite number with a caller-provided fallback.
   const number = (value, fallback) => value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : fallback;
   const width = number(source.width ?? (source !== token ? token?.width : undefined), 1);
   const height = number(source.height ?? (source !== token ? token?.height : undefined), 1);
@@ -1098,16 +1151,19 @@ export function tokenPortraitRecord(token) {
   });
 }
 
+// Read Foundry token collections and arrays into a safe list.
 function collectionValues(collection) {
   if (!collection) return [];
   if (typeof collection.values === "function") return Array.from(collection.values());
   return Array.from(collection);
 }
 
+// Count the user's current token targets without exposing the target collection.
 function targetCount(user) {
   return Number(user?.targets?.size ?? collectionValues(user?.targets).length) || 0;
 }
 
+// Resolve a Foundry translation key with a readable fallback.
 function localize(game, key, fallback) {
   const value = typeof game?.i18n?.localize === "function" ? String(game.i18n.localize(key) ?? "") : "";
   return value && value !== key ? value : fallback;
@@ -1123,6 +1179,7 @@ export async function toggleTokenTarget(object, token, user) {
   return Object.freeze({ ok: true, action: targeted ? "untargeted" : "targeted", tokenId: String(token.id) });
 }
 
+// Check current Token control permission and ownership, failing closed on API errors.
 function canControlToken(token, user) {
   if (!token || !user) return false;
   try {
@@ -1136,6 +1193,7 @@ function canControlToken(token, user) {
   }
 }
 
+// Convert client coordinates through the live renderer and find the topmost visible token at that point.
 function tokenAtClientPoint(canvas, clientX, clientY, user) {
   const renderer = canvas.app?.renderer;
   const view = renderer?.canvas ?? canvas.app?.canvas ?? canvas.app?.view;
@@ -1157,12 +1215,14 @@ function tokenAtClientPoint(canvas, clientX, clientY, user) {
   return placeables.find((object) => tokenIsVisible(object, object?.document, user) && tokenContains(object, world)) ?? null;
 }
 
+// Check token visibility and user sight/ownership before permitting hit testing.
 function tokenIsVisible(object, token, user) {
   if (!object || !token) return false;
   if (user?.isGM) return true;
   return !token.hidden && object.visible !== false;
 }
 
+// Test whether a canvas point falls inside the current token bounds.
 function tokenContains(object, point) {
   if (typeof object.bounds?.contains === "function") return object.bounds.contains(point.x, point.y);
   const token = object.document;
@@ -1175,6 +1235,7 @@ function tokenContains(object, point) {
     && point.x >= left && point.x <= left + width && point.y >= top && point.y <= top + height;
 }
 
+// Reject commands whose world, user, or connection generation no longer matches the active session.
 function assertSession(game, expected, getConnectionGeneration = () => 0) {
   if (!game?.user || !game?.world) throw new MovementError("SESSION_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.CombatGateway.TheFoundrySessionIsNotReady", "The Foundry session is not ready."));
   if (expected.worldId && expected.worldId !== game.world.id) throw new MovementError("STALE_SESSION", localizeFoundry("VEMOBILE.Interface.TokenMovementGateway.TheActiveWorldHasChanged", "The active world has changed."));
@@ -1184,22 +1245,26 @@ function assertSession(game, expected, getConnectionGeneration = () => 0) {
   }
 }
 
+// Validate and normalize the stable identifier supplied by a movement command.
 function identifier(value, field) {
   const id = String(value ?? "").trim();
   if (!id || id.length > 128) throw new MovementError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.CharacterSource.IsRequired", "{field} is required.", { field: (field) }));
   return id;
 }
 
+// Resolve the Scene identifier used by Foundry's active Combat document.
 function foundryCombatSceneId(combat) {
   const scene = combat?.scene;
   return String((typeof scene === "string" ? scene : scene?.id) ?? combat?.sceneId ?? "");
 }
 
+// Read a Token's committed source position for before/after movement comparison.
 function tokenPosition(token) {
   const source = token?._source ?? token;
   return { x: Number(source?.x), y: Number(source?.y) };
 }
 
+// Focus a token in the canvas and wait for its animation before returning.
 function focusToken(canvas, token, animated, viewport = null) {
   if (!canvas?.ready) return false;
   const center = cameraTargetForToken(canvas, token, viewport);
@@ -1210,6 +1275,7 @@ function focusToken(canvas, token, animated, viewport = null) {
   return true;
 }
 
+// Wait for the current token movement animation, bounded so a stuck promise cannot block the command.
 async function settleMovementAnimation(object) {
   const movement = object?.movementAnimationPromise;
   if (!movement || typeof movement.then !== "function") return;
@@ -1218,6 +1284,7 @@ async function settleMovementAnimation(object) {
   } catch { /* camera recentering should survive a cancelled token animation */ }
 }
 
+// Move the canvas camera to the token using the native smooth camera control.
 async function smoothlyRecenterToken(canvas, token, viewport = null, duration = 220, isCurrent = () => true) {
   if (!canvas?.ready || !isCurrent()) return false;
   const center = cameraTargetForToken(canvas, token, viewport);
@@ -1233,6 +1300,7 @@ async function smoothlyRecenterToken(canvas, token, viewport = null, duration = 
   return true;
 }
 
+// Adjust the camera only when movement would leave the token outside the requested viewport bounds.
 function keepTokenVisible(canvas, token, viewport = null, margin = 0.64) {
   if (!canvas?.ready) return;
   const center = tokenCenter(token);
@@ -1263,6 +1331,7 @@ function keepTokenVisible(canvas, token, viewport = null, margin = 0.64) {
   }
 }
 
+/** Calculate the stage position that centers a token in the visible viewport. */
 export function cameraTargetForToken(canvas, token, viewport = null) {
   const center = tokenCenter(token);
   if (!center || !viewport) return center;
@@ -1277,6 +1346,7 @@ export function cameraTargetForToken(canvas, token, viewport = null) {
   };
 }
 
+// Read finite renderer dimensions and client bounds for coordinate conversion.
 function rendererMetrics(canvas) {
   const renderer = canvas.app?.renderer;
   const view = renderer?.canvas ?? canvas.app?.canvas ?? canvas.app?.view;
@@ -1288,6 +1358,7 @@ function rendererMetrics(canvas) {
   return { rect, screenWidth, screenHeight };
 }
 
+// Normalize the optional viewport rectangle used for safe camera placement.
 function viewportBounds(value) {
   if (value === null || value === undefined) return null;
   const viewport = {

@@ -14,6 +14,7 @@ export function createCombatSceneActions({
   let active = null;
   let generation = 0;
 
+  // Wait for a usable map, then recheck the exact combatant and connection before asking the gateway to act.
   const run = async (kind, combatId, combatantId) => {
     const capability = kind === "focus" ? "canFocus" : "canTarget";
     const combat = getSnapshot()?.combat;
@@ -57,6 +58,7 @@ export function createCombatSceneActions({
   return Object.freeze({
     focus: (combatId, combatantId) => run("focus", combatId, combatantId),
     target: (combatId, combatantId) => run("target", combatId, combatantId),
+    // Invalidate waits and camera ownership so the old combat action cannot act after navigation or reconnect.
     cancel(reason = "The Combat Scene action was cancelled.") {
       generation += 1;
       active?.abort(new SceneInteractionCancelledError(reason, localize));

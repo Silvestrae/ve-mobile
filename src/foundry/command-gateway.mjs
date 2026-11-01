@@ -18,10 +18,13 @@ export function createFoundryCommandGateway({
   getConnectionGeneration = () => 0,
   systemIntegration = selectSystemIntegration(getGame()?.system?.id ?? "dnd5e")
 } = {}) {
+  // A fingerprint covers the exact action identity so rapid duplicate taps are
+  // rejected while unrelated commands can still proceed independently.
   const inFlight = new Set();
 
   const { actions, messages } = systemIntegration;
   const { handlers } = actions;
+  // Check message visibility under the active system's rules; command authority is checked separately.
   const revealMessage = message => messages.canReveal ? messages.canReveal(message, getGame()) : canRevealMessage(message);
 
   return Object.freeze({
@@ -35,6 +38,7 @@ export function createFoundryCommandGateway({
       return actions.capabilitiesForActor(actor, user);
     },
 
+    // Read the current Actor's defense editor options as plain records for the mobile form.
     readDefenseEditor(payload, expectedSession = {}) {
       const game = getGame();
       assertSession(game, expectedSession, getConnectionGeneration);
@@ -45,6 +49,7 @@ export function createFoundryCommandGateway({
       if (typeof actions.readDefenseEditor !== "function" || !actions.capabilitiesForActor(actor, game.user).editDefenses) throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.PF2E.Unavailable", "This PF2e action is unavailable."));
       return actions.readDefenseEditor(actor);
     },
+    // Rebuild the current eligible item menu from the requested Actor and item context.
     readItemMenu(payload, expectedSession = {}) {
       const game = getGame();
       assertSession(game, expectedSession, getConnectionGeneration);
@@ -55,6 +60,9 @@ export function createFoundryCommandGateway({
       return actions.readItemMenu(actor, payload, game.user);
     },
 
+    /** Run an allowlisted Actor command against freshly resolved, currently
+     * owned documents. The per-command context rechecks session/system/Actor
+     * after asynchronous work; finally always releases hooks and busy state. */
     async execute(name, payload = {}, expectedSession = {}, observer = {}) {
       const handler = Object.hasOwn(handlers, name) ? handlers[name] : null;
       if (!handler) throw new CommandError("UNKNOWN_COMMAND", localizeFoundry("VEMOBILE.Character.CommandGateway.UnsupportedCommand", "Unsupported command: {name}", { name: String(name) }));
@@ -86,6 +94,7 @@ export function createFoundryCommandGateway({
         actions.assertActorCommand(actor, name);
         const actorId = String(actor.id ?? "");
         const actionItem = name === ACTOR_COMMANDS.USE_ITEM ? actions.resolveItem(actor, payload.itemId) : null;
+        // Check whether the user may reveal this action result from the current Actor and message.
         const canRevealActionMessage = message => revealMessage(message) && (!actionItem || !messages.rootMatches || messages.rootMatches(message, actor, actionItem));
         const actionTargets = actionItem ? Array.from(game.user?.targets ?? [], (target) => target?.document ?? target).filter((target) => target?.id) : [];
         const actionTargetIds = actionTargets.map((target) => String(target.id));
@@ -97,6 +106,7 @@ export function createFoundryCommandGateway({
           img: String(target._source?.texture?.src ?? target.texture?.src ?? "")
         })) : [];
         const existingMessageIds = new Set(messageDocuments(game).map(messageIdentifier).filter(Boolean));
+        // Publish the accepted consuming action through the injected session callback.
         const announceAccepted = (message, { returned = false, userId } = {}) => {
           if (acceptanceAnnounced || typeof observer?.onActionAccepted !== "function"
             || !SCENE_RETURN_COMMANDS.includes(name) || !revealMessage(message)
@@ -117,6 +127,7 @@ export function createFoundryCommandGateway({
             }
           });
         };
+        // Create and publish the action-session record from native roll/messages while the owner context remains current.
         const announceActionSession = (output) => {
           if (expectedSession.connectionGeneration !== undefined
             && expectedSession.connectionGeneration !== getConnectionGeneration()) return null;
@@ -157,7 +168,7 @@ export function createFoundryCommandGateway({
           })
           : null;
         if (actionItem) templateUsage = messages.watchItemUsage(getHooks(), actor, actionItem, announceActionSession);
-        const output = await handler(actor, payload, { assertCurrent() {
+        const output = await handler(actor, payload, { /* Reject result handling once the command's captured session no longer owns the action. */ assertCurrent() {
           const currentGame = getGame();
           assertSession(currentGame, expectedSession, getConnectionGeneration);
           assertSystemIntegration(systemIntegration, currentGame);
@@ -210,6 +221,8 @@ export function createFoundryCommandGateway({
 
 
 function createDiceSoNiceWaiter(game, getHooks) {
+  // Dice So Nice completion is optional presentation timing; this scoped waiter
+  // enriches a roll result without making the native roll depend on the module.
   let active = false;
   try {
     active = Boolean(game?.modules?.get?.("dice-so-nice")?.active);
@@ -223,6 +236,7 @@ function createDiceSoNiceWaiter(game, getHooks) {
 
   const completed = new Set();
   let resolvePending = null;
+  // Finalize the native action capture once the associated roll workflow completes.
   const onComplete = (messageId) => {
     const id = messageIdentifier(messageId);
     if (!id) return;
@@ -233,6 +247,7 @@ function createDiceSoNiceWaiter(game, getHooks) {
   const hookId = hooks.on("diceSoNiceRollComplete", onComplete);
 
   return {
+    // Resolve the native result message and publish its final command outcome to the caller.
     async finalize(result, currentGame, output) {
       const messageId = String(result?.messageId ?? "");
       if (!messageId) return result;
@@ -240,6 +255,7 @@ function createDiceSoNiceWaiter(game, getHooks) {
         await new Promise((resolve) => {
           let settled = false;
           let timerId = null;
+          // Clear this wait's timeout and resolve once; dispose() removes the shared completion hook.
           const finish = () => {
             if (settled) return;
             settled = true;
@@ -267,6 +283,7 @@ function createDiceSoNiceWaiter(game, getHooks) {
   };
 }
 
+// Normalize a native roll result into the command result record.
 function resultFromRollOutput(output, canReveal = canRevealMessage) {
   const rolls = Array.isArray(output) ? output : [];
   for (const roll of rolls) {
@@ -278,6 +295,7 @@ function resultFromRollOutput(output, canReveal = canRevealMessage) {
   return null;
 }
 
+// Find the newly created message associated with the command’s native action.
 function resultFromNewMessage(game, existingIds, actor, userId, canReveal = canRevealMessage) {
   const messages = messageDocuments(game).filter((message) => {
     const id = messageIdentifier(message);
@@ -295,6 +313,7 @@ function resultFromNewMessage(game, existingIds, actor, userId, canReveal = canR
   return null;
 }
 
+// Serialize a native Roll into its formula, total, and display-safe result fields.
 function rollResultRecord(roll, message) {
   const total = Number(roll?.total);
   if (!Number.isFinite(total)) return null;
@@ -308,6 +327,7 @@ function rollResultRecord(roll, message) {
   });
 }
 
+// Extract bounded dice and part details from the native Roll for presentation.
 function rollBreakdown(roll) {
   let terms = [];
   try {
@@ -345,6 +365,7 @@ function rollBreakdown(roll) {
   return breakdown.slice(0, 12);
 }
 
+// Read current Foundry chat message documents as an ordered list.
 function messageDocuments(game) {
   try {
     return Array.from(game?.messages ?? []);
@@ -353,11 +374,13 @@ function messageDocuments(game) {
   }
 }
 
+// Extract the stable ID from a chat message or source record.
 function messageIdentifier(message) {
   if (typeof message === "string" || typeof message === "number") return String(message);
   return String(message?.id ?? message?._id ?? message?._source?._id ?? "");
 }
 
+// Match newly created messages to the accepted action using Actor, author, item, and timing provenance.
 function actionSessionFromNewMessages(game, existingIds, actor, item, output, captured = [], includeSourceUuid = false, targetIds = [], targetPreviews = [], messages) {
   const { originatingMessageId, referencesItem: messageReferencesItem } = messages;
   const created = uniqueMessages([...messageDocuments(game), ...captured]).filter((message) => {
@@ -425,9 +448,11 @@ function actionSessionFromNewMessages(game, existingIds, actor, item, output, ca
   });
 }
 
+// Observe chat creation during the native action and bound capture to the current command owner.
 function beginActionMessageCapture(hooks, existingIds, onMessage = () => {}) {
   const messages = [];
   const waiters = new Set();
+  // Collect a created message only when it falls within this action’s captured provenance.
   const onCreate = (message, _options, userId) => {
     const id = messageIdentifier(message);
     if (!id || existingIds.has(id) || messages.some((candidate) => messageIdentifier(candidate) === id)) return;
@@ -440,10 +465,13 @@ function beginActionMessageCapture(hooks, existingIds, onMessage = () => {}) {
     get messages() {
       return [...messages];
     },
+    // Wait briefly for a newly created native chat message, or settle when none arrives.
     waitForChange(previousCount, delay) {
       if (messages.length > previousCount) return Promise.resolve();
       return new Promise((resolve) => {
         let timeoutId;
+        // Resolve this waiter once, clearing its timeout and removing it from
+        // the active capture before the caller resumes.
         const finish = () => {
           clearTimeout(timeoutId);
           waiters.delete(finish);
@@ -460,6 +488,7 @@ function beginActionMessageCapture(hooks, existingIds, onMessage = () => {}) {
   });
 }
 
+// Deduplicate message documents by stable ID while preserving their first-seen order.
 function uniqueMessages(messages) {
   const seen = new Set();
   return messages.filter((message) => {
@@ -470,6 +499,7 @@ function uniqueMessages(messages) {
   });
 }
 
+// Extract the action message ID returned directly by a native workflow.
 function returnedActionMessageId(output) {
   const references = [
     output?.message,
@@ -487,6 +517,7 @@ function returnedActionMessageId(output) {
   return "";
 }
 
+// Normalize a message ID from Foundry's supported reference forms.
 function messageIdFromReference(reference) {
   if (!reference) return "";
   if (typeof reference === "string") {
@@ -498,14 +529,17 @@ function messageIdFromReference(reference) {
   return messageIdentifier(reference);
 }
 
+// Read the speaker Actor ID from a message or its source data.
 function speakerActorId(message) {
   return String(message?.speaker?.actor ?? message?._source?.speaker?.actor ?? "");
 }
 
+// Read the author ID from a message or its source data.
 function messageAuthorId(message) {
   return String(message?.author?.id ?? message?.user?.id ?? message?._source?.author ?? message?._source?.user ?? "");
 }
 
+// Check message visibility and current Actor authority before revealing its contents.
 function canRevealMessage(message) {
   return message?.visible !== false && message?.isContentVisible !== false;
 }

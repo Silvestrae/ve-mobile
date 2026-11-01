@@ -2,16 +2,23 @@ import { CommandError } from "../../command-support.mjs";
 import { localizeFoundry } from "../../localization.mjs";
 
 const dictionaries = Object.freeze({ immunities: "immunityTypes", weaknesses: "weaknessTypes", resistances: "resistanceTypes" });
+// Raise the shared localized validation error for unsupported PF2e defense edits.
 const invalid = () => { throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.PF2E.InvalidInput", "This PF2e action is invalid or has changed. Refresh and try again.")); };
+// Read committed defense source rows for the selected PF2e attribute.
 const sourceRows = (actor, category) => actor._source?.system?.attributes?.[category] ?? [];
+// List configured defense types excluding the custom catch-all entry.
 const typesFor = category => Object.entries(globalThis.CONFIG?.PF2E?.[dictionaries[category]] ?? {}).filter(([type]) => type !== "custom");
+// Keep only string tags from the PF2e defense source.
 const tags = value => Array.isArray(value) ? value.filter(entry => typeof entry === "string") : [];
+// Build the editable defense entries from committed source data and current configuration.
 function entriesFor(actor, category) {
   const allowed = new Set(typesFor(category).map(([type]) => type));
   return Array.from(sourceRows(actor, category)).map((entry, sourceIndex) => ({ sourceIndex, type: String(entry.type ?? ""), ...(typeof entry.label === "string" ? { label: entry.label } : {}),
     value: category === "immunities" || !Number.isFinite(Number(entry.value)) ? null : Number(entry.value), exceptions: tags(entry.exceptions), doubleVs: tags(entry.doubleVs), editable: allowed.has(entry.type) }));
 }
 
+/** Build editor rows from committed defense source data so edits target stable
+ * indices rather than derived/prepared PF2e values. */
 export function defenseEditorRecord(actor) {
   const categories = Object.keys(dictionaries);
   return {
@@ -22,6 +29,7 @@ export function defenseEditorRecord(actor) {
   };
 }
 
+/** Validate the selected source row and apply only the supported defense fields. */
 export function editDefenses(actor, payload, context) {
   if (!["character", "npc", "hazard", "vehicle"].includes(actor.type) || typeof actor.update !== "function" || !Object.hasOwn(dictionaries, payload.category)) invalid();
   const category = payload.category;
@@ -30,6 +38,7 @@ export function editDefenses(actor, payload, context) {
   if (!Array.isArray(payload.values) || payload.values.length > 128) invalid();
   const allowed = new Set(typesFor(category).map(([type]) => type));
   const used = new Set();
+  // Convert a normalized defense entry into the update payload shape.
   const wire = ({ sourceIndex, type, value, exceptions, doubleVs }) => ({ sourceIndex, type, value, exceptions, doubleVs });
   const normalized = payload.values.map(entry => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some(key => !["sourceIndex", "type", "value", "exceptions", "doubleVs"].includes(key))) invalid();

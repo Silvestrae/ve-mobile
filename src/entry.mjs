@@ -1,3 +1,6 @@
+// Composition root for Foundry startup: select the system, restore prior settings, and wire the page/runtime owners.
+import { createAutoModeConfirmationGateway } from "./foundry/auto-mode-confirmation-gateway.mjs";
+import { showAutoModeConfirmation } from "./ui/auto-mode-confirmation.mjs";
 import { selectSystemIntegration } from "./foundry/system-integration.mjs";
 import { localizeFoundry } from "./foundry/localization.mjs";
 import { createControlsGuideGateway } from "./foundry/controls-guide-gateway.mjs";
@@ -87,7 +90,14 @@ if (isGamePage) {
   const activationPolicy = createActivationPolicyResolver();
   let mobileMutationReady = false;
   let startupBlocked = false;
-  const readRequestedPolicy = () => sessionActivation.apply(activationPolicy.resolve(readPreferences()));
+  const modeConfirmation = createAutoModeConfirmationGateway({
+    readPreferences,
+    resolvePolicy: preferences => activationPolicy.resolve(preferences),
+    saveMode: mode => preferencesGateway.set({ key: KEYS.MODE, value: mode })
+  });
+  // Resolve the saved display choice plus the current page's temporary presentation override.
+  const readRequestedPolicy = () => sessionActivation.apply(modeConfirmation.policy());
+  // Add current startup/Canvas readiness to the requested policy before any runtime owner uses it.
   const readPolicy = () => {
     const requested = readRequestedPolicy();
     return { ...requested, active: requested.active && !startupBlocked,
@@ -100,6 +110,7 @@ if (isGamePage) {
   const desktopSettingsVisibility = createFoundryDesktopSettingsVisibilityGateway({ readPolicy });
   const deviceIdentityGateway = createDeviceIdentityGateway();
   const graphicsJournal = createGraphicsSafetyJournal();
+  // Exclude already-acknowledged graphics incidents from decisions made during this startup.
   const graphicsDecisionRecovery = () => {
     const recovery = graphicsJournal.recovery();
     let acknowledgedAt = 0;
@@ -126,6 +137,7 @@ if (isGamePage) {
   let chatDomGateway = null;
   let mobileBackGateway = null;
   let visualIsolationController = null;
+  // Resolve the user's visual safeguards against the current recorded graphics failure evidence.
   const baseGraphicsPolicy = () => {
     const preferences = preferencesGateway.snapshot();
     return resolveMobileGraphicsPolicy({
@@ -134,6 +146,7 @@ if (isGamePage) {
       recovery: graphicsDecisionRecovery()
     });
   };
+  // Layer the active memory profile over the base safeguards only while mobile owns graphics policy.
   const resolvedGraphicsPolicy = () => memoryProfilePolicy(
     mobilePerformanceAuthority.active() ? (lowMemoryGateway?.snapshot?.().profile ?? preferencesGateway.snapshot().memoryProtectionProfile ?? "normal") : "normal",
     baseGraphicsPolicy()
@@ -172,6 +185,7 @@ if (isGamePage) {
   let wakeStatusVersion = 0;
   const bootstrapWakePreference = createBootstrapWakePreference({
     initialValue: readKeepScreenAwake(),
+    // Wait for native settings registration before persisting the loading-screen wake choice.
     persist: async (value) => {
       await settingsReady;
       try {
@@ -181,6 +195,7 @@ if (isGamePage) {
       }
     }
   });
+  // Use the bootstrap choice until its ownership has been handed to the normal saved preference.
   const readWakeEnabled = () => wakePreferenceHandedOff
     ? readKeepScreenAwake()
     : bootstrapWakePreference.enabled;
@@ -193,6 +208,7 @@ if (isGamePage) {
     localize: (key, fallback) => localizeFoundry(key, fallback),
     iconUrl: new URL("../Icon.png", import.meta.url).href
   });
+  // Refresh retained loading/recovery copy after Foundry's localizer becomes available.
   const refreshBootstrapLocalization = () => { bootstrap.refreshLocalization?.(); renderBootstrapPhase(currentBootstrapStage); if (bootstrapRecoveryReason) showBootstrapRecovery(bootstrapRecoveryReason); };
   const localizationHook = Hooks.once("i18nInit", refreshBootstrapLocalization);
   window.addEventListener("pagehide", () => Hooks.off("i18nInit", localizationHook), { once: true });
@@ -201,6 +217,7 @@ if (isGamePage) {
   let bootstrapScope = null;
   let bootstrapWatchdog = null;
 
+  // Offer a refresh path only for an unfinished, still-mounted bootstrap surface.
   const showBootstrapRecovery = (reason = "stalled") => {
     if (startupComplete || !bootstrap.mounted) return;
     bootstrapRecoveryReason = reason;
@@ -216,12 +233,14 @@ if (isGamePage) {
     });
   };
 
+  // Record actual startup progress for both the visible checkpoints and the stall watchdog.
   const advanceBootstrap = (stage) => {
     currentBootstrapStage = stage;
     bootstrapWatchdog?.progress();
     bootstrap.advance(stage);
     renderBootstrapPhase(stage);
   };
+  // Show the current stage's localized summary without manufacturing a percentage for unknown work.
   const renderBootstrapPhase = stage => {
     const labels = {
       init: localizeFoundry("VEMOBILE.Boot.Phase.init", "Preparing game settings…"), world: localizeFoundry("VEMOBILE.Boot.Phase.world", "Preparing world data…"),
@@ -232,6 +251,7 @@ if (isGamePage) {
     bootstrap.setPhase?.({ label: labels[stage] ?? localizeFoundry("VEMOBILE.Boot.Phase.Default", "Loading Foundry…") });
   };
 
+  // Reconcile the screen-awake control and ignore stale async status from an earlier choice.
   const updateBootstrapWake = async (fromGesture = false) => {
     const statusVersion = ++wakeStatusVersion;
     if (!bootstrap.mounted) return;
@@ -265,11 +285,13 @@ if (isGamePage) {
     });
   };
 
+  // Save the explicit startup choice and request its capability state from the same user gesture.
   const chooseBootstrapWake = (enabled, { fromGesture = false } = {}) => {
     void bootstrapWakePreference.choose(enabled);
     void updateBootstrapWake(fromGesture);
   };
 
+  // Retire the loading/watchdog owners together when this page no longer needs mobile startup.
   const stopBootstrap = () => {
     bootstrapWatchdog?.stop();
     bootstrapWatchdog = null;
@@ -278,6 +300,7 @@ if (isGamePage) {
     bootstrapScope = null;
   };
 
+  // Mount or retire the loading surface according to the current resolved activation policy.
   const reconcileBootstrap = () => {
     if (startupComplete) return;
     const policy = readPolicy();
@@ -316,6 +339,7 @@ if (isGamePage) {
     void updateBootstrapWake();
   };
 
+  // Finish once, handling optional wake confirmation before transferring ownership to the running interface.
   const finishBootstrap = ({ animate = true, reason = "initial-ready" } = {}) => {
     if (startupComplete || bootstrapFinishing) return;
     bootstrapFinishing = true;
@@ -341,6 +365,7 @@ if (isGamePage) {
         bootstrapFinishing = false;
         return;
       }
+      // Retire this finishing scope and mark the bootstrap complete after its final presentation work.
       const complete = () => {
         bootstrap.unmount();
         if (bootstrapScope === finishingScope) bootstrapScope = null;
@@ -373,7 +398,10 @@ if (isGamePage) {
   // The module script runs before Foundry creates game. Keep the loading
   // surface early, but compose system-dependent services only at native init.
   let kernel;
+  // Defer broad memory diagnostics until the runtime dependencies have actually been composed.
   let readMobileMemory = () => null;
+  // Compose system-dependent gateways only after Foundry has selected the world/system.
+  // The early bootstrap above owns loading; app-kernel.mjs owns the eventual active UI.
   Hooks.once("init", function initializeMobileRuntime() {
   const systemIntegration = selectSystemIntegration(game.system.id);
   systemIntegration.assertCompatible?.(game);
@@ -418,6 +446,7 @@ if (isGamePage) {
   });
   let desktopOptimizer = null;
   let desktopControlsGuide = null;
+  // Reuse the active mobile guide or create a separate scope-owned guide for Desktop settings.
   const openControlsGuide = () => {
     if (readPolicy().active) { kernel?.openControlsGuide?.(document.activeElement); return; }
     if (!desktopControlsGuide) {
@@ -433,6 +462,7 @@ if (isGamePage) {
     desktopControlsGuide.surface.element.dataset.theme = themeGateway.applicationTheme();
     desktopControlsGuide.surface.show(document.activeElement);
   };
+  // Admit the GM-only optimizer independently of mobile presentation and reuse its current owner.
   const openDesktopMobileAssetOptimizer = (sceneId = "", sceneName = "") => {
     if (!globalThis.game?.user?.isGM) throw new Error(localizeFoundry("VEMOBILE.Optimizer.GmOnly", "Only a GM may open the Mobile Asset Optimizer."));
     if (!desktopOptimizer) {
@@ -536,6 +566,7 @@ if (isGamePage) {
   let graphicsSessionScope = null;
   const graphicsPolicyListeners = new Set();
   let publishedGraphicsPolicyKey = "";
+  // Replace visual guard scopes when effective graphics policy changes and restore them on Desktop exit.
   const reconcileMediaGuard = (force = false) => {
     const shouldRun = mobilePerformanceAuthority.active();
     if (!shouldRun) {
@@ -568,6 +599,7 @@ if (isGamePage) {
     if (!force && mediaScope && mediaPolicyKey === policyKey) return;
     mediaScope?.dispose();
     const candidate = createTaskScope("mobile-media", performanceObserver);
+    // Reconcile safeguards after the browser's context-loss event has finished, then republish client capability.
     const onContextLoss = () => queueMicrotask(() => {
       reconcileMediaGuard(true);
       void clientCapabilityGateway?.publish("context-loss");
@@ -630,14 +662,17 @@ if (isGamePage) {
     wakeLockController: wakeLock,
     readPolicy,
     readGraphicsPolicy: resolvedGraphicsPolicy,
+    // Subscribe this owner to effective graphics-policy changes and immediately deliver the current policy.
     watchGraphicsPolicy: (scope, listener) => {
       graphicsPolicyListeners.add(listener);
+      // Remove this graphics-policy listener when its owner is disposed.
       const unsubscribe = () => graphicsPolicyListeners.delete(listener);
       scope?.own?.(unsubscribe);
       listener(resolvedGraphicsPolicy());
       return unsubscribe;
     },
     disable: () => preferencesGateway.set({ key: KEYS.MODE, value: "desktop" }),
+    // Acquire native-app admission, style isolation and compatibility patches under the activation scope before mounting VE.
     preparePresentation: (scope) => {
       diagnostics.watch(scope);
       lowMemoryGateway.applyPresentationClass(scope);
@@ -684,6 +719,7 @@ if (isGamePage) {
     handoff: durableProfileHandoff,
     readEntryHandoff: () => globalThis.game?.settings?.get?.(MODULE_ID, KEYS.MOBILE_ENTRY_HANDOFF),
     clearEntryHandoff: () => globalThis.game.settings.set(MODULE_ID, KEYS.MOBILE_ENTRY_HANDOFF, {}),
+    // Request the native debounced reload once, leaving an already-pending display-mode reload in charge.
     requestReload: () => {
       if (modeReloadPending) return;
       const reload = globalThis.foundry?.utils?.debouncedReload;
@@ -695,11 +731,13 @@ if (isGamePage) {
   const reconcilePerformanceMode = performanceLifecycle.reconcile;
   let themeScope = null;
   let lastSelectedRuntimeMode = null;
+  // Use Foundry's debounced reload when available and the browser reload as a fallback.
   const reloadForModeChange = () => {
     const reload = globalThis.foundry?.utils?.debouncedReload;
     if (typeof reload === "function") reload();
     else globalThis.window?.location?.reload?.();
   };
+  // Restore captured graphics/theme values before clearing the pending Desktop recovery record.
   const restoreDesktopSettings = async () => {
     themeScope?.dispose();
     themeScope = null;
@@ -718,6 +756,7 @@ if (isGamePage) {
     onError: error => diagnostics.record("error", "Desktop settings recovery is required", error),
     onRecovery: record => { startupBlocked = true; recoveryRecord = record; }
   });
+  // Hold normal startup behind a retryable recovery surface until saved settings are restored.
   const showRestorationRecovery = () => {
     recoveryScope?.dispose();
     finishBootstrap({ animate: false, reason: "desktop-recovery" });
@@ -728,10 +767,29 @@ if (isGamePage) {
     showDesktopRestorationRecovery({ scope: recoveryScope, labels, keys: recoveryRecord?.keys ?? [], retry: async () => {
       const result = await startupGate.retry();
       if (result.state === "ready") reloadForModeChange();
-      else { showRestorationRecovery(); throw new Error(localizeFoundry("VEMOBILE.Recovery.DesktopPending", "Desktop restoration remains pending.")); }
+      // Keep the live panel and its listener: replacing it here would send the
+      // retry handler's failure feedback to the detached, disposed panel.
+      else throw new Error(recoveryRecord?.message || localizeFoundry("VEMOBILE.Recovery.DesktopPending", "Desktop restoration remains pending."));
     } });
   };
   let modeTransitionQueue = Promise.resolve();
+  let modeConfirmationScope = null;
+  // Open one page-owned confirmation only when Foundry is ready and an automatic choice is pending.
+  const reconcileModeConfirmation = () => {
+    if (!globalThis.game?.ready) return;
+    if (!modeConfirmation.pending) {
+      // The confirming button owns removal after persistence completes.
+      return;
+    }
+    if (modeConfirmationScope && !modeConfirmationScope.disposed) return;
+    modeConfirmationScope = createTaskScope("auto-mode-confirmation", performanceObserver);
+    modeConfirmationScope.listen(window, "pagehide", () => modeConfirmationScope.dispose(), { once: true });
+    const scope = modeConfirmationScope;
+    void showAutoModeConfirmation({ scope, mode: modeConfirmation.suggestion(),
+      confirm: mode => modeConfirmation.confirm(mode), localize: localizeFoundry })
+      .finally(() => scope.dispose())
+      .catch(error => diagnostics.record("error", "Display mode confirmation failed", error));
+  };
 
   (() => {
     const lightingScope = createTaskScope("native-lighting-precision", performanceObserver);
@@ -745,6 +803,7 @@ if (isGamePage) {
       backScope.listen(window, "pagehide", () => backScope.dispose(), { once: true, passive: true });
     }
     advanceBootstrap("init");
+    // Invalidate old action intent, reconcile current owners and refresh capabilities after a saved setting changes.
     const reconcileApplicationPreference = ({ key, value } = {}) => {
       if (modeReloadPending || startupBlocked) return;
       store.dispatch({ type: "action-navigation-invalidated" });
@@ -765,6 +824,7 @@ if (isGamePage) {
     };
     registerPreferences({
       onApplicationChange: reconcileApplicationPreference,
+      // Stop old presentation authority before serializing saved mode changes, Desktop restoration and reload handoff.
       onPresentationChange: ({ key } = {}) => {
         const currentMode = readPolicy().runtimeMode;
         const priorMode = lastSelectedRuntimeMode;
@@ -793,6 +853,7 @@ if (isGamePage) {
           });
           return;
         }
+        reconcileModeConfirmation();
         reconcileBootstrap();
         reconcileApplicationPreference();
         if (key === KEYS.THEME && mobilePerformanceAuthority.active()) themeGateway.sync(readPolicy().theme);
@@ -829,12 +890,13 @@ if (isGamePage) {
     reconcileBootstrap();
     reconcileMediaGuard();
   })();
+  // Bind native documents and page-lifetime observers before Foundry builds its ready UI.
   Hooks.once("setup", () => {
     authoritativeGateway.bindInitialDocuments();
     advanceBootstrap("world");
     const artworkScope = createTaskScope("native-scene-artwork-progress", performanceObserver);
     artworkScope.listen(window, "pagehide", () => artworkScope.dispose(), { once: true, passive: true });
-    observeNativeSceneArtworkProgress(artworkScope, { onProgress: (progress) => {
+    observeNativeSceneArtworkProgress(artworkScope, { /* Forward native artwork progress only to the currently relevant bootstrap or Canvas recovery checkpoint. */ onProgress: (progress) => {
       if (!readPolicy().active) return;
       if (bootstrap.mounted) bootstrap.setPhase?.(progress);
       const reconnect = store.state.reconnect;
@@ -854,11 +916,13 @@ if (isGamePage) {
       clientCapabilityGateway.start(capabilityScope);
     }
   });
+  // Capture native rendering capability and install eligible aliases before Scene artwork loads.
   Hooks.once("canvasInit", () => {
     lightingPrecision.measure();
     if (mobilePerformanceAuthority.active()) mobileAssetGateway.registerAliases();
     advanceBootstrap("canvas");
   });
+  // Restore interrupted settings first; only then grant mutation authority and start the mobile session.
   Hooks.once("ready", async () => {
     void pwaInstall?.setDefaultName(readPwaWorldName()).catch(error => {
       if (!pwaScope.disposed) console.warn("VE Mobile | App name could not be prepared", error);
@@ -928,8 +992,10 @@ if (isGamePage) {
     diagnostics.record("info", `VE Mobile v${module?.version ?? "0.1.0"} ready`);
     diagnosticsJournalGateway?.schedule?.();
     console.info(`VE Mobile | v${module?.version ?? "0.1.0"} ready`);
+    reconcileModeConfirmation();
   });
 
+  // Build the broad diagnostic record only for callers that request memory/recovery evidence.
   function mobileMemoryDiagnostics() {
     const canvasRef = globalThis.canvas;
     const scene = canvasRef?.scene ?? globalThis.game?.scenes?.current;
@@ -948,6 +1014,7 @@ if (isGamePage) {
     });
   }
 
+  // Measure the actual Scene pane and Canvas backing store for device-pressure decisions.
   function memoryPresentationContext() {
     const canvasElement = globalThis.canvas?.app?.renderer?.canvas ?? globalThis.canvas?.app?.view ?? null;
     const root = globalThis.document?.querySelector?.(".ve-mobile-app");
@@ -973,6 +1040,7 @@ if (isGamePage) {
   });
 }
 
+// Read the native no-Canvas flag defensively while Foundry settings may still be initializing.
 function readNoCanvas() {
   try { return globalThis.game?.settings?.get?.("core", "noCanvas") === true; } catch { return false; }
 }

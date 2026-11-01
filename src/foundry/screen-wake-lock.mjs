@@ -9,10 +9,15 @@ export function createScreenWakeLockController({
   let pending = null;
   let version = 0;
 
+  // Check whether the current browser exposes the Screen Wake Lock request API.
   const supported = () => typeof getNavigator()?.wakeLock?.request === "function";
+  // Hold a lock only while an owner requests it, the preference is enabled,
+  // the API exists, and the page is visible.
   const shouldHold = () => Boolean(owners.size && readEnabled() && supported()
     && getDocument()?.visibilityState !== "hidden");
 
+  // Clear the current handle before awaiting release so a newer request can
+  // acquire independently; release failures are reported but do not block cleanup.
   const release = async () => {
     const current = sentinel;
     sentinel = null;
@@ -24,6 +29,8 @@ export function createScreenWakeLockController({
     }
   };
 
+  // Coalesce browser requests and discard the result if owner/policy version
+  // changed before the browser granted it.
   const acquire = (expectedVersion) => {
     if (sentinel && !sentinel.released) return Promise.resolve(true);
     if (pending) return pending;
@@ -65,12 +72,16 @@ export function createScreenWakeLockController({
     return pending;
   };
 
+  // Reconcile the owned lock with current visibility and preference; changing
+  // to a release also advances the version to invalidate pending acquisitions.
   const reconcile = () => {
     if (shouldHold()) return acquire(version);
     version += 1;
     return release().then(() => false);
   };
 
+  // Request while a real user gesture is still on the call stack, since browsers
+  // may reject wake-lock requests started later from lifecycle callbacks.
   const requestFromUserGesture = () => {
     if (!owners.size || !supported() || getDocument()?.visibilityState === "hidden") return Promise.resolve(false);
     return acquire(version);
@@ -83,6 +94,7 @@ export function createScreenWakeLockController({
     get active() {
       return Boolean(sentinel && !sentinel.released);
     },
+    // Request and own a screen wake lock while the active mobile scope requires it.
     enable(scope) {
       if (!scope || owners.has(scope)) return;
       owners.add(scope);
@@ -119,6 +131,8 @@ export function createBootstrapWakePreference({
   let persistedRevision = 0;
   let writeTask = null;
 
+  // Persist preference revisions in order, coalescing intermediate choices to
+  // the newest value observed before each write begins.
   const drain = async () => {
     while (persistedRevision < revision) {
       const targetRevision = revision;
@@ -128,6 +142,8 @@ export function createBootstrapWakePreference({
     }
   };
 
+  // Keep one persistence task active and start another only if a newer revision
+  // arrived while the previous write was in flight.
   const schedulePersistence = () => {
     if (!writeTask) {
       writeTask = drain().finally(() => {
@@ -150,6 +166,7 @@ export function createBootstrapWakePreference({
       enabled = Boolean(value);
       return true;
     },
+    // Record the user's wake-lock preference and reconcile the current browser lock request.
     choose(value) {
       const next = Boolean(value);
       if (next === enabled && persistedRevision === revision) return writeTask ?? Promise.resolve();

@@ -1,5 +1,6 @@
 import { localizeFoundry } from "./localization.mjs";
 
+/** Typed failure codes let the renderer show safe, localized command errors. */
 export class CommandError extends Error {
   constructor(code, message, options = {}) {
     super(message, options);
@@ -9,6 +10,7 @@ export class CommandError extends Error {
 }
 
 
+/** Fail closed when Foundry cannot confirm OWNER permission for this Actor. */
 export function canOwn(actor, user) {
   if (!actor || !user) return false;
   try {
@@ -19,6 +21,7 @@ export function canOwn(actor, user) {
   }
 }
 
+/** Reject a command whose world, user or connection differs from its caller's snapshot. */
 export function assertSession(game, expected, getConnectionGeneration = () => 0) {
   if (!game?.user || !game?.world) throw new CommandError("SESSION_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.BiographyGateway.TheFoundrySessionIsNotReady", "The Foundry session is not ready."));
   if (expected.worldId && expected.worldId !== game.world.id) {
@@ -32,6 +35,7 @@ export function assertSession(game, expected, getConnectionGeneration = () => 0)
   }
 }
 
+/** Normalize a required external ID and cap it before using it in a lookup. */
 export function identifier(value, field) {
   const id = String(value ?? "").trim();
   if (!id || id.length > 128) throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.Character.CommandGateway.IsRequired", "{field} is required.", { field: (field) }));

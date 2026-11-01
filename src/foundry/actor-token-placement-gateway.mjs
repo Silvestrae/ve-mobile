@@ -11,8 +11,10 @@ export function createActorTokenPlacementGateway({
   let creating = false;
   let previewGeneration = 0;
   let viewGeneration = 0;
+  // Capture the active canvas and camera identity before beginning Actor token placement.
   const captureView = canvas => ({ canvas, scene: canvas.scene, stage: canvas.stage, level: canvas.level, generation: viewGeneration,
     worldId: getGame()?.world?.id, userId: getGame()?.user?.id, connectionGeneration: getConnectionGeneration() });
+  // Check that the captured canvas view remains current during asynchronous placement.
   const viewCurrent = view => {
     const canvas = getCanvas();
     return canvas === view.canvas && canvas?.ready && !canvas.loading && canvas.scene === view.scene
@@ -20,13 +22,16 @@ export function createActorTokenPlacementGateway({
       && getGame()?.world?.id === view.worldId && getGame()?.user?.id === view.userId
       && getConnectionGeneration() === view.connectionGeneration;
   };
+  // Cancel the pending token preview and release its native interaction resources.
   const cancelPreview = () => { previewGeneration += 1; viewGeneration += 1; preview = null; };
+  // Report a placement failure through the injected error callback.
   const error = (key, fallback) => {
     const id = `VEMOBILE.Scene.ActorToken.${key}`;
     const localized = getGame()?.i18n?.localize?.(id);
     return new Error(localized && localized !== id ? localized : fallback);
   };
 
+  // Resolve the exact Actor source and Scene target after each asynchronous boundary.
   const resolve = (sourceUuid, sceneId) => {
     const game = getGame();
     const canvas = getCanvas();
@@ -45,14 +50,17 @@ export function createActorTokenPlacementGateway({
     return { actor, canvas, game };
   };
 
+  // Check whether the requested Actor may be placed on the current Scene by this user.
   const eligibility = (sourceUuid, sceneId) => Boolean(resolve(sourceUuid, sceneId));
 
+  // Convert a client point into the active canvas placement coordinate.
   const pointAt = (canvas, clientPoint) => {
     if (!Number.isFinite(clientPoint?.x) || !Number.isFinite(clientPoint?.y)) return null;
     const point = canvas.canvasCoordinatesFromClient(clientPoint);
     return canvas.dimensions?.rect?.contains?.(point.x, point.y) ? point : null;
   };
 
+  // Run Foundry’s native Actor drop workflow while preserving current canvas, permission, and target identity.
   const nativeDrop = async (sourceUuid, sceneId, clientPoint, appearance = null, validate = () => true) => {
     if (creating) return false;
     if (!validate()) return false;
@@ -112,6 +120,7 @@ export function createActorTokenPlacementGateway({
       scope.own(cancelPreview);
     },
     drop: (sourceUuid, sceneId, point, validate) => nativeDrop(sourceUuid, sceneId, point, null, validate),
+    // Resolve and prepare the requested Actor token on the Scene without placing it yet.
     async prepare(sourceUuid, sceneId, validate = () => true) {
       if (preview) return null;
       const generation = ++previewGeneration;
@@ -127,6 +136,7 @@ export function createActorTokenPlacementGateway({
       return Object.freeze({ img: String(token.texture?.src ?? target.actor.img ?? ""),
         width: Number(token.width) || 1, height: Number(token.height) || 1 });
     },
+    // Return the current prepared token preview at a client point, if the preview remains valid.
     previewAt(clientPoint = null) {
       if (!preview) return null;
       const target = resolve(preview.sourceUuid, preview.sceneId);
@@ -148,6 +158,7 @@ export function createActorTokenPlacementGateway({
         width: Math.max(20, preview.token.width * grid * scale),
         height: Math.max(20, preview.token.height * grid * scale) });
     },
+    // Recheck the prepared Actor and Scene before creating the token through Foundry.
     async commit(sourceUuid, sceneId, validate) {
       if (!preview || preview.sourceUuid !== sourceUuid || preview.sceneId !== sceneId || !preview.point) return false;
       const target = resolve(sourceUuid, sceneId);

@@ -10,6 +10,7 @@ export function controlsGuideSections({ presentation = "desktop", canvasAvailabl
   return Object.freeze(sections.map(section => Object.freeze({ ...section, entries: Object.freeze(section.entries) })));
 }
 
+// Wait until mobile presentation is settled and no interactive surface would be interrupted by the invitation.
 export function controlsInvitationReady({ ready, state = {}, blocked = false, interacting = false } = {}) {
   return Boolean(ready && state.status === "ready" && ["phone", "tablet"].includes(state.formFactor)
     && !state.reconnect && !state.modeTransition && !state.templatePlacement && !state.nativeTokenPlacement

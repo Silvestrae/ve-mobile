@@ -5,7 +5,7 @@ import { renderCharacters as renderDnd5eCharacters } from "./systems/dnd5e/prese
 
 export * from "./systems/dnd5e/presenter.mjs";
 
-// Existing renderer-only consumers may omit world metadata; preserve their historical D&D5e presentation.
+// Route character rendering to the world's supported integration; older renderer-only callers default to D&D5e.
 export function renderCharacters(options) {
   const { state, commands } = options;
   const world = state?.snapshot?.world;

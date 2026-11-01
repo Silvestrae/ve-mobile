@@ -12,6 +12,7 @@ export function createFoundryActionSessionGateway({
   getUi = () => globalThis.ui
 } = {}) {
   return Object.freeze({
+    // Render messages linked to one native action into the owned chat surface and release hooks on teardown.
     async mount(host, session, scope, { onCompactVisibility = () => {} } = {}) {
       const rootMessageId = identifier(session?.rootMessageId);
       if (!host?.replaceChildren || !rootMessageId || !scope?.hook) {
@@ -46,6 +47,7 @@ export function createFoundryActionSessionGateway({
         }
       }
 
+      // Collect the native action messages for this session, render them into the owned host, and retain scroll position when the DOM is reconciled.
       const render = async (scrollToResult = false) => {
         if (disposed || scope.disposed) return false;
         const messages = collectActionMessages(getGame(), rootMessageId, explicitlyCapturedIds);
@@ -129,10 +131,12 @@ export function createFoundryActionSessionGateway({
         return true;
       };
 
+      // Debounce chat updates so bursts of related Foundry hooks schedule one refresh.
       const scheduleRender = (scrollToResult = false) => {
         queue = queue.then(() => render(scrollToResult), () => render(scrollToResult));
         return queue;
       };
+      // Serialize requested refreshes, remembering whether the next result should be brought into view.
       const requestRender = (scrollToResult = false) => {
         pendingResultScroll ||= scrollToResult;
         if (renderTimer !== null) clearTimeout(renderTimer);
@@ -143,6 +147,7 @@ export function createFoundryActionSessionGateway({
           void scheduleRender(shouldScroll);
         }, ACTION_UPDATE_SETTLE_MS);
       };
+      // Accept a message only when its actor, author, item, or activity provenance matches this action session.
       const belongs = (message) => {
         const id = messageIdentifier(message);
         const origin = originatingMessageId(message);
@@ -206,6 +211,7 @@ export function markOddCompactRoll(elements) {
   const entries = elements.filter((element) => element.classList?.contains("ve-action-session-compact-entry"));
   let rollCount = 0;
   let run = [];
+  // Flush the final compact-result group when a sequence of native roll messages ends.
   const finishRun = () => {
     if (run.length % 2) run.at(-1)?.classList?.add("ve-action-session-compact-last-roll");
     run = [];
@@ -236,6 +242,7 @@ export function compactMessageActivity(message) {
   return { key, label: String(activity?.name ?? reference.name).trim().slice(0, 120), type: identifier(activity?.type ?? reference.type) };
 }
 
+// Read the Midi-QOL save-target identifier associated with a native roll message.
 function nativeSaveTargetId(message) {
   // Midi may create a generic ChatMessage for a save, without a dnd5e roll type.
   // Its native speaker/request still identifies the target; the owning activity
@@ -252,6 +259,7 @@ export function compactActivityElements(document, session, records) {
   const rootId = identifier(session?.rootMessageId);
   const byId = new Map(records.map(record => [record.id, record]));
   const groups = new Map();
+  // Resolve an activity reference through related message records while preventing cyclic reference walks.
   const resolveActivity = (record, visited = new Set()) => {
     if (!record || visited.has(record.id)) return null;
     if (record.activity) return record.activity;
@@ -363,6 +371,7 @@ export function patchActionMessageElement(current, next) {
   return true;
 }
 
+// Update an existing rendered subtree in place so disclosure and focus state survive new message data.
 function patchNode(current, next) {
   if (current.nodeType === 3 || current.nodeType === 8) {
     if (current.nodeValue !== next.nodeValue) current.nodeValue = next.nodeValue;
@@ -387,6 +396,7 @@ function patchNode(current, next) {
   while ((current.childNodes?.length ?? 0) > nextChildren.length) current.lastChild?.remove?.();
 }
 
+// Copy changed attributes from the new node and remove obsolete attributes from the retained node.
 function syncAttributes(current, next) {
   const nextNames = new Set(Array.from(next.attributes ?? []).map(({ name }) => name));
   for (const { name } of Array.from(current.attributes ?? [])) {
@@ -397,6 +407,7 @@ function syncAttributes(current, next) {
   }
 }
 
+// Adapt Foundry’s rendered chat card into the session’s accessible action and description structure.
 function prepareActionMessageElement(element) {
   for (const description of element.querySelectorAll?.(".description.collapsible") ?? []) {
     description.classList?.add?.("collapsed");
@@ -480,12 +491,12 @@ export function compactActionMessageElement(element, document, chatElement, moda
       const seen = new Set();
       for (const nativeIcon of icons) {
         if (nativeVisibilityHidden(nativeIcon)) continue;
-        const src = nativeIcon.getAttribute("src");
-        if (!src || seen.has(src)) continue;
-        seen.add(src);
+        const iconSource = nativeIcon.getAttribute("src");
+        if (!iconSource || seen.has(iconSource)) continue;
+        seen.add(iconSource);
         const icon = document.createElement("img");
         icon.className = "ve-action-session-compact-damage-icon";
-        icon.setAttribute("src", src);
+        icon.setAttribute("src", iconSource);
         const name = nativeIcon.getAttribute("aria-label") || nativeIcon.getAttribute("alt") || nativeIcon.getAttribute("data-tooltip") || "";
         icon.setAttribute("alt", name);
         if (name) icon.setAttribute("title", name);
@@ -577,10 +588,10 @@ export function collectRenderedActionTargets(element, targets) {
     const name = String(nameNode?.textContent ?? "").trim();
     if (!id || !name) continue;
     const image = row.querySelector?.("img.midi-qol-target-img, :scope > img");
-    const src = !nativeVisibilityHidden(image) ? String(image?.getAttribute?.("src") ?? "") : "";
-    const current = targets.get(id) ?? { id, name, img: src, attack: null, save: null };
+    const imageSource = !nativeVisibilityHidden(image) ? String(image?.getAttribute?.("src") ?? "") : "";
+    const current = targets.get(id) ?? { id, name, img: imageSource, attack: null, save: null };
     current.name = name;
-    if (src) current.img = src;
+    if (imageSource) current.img = imageSource;
     if (row.classList?.contains("midi-qol-hit-class")) {
       const icon = row.querySelector?.(".midi-qol-hit-symbol");
       const outcome = !nativeVisibilityHidden(icon) ? nativeOutcome(icon) || classOutcome(row) : classOutcome(row);
@@ -612,6 +623,7 @@ export function collectRenderedActionTargets(element, targets) {
   return targets;
 }
 
+// Ignore controls hidden by Foundry’s inline style or computed visibility.
 function nativeVisibilityHidden(node) {
   if (!node) return true;
   for (let current = node; current; current = current.parentElement) {
@@ -620,12 +632,14 @@ function nativeVisibilityHidden(node) {
   return false;
 }
 
+// Read a visible outcome from the native icon used by D&D5e or Midi-QOL.
 function nativeOutcome(icon) {
   if (icon?.classList?.contains("fa-check")) return "success";
   if (icon?.classList?.contains("fa-times") || icon?.classList?.contains("fa-xmark")) return "failure";
   return "";
 }
 
+// Infer hit/save outcome from the native result row classes when no icon gives it.
 function classOutcome(row) {
   if (row.classList?.contains("success")) return "success";
   if (row.classList?.contains("failure")) return "failure";
@@ -643,6 +657,7 @@ export function compactActionTargetsElement(document, rootMessageId, targetIds =
     const tokenId = /^Scene\.[^.]+\.Token\.([^.]+)$/u.exec(id)?.[1];
     if (tokenId) tokenKeys.set(tokenId, tokenKeys.has(tokenId) ? null : id);
   }
+  // Map a token UUID to its canonical target identifier when a target record supplies both forms.
   const canonicalId = id => tokenKeys.get(id) || id;
   const ids = [...new Set(Array.from(targetIds ?? [], identifier).filter(Boolean).map(canonicalId))];
   const allowedIds = new Set(ids);
@@ -695,19 +710,21 @@ export function compactActionTargetsElement(document, rootMessageId, targetIds =
   return wrapper;
 }
 
+// Build one compact target row with its image, name, and roll outcome badges.
 function compactActionTargetRow(document, target) {
   const row = document.createElement("div");
   row.className = "ve-action-session-compact-target";
   if (target.img) {
-    const img = document.createElement("img");
-    img.src = target.img;
-    img.alt = "";
-    row.append(img);
+    const imageElement = document.createElement("img");
+    imageElement.src = target.img;
+    imageElement.alt = "";
+    row.append(imageElement);
   }
   const name = document.createElement("span");
   name.className = "ve-action-session-compact-target-name";
   name.textContent = target.name;
   row.append(name);
+  // Append a localized roll/save outcome badge when a target result is available.
   const addOutcome = (kind, result) => {
     if (!result) return;
     const badge = document.createElement("span");
@@ -724,6 +741,7 @@ function compactActionTargetRow(document, target) {
   return row;
 }
 
+// Normalize native roll classes and labels to the action-session roll categories.
 function rollKind(value) {
   const text = String(value ?? "").toLowerCase();
   for (const kind of ["attack", "save", "check", "damage", "healing"]) {
@@ -732,11 +750,14 @@ function rollKind(value) {
   return "";
 }
 
+// Return the localized heading for an action-session roll category.
 function kindLabel(kind) {
   return kind ? kind[0].toUpperCase() + kind.slice(1) : "";
 }
 
+// Keep the modal description disclosure and its equivalent native chat action synchronized.
 function bindActionDescriptionToggles(host, scope) {
+  // Handle clicks on a card description summary and update its expanded state.
   const toggle = (event) => {
     const summary = event.target?.closest?.(".description.collapsible > .summary");
     const description = summary?.parentElement;
@@ -814,6 +835,7 @@ export function findNativeChatAction(chatElement, modalAction, messageId, modalH
   return null;
 }
 
+// Identify a native action control by its action, activity, and data attributes for safe click forwarding.
 function actionFingerprint(element) {
   const activityUuid = element.closest?.("[data-activity-uuid]")?.dataset?.activityUuid ?? "";
   const values = [
@@ -831,6 +853,7 @@ function actionFingerprint(element) {
   return values.map((value) => String(value ?? "")).join("\u001f");
 }
 
+// Read a message ID from a rendered chat element or its dataset.
 function messageIdentifierFromElement(element) {
   return identifier(element?.getAttribute?.("data-message-id") ?? element?.dataset?.messageId);
 }
@@ -904,10 +927,12 @@ export function isVisibleItemActivity(message, session, game) {
   return identifier(reference?.uuid) === expectedUuid;
 }
 
+// Prefer the session’s exact Actor source UUID and use the resolved Actor only as a fallback.
 function actorSourceUuidForSession(actor, session) {
   return String(session.actorSourceUuid || actor.uuid || `Actor.${actor.id}`);
 }
 
+// Read Foundry’s current chat messages as a plain list.
 function messageDocuments(game) {
   try {
     return Array.from(game?.messages ?? []);
@@ -916,15 +941,18 @@ function messageDocuments(game) {
   }
 }
 
+// Extract the stable message ID from a document or source record.
 function messageIdentifier(message) {
   return identifier(message?.id ?? message?._id ?? message?._source?._id);
 }
 
+// Normalize a chat message timestamp for ordering and session-window checks.
 function messageTimestamp(message) {
   const timestamp = Number(message?.timestamp ?? message?._source?.timestamp);
   return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER;
 }
 
+// Check the message’s visibility and source state before including it in the action view.
 function canRenderMessage(message) {
   // A blind/self-hidden roll can still be visible to its author as Foundry's
   // permission-safe redacted card. Never inspect or reproduce its result;
@@ -932,6 +960,7 @@ function canRenderMessage(message) {
   return message?.visible !== false;
 }
 
+// Normalize a present identifier without coercing arbitrary document objects.
 function identifier(value) {
   return String(value ?? "").trim().slice(0, 128);
 }

@@ -19,7 +19,9 @@ export function createFoundryMobileBackGateway({
   let active = false;
   let armed = false;
   let ownerToken = "";
+  // Dispatch the current mobile back action through the registered lifecycle owner.
   let onBack = () => "root";
+  // Capture safe current context for back-navigation diagnostics.
   let getDiagnosticContext = () => ({});
   let lastPopstateAt = null;
   let lastAction = "none";
@@ -28,16 +30,21 @@ export function createFoundryMobileBackGateway({
   let leaveConfirmed = false;
   let restorePendingConfirm = null;
 
+  // Resolve the current browser history surface used by the back guard.
   const browser = () => getWindow?.();
+  // Create the unique state marker owned by this back-navigation entry.
   const marker = (phase) => ({ kind: MARKER_KIND, pageToken, ownerToken, phase });
+  // Copy the current history state and attach this guard’s marker.
   const stateWithMarker = (history, phase) => ({
     ...plainState(history.state),
     [HISTORY_KEY]: marker(phase)
   });
+  // Record a bounded error when history restoration or back dispatch fails.
   const recordError = (message, error) => {
     lastError = `${message}: ${error?.message ?? String(error)}`;
     trace({ action: "error", message, error: lastError });
   };
+  // Push the owned history entry and register its cleanup before intercepting browser back.
   const arm = (history, { replaceCurrent = false } = {}) => {
     try {
       if (replaceCurrent) history.replaceState(stateWithMarker(history, "active"), "");
@@ -66,6 +73,7 @@ export function createFoundryMobileBackGateway({
     if (typeof prompt !== "string" || !prompt || prompt === "APP.NavigateBackConfirm" || typeof originalConfirm !== "function") return false;
     let timeout = null;
     let restored = false;
+    // Remove the guard’s history entry only while its marker still identifies the current state.
     const restore = () => {
       if (restored) return;
       restored = true;
@@ -73,6 +81,7 @@ export function createFoundryMobileBackGateway({
       if (window.confirm === observeConfirm) window.confirm = originalConfirm;
       if (restorePendingConfirm === restore) restorePendingConfirm = null;
     };
+    // Watch for a native confirmation surface and suspend back handling while it is active.
     const observeConfirm = function(message, ...args) {
       if (String(message) !== prompt) return Reflect.apply(originalConfirm, this, [message, ...args]);
       restore();
@@ -107,6 +116,7 @@ export function createFoundryMobileBackGateway({
     return true;
   };
 
+  // Handle browser back by distinguishing the owned marker from a user or Foundry history transition.
   const handlePopstate = (event) => {
     if (!active || leaveConfirmed) return;
     lastPopstateAt = now();
@@ -139,6 +149,7 @@ export function createFoundryMobileBackGateway({
   };
 
   return Object.freeze({
+    // Install the early browser-history listener and register restoration with the mobile lifecycle.
     install(scope) {
       if (installed) return true;
       const window = browser();
@@ -162,6 +173,7 @@ export function createFoundryMobileBackGateway({
       installed = true;
       return true;
     },
+    // Enable scoped Back handling with the caller's navigation action and diagnostic context.
     enable(scope, { onBack: action = () => "root", getDiagnosticContext: context = () => ({}) } = {}) {
       if (!installed || !scope?.own) {
         recordError("Browser Back protection could not enable", new Error("Early listener or task scope unavailable"));
@@ -209,6 +221,7 @@ export function createFoundryMobileBackGateway({
       trace({ action: "enabled", reused: reuseInactive });
       return true;
     },
+    // Expose current Back protection, intercepted action, and latest diagnostic outcome.
     snapshot() {
       const window = browser();
       const history = window?.history;
@@ -241,6 +254,7 @@ export function createFoundryMobileBackGateway({
   });
 }
 
+// Convert history state to a plain object before adding or removing the guard marker.
 function plainState(state) {
   return state && typeof state === "object" && !Array.isArray(state) ? state : {};
 }

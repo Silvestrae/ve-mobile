@@ -14,11 +14,13 @@ export function enableMobileDiceGuard(scope, {
   let earlyInstance = null;
   let restoreEarlyInstance = null;
 
+  // Initialize the static Dice So Nice instance before its first renderer is attached.
   const primeStaticInstance = (instance) => {
     if (mode !== "static" || !instance || earlyInstance === instance || guardedInstance === instance) return;
     restoreEarlyInstance?.();
     const originalEnabled = instance.isEnabled;
     const originalMessageHookDisabled = instance.messageHookDisabled;
+    // Check the current Dice So Nice static-rendering setting.
     const staticEnabled = () => false;
     instance.isEnabled = staticEnabled;
     instance.messageHookDisabled = true;
@@ -31,6 +33,7 @@ export function enableMobileDiceGuard(scope, {
     };
   };
 
+  // Install the scoped Dice So Nice guard and retain the exact original methods for restoration.
   const install = (readyInstance = null) => {
     const game = getGame();
     if (!game?.modules?.get?.("dice-so-nice")?.active) return;
@@ -56,11 +59,20 @@ export function enableMobileDiceGuard(scope, {
 }
 
 export function guardDiceInstance(instance, { mode = "static", diagnostics = null, journal = null } = {}) {
+  // Patch only this Dice So Nice instance and retain conditional restorers so
+  // teardown does not overwrite a later wrapper installed by another module.
   const cleanups = [];
+  // Register one patch restoration with the owning task scope.
   const own = (cleanup) => cleanups.push(cleanup);
+
+  if (mode !== "static") {
+    const restoreBounds = useMobileDiceBounds(instance, diagnostics);
+    if (restoreBounds) own(restoreBounds);
+  }
 
   const originalShow = instance.show;
   if (mode !== "static" && typeof originalShow === "function") {
+    // Allow Dice So Nice to show only when the current renderer and mobile graphics policy permit it.
     const guardedShow = function (...args) {
       journal?.recordRisk?.("dice-so-nice-roll", `mode:${mode}`);
       const result = originalShow.apply(this, args);
@@ -80,6 +92,7 @@ export function guardDiceInstance(instance, { mode = "static", diagnostics = nul
   if (mode === "static") {
     const originalEnabled = instance.isEnabled;
     const originalMessageHookDisabled = instance.messageHookDisabled;
+    // Keep native dice disabled for this static-results mode until cleanup.
     const staticEnabled = () => false;
     instance.isEnabled = staticEnabled;
     instance.messageHookDisabled = true;
@@ -107,6 +120,40 @@ export function guardDiceInstance(instance, { mode = "static", diagnostics = nul
   };
 }
 
+/** Ignore the replaced desktop sidebar while this mobile graphics scope owns DSN.
+ * DSN 5.3.4 and 6.4.4 reserve its measured width even when VE hides it. Correct
+ * the native dimension result so both physics barriers and autoscale use the
+ * available width; a CSS canvas stretch alone cannot change those barriers.
+ */
+function useMobileDiceBounds(instance, diagnostics) {
+  const originalDimensions = instance._computeDimensions;
+  if (typeof originalDimensions !== "function" || typeof instance.resizePlayArea !== "function") return null;
+  let active = true;
+  // Preserve explicit user rolling areas and every native dimension except the
+  // right sidebar reservation. Return fresh records without mutating DSN config.
+  const mobileDimensions = function (rollingArea, ...args) {
+    const dimensions = originalDimensions.call(this, rollingArea, ...args);
+    if (!active || rollingArea || !dimensions?.margin) return dimensions;
+    return { ...dimensions, margin: { ...dimensions.margin, right: 0 } };
+  };
+  // Reuse DSN's boundary update instead of recreating its WebGL renderer or
+  // touching settings. Ready, sidebar changes and rebuilds reuse this wrapper.
+  const refreshBounds = () => {
+    try { instance.resizePlayArea(); }
+    catch (error) { diagnostics?.record?.("warn", "Could not refresh Dice So Nice rolling bounds", error); }
+  };
+  instance._computeDimensions = mobileDimensions;
+  refreshBounds();
+  return () => {
+    active = false;
+    if (instance._computeDimensions === mobileDimensions) instance._computeDimensions = originalDimensions;
+    // A later module wrapper may retain ours; the inactive flag lets it safely
+    // pass through after Desktop exit rather than retaining mobile behavior.
+    refreshBounds();
+  };
+}
+
+/** Lower only the current dice renderer's local geometry/texture workload. */
 export function reduceDiceQuality(instance) {
   const box = instance?.box;
   const factory = box?.dicefactory ?? instance?.DiceFactory;
@@ -226,6 +273,7 @@ export function inspectDiceRuntime(instance, {
   });
 }
 
+// Finish or discard queued dice animations while the renderer is suspended.
 function drainHiddenAnimations(instance) {
   const queue = Array.isArray(instance?.hiddenAnimationQueue) ? instance.hiddenAnimationQueue.splice(0) : [];
   for (const entry of queue) {
@@ -233,6 +281,7 @@ function drainHiddenAnimations(instance) {
   }
 }
 
+// Suspend the current Dice So Nice renderer and capture only the state needed for policy-safe restoration.
 function suspendDiceRenderer(instance) {
   const box = instance?.box;
   const renderer = box?.renderer ?? instance?.dice3dRenderers?.board;
@@ -253,15 +302,18 @@ function suspendDiceRenderer(instance) {
   };
 }
 
+// Read finite renderer bounds or return null when the canvas is detached.
 function safeRect(element) {
   try { return element?.getBoundingClientRect?.() ?? null; } catch { return null; }
 }
 
+// Normalize a positive finite renderer dimension.
 function finiteDimension(value) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? Math.round(number * 100) / 100 : null;
 }
 
+// Resolve the effective device pixel ratio under the current graphics cap.
 function effectiveRatio(backing, css) {
   if (!Number.isFinite(backing) || !Number.isFinite(css) || css <= 0) return null;
   return Math.round((backing / css) * 100) / 100;

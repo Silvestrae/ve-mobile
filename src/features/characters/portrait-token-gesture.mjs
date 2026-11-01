@@ -8,6 +8,7 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
   const document = portrait.ownerDocument;
   const window = document.defaultView ?? globalThis.window;
   const split = state.formFactor === "tablet" && state.splitScreen && state.route === "characters";
+  // Normalize directory records so actions always target one stable Actor source.
   const sourceOf = (entry) => String(entry?.sourceUuid ?? (entry?.id ? `Actor.${entry.id}` : ""));
   const directory = new Map(actors.map((entry) => [sourceOf(entry), entry]));
   const selectedSource = String(state.snapshot?.selectedActor?.sourceUuid ?? sourceOf(actor));
@@ -34,8 +35,11 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
     : commands.localize?.("VEMOBILE.Character.HoldActions", "Hold for portrait actions") ?? localizedText(commands.localize, "VEMOBILE.Character.HoldActions", "Hold for portrait actions");
   portrait.querySelector("img")?.setAttribute("draggable", "false");
 
+  // Hide the one-shot action menu and discard its selected Actor source.
   function closeMenu() { if (actionMenu) actionMenu.hidden = true; menuSource = ""; }
+  // Remove the drag preview when its owning gesture ends.
   function clearGhost() { ghost?.remove(); ghost = null; }
+  // Cancel the active press and release its timer, pointer listeners, and scroll lock.
   function cancel() {
     if (!press) return;
     const current = press;
@@ -43,18 +47,21 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
     current.scope.dispose();
     clearGhost();
   }
+  // Accept drops only on the Scene surface, clear of interactive controls.
   function sceneTarget(x, y) {
     const element = document.elementFromPoint?.(x, y);
     const surface = element?.closest?.(".ve-split-scene-viewport .ve-scene-screen");
     if (!surface || element.closest("button, a, [role='toolbar'], .ve-scene-combat-carousel, .ve-quickbar")) return null;
     return surface;
   }
+  // Cancel if layout changes have moved or resized Scene since the hold armed.
   function sceneGeometryCurrent(current) {
     if (!split) return true;
     const bounds = document.querySelector(".ve-split-scene-viewport .ve-scene-screen")?.getBoundingClientRect?.();
     return Boolean(bounds && current.sceneBounds && ["x", "y", "width", "height"]
       .every((key) => Math.abs(bounds[key] - current.sceneBounds[key]) <= 2));
   }
+  // Create the preview once, then follow the active pointer in screen coordinates.
   function positionGhost(current, x, y) {
     if (!ghost) {
       ghost = node("div", { className: "ve-portrait-token-ghost",
@@ -65,6 +72,7 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
     }
     if (ghost) { ghost.style.left = `${x}px`; ghost.style.top = `${y}px`; }
   }
+  // Suppress scrolling during placement and restore the target's prior DOM state.
   function lockScroll(current) {
     for (const scroller of [portrait.closest(".ve-viewport"), current.row && chooser].filter(Boolean)) {
       const overflow = scroller.style.overflowY;
@@ -89,6 +97,7 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
     try { current.target.setPointerCapture?.(current.id); } catch { /* document listeners retain ownership */ }
     current.scope.own(() => { try { current.target.releasePointerCapture?.(current.id); } catch { /* source may detach */ } });
   }
+  // Begin placement only while the original row and capability remain valid.
   function arm(current) {
     if (press !== current || !current.target.isConnected || !commands.canPlaceActorToken?.(current.source)) { cancel(); return; }
     current.armed = true;
@@ -97,6 +106,7 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
     if (split) positionGhost(current, current.x, current.y);
     pulseHoldHaptic();
   }
+  // Resolve a portrait or menu row to its exact Actor source record.
   function resolveTarget(target) {
     if (portrait.contains(target)) return { target: portrait, actor, source: selectedSource, row: false };
     const row = target?.closest?.(".ve-character-menu-actor");
@@ -107,6 +117,7 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
     const rowActor = directory.get(source);
     return rowActor ? { target: row, actor: rowActor, source, row: true } : null;
   }
+  // Start one primary-pointer hold and give its child scope the timer ownership.
   function pointerDown(event) {
     if ((event.button !== undefined && event.button !== 0) || press) return;
     const origin = resolveTarget(event.target);
@@ -119,6 +130,7 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
     press = current;
     owner.timeout(() => arm(current), LONG_PRESS_DURATION_MS);
   }
+  // Cancel stale or revoked gestures; after arming, follow the drop preview.
   function move(x, y) {
     const current = press;
     if (!current) return;
@@ -139,6 +151,7 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
     positionGhost(current, x, y);
     ghost?.classList.toggle("is-valid", Boolean(sceneTarget(x, y)));
   }
+  // Choose between a valid Scene token drop and the portrait action menu.
   function release(x, y) {
     const current = press;
     if (!current) return;
@@ -162,6 +175,7 @@ export function bindActorPlacementHold({ portrait, actor, actors, chooser, menuH
       actionMenu.hidden = false;
     }
   }
+  // Match touch events to the identifier that began on the active target.
   function activeTouch(event) {
     if (!press) return null;
     const changed = Array.from(event.changedTouches ?? []);

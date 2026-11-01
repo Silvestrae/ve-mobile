@@ -40,6 +40,7 @@ const ICONS = Object.freeze({
   }
 });
 
+// Resolve the VE-owned tab icon, using the biography mark for unknown tab keys.
 export function sheetTabIcon(name) {
   const definition = ICONS[name] ?? ICONS.biography;
   return vectorIcon(definition.viewBox, definition.shapes, `ve-sheet-tab-icon ve-sheet-tab-icon-${name}`);

@@ -15,7 +15,9 @@ export function renderActionSessionModal(session, commands, scope) {
     attrs: { role: "log", "aria-live": "polite", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.ActionSessionModal.ActionMessages", "{label} action messages", { label: (session.label) }) },
     children: [node("p", { className: "ve-action-session-loading", text: localizedText(commands.localize, "VEMOBILE.Interface.ActionSessionModal.LoadingAction", "Loading action…") })]
   });
+  // Ask the kernel to dismiss this action rather than removing its DOM without releasing ownership.
   const close = () => commands.dismissActionSession();
+  // Give both close controls the same scoped handler and accessible label.
   const closeButton = (label, className, contents) => node("button", {
     className,
     attrs: { type: "button", "aria-label": label },

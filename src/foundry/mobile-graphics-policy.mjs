@@ -75,6 +75,8 @@ export function resolveMobileGraphicsPolicy({
   });
 }
 
+/** Classify the active device from browser/Canvas evidence without probing a
+ * second graphics context or walking loaded media. */
 export function inspectGraphicsDevice({
   navigatorRef = globalThis.navigator,
   screenRef = globalThis.screen,
@@ -131,6 +133,7 @@ export function inspectGraphicsDevice({
   });
 }
 
+/** Recognize iOS devices, including iPadOS desktop-site mode. */
 export function isAppleTouchBrowser(navigatorRef = {}) {
   const userAgent = String(navigatorRef.userAgent ?? "");
   const platform = String(navigatorRef.platform ?? "");
@@ -139,6 +142,7 @@ export function isAppleTouchBrowser(navigatorRef = {}) {
     || (/Mac/iu.test(platform) && touchPoints > 1);
 }
 
+/** Keep Android detection separate so policy can weigh its capability signals. */
 export function isAndroidBrowser(navigatorRef = {}) {
   return /Android/iu.test(String(navigatorRef.userAgent ?? ""));
 }
@@ -161,6 +165,7 @@ export function createGraphicsSafetyJournal({
   let current = previous ? cloneJournal(previous) : emptyJournal();
   let lastRiskSignature = "";
 
+  // Persist the updated graphics recovery journal through the current settings owner.
   const write = (patch) => {
     current = { ...current, ...patch, version: JOURNAL_VERSION };
     try {
@@ -169,6 +174,7 @@ export function createGraphicsSafetyJournal({
       // Graphics protection remains active when local storage is unavailable.
     }
   };
+  // Read the normalized recovery snapshot used by graphics recommendations.
   const recovery = () => recoveryFor(current, Number(now()), unexpectedPreviousExit, interruptedSceneDrawAt);
 
   const api = {
@@ -181,6 +187,7 @@ export function createGraphicsSafetyJournal({
     },
     recovery,
     previous: serializableJournal(previous),
+    // Begin a graphics-risk episode using the selected policy snapshot.
     begin(policy) {
       const beganAt = Number(now());
       const recentContextLosses = recentLosses(current.recentContextLosses, beganAt);
@@ -200,6 +207,7 @@ export function createGraphicsSafetyJournal({
         dice: String(policy?.dice ?? "normal")
       });
     },
+    // Append one risk event and its detail to the current episode's bounded history.
     recordRisk(kind, detail = null) {
       if (!current?.active) return;
       const riskAt = Number(now());
@@ -219,6 +227,7 @@ export function createGraphicsSafetyJournal({
       if (kind && String(current.lastRisk?.kind ?? "") !== String(kind)) return;
       write({ lastRiskAt: 0, lastRisk: null });
     },
+    // Record a graphics context loss and the supplied source details in the active episode.
     recordContextLoss(source = null, details = null) {
       if (!current?.active) return;
       const lossAt = Number(now());
@@ -237,6 +246,7 @@ export function createGraphicsSafetyJournal({
         lastContextLoss: serializableContextLoss(details, { at: lossAt, source: normalizedSource })
       });
     },
+    // Record that the graphics context was restored without discarding earlier loss details.
     recordContextRestore(source = null) {
       if (!current?.active) return;
       write({
@@ -252,6 +262,7 @@ export function createGraphicsSafetyJournal({
       if (!current?.active) return;
       write({ effects: String(policy?.effects ?? "off"), dice: String(policy?.dice ?? "normal") });
     },
+    // Close the active graphics-risk episode while retaining its final summary for diagnostics.
     finish() {
       if (!current?.active) return;
       const finishedAt = Number(now());
@@ -275,6 +286,7 @@ export function createGraphicsSafetyJournal({
   return Object.freeze(api);
 }
 
+// Read the current renderer’s maximum texture size when PIXI exposes it.
 function existingMaxTextureSize(getCanvas) {
   try {
     const renderer = getCanvas?.()?.app?.renderer;
@@ -285,11 +297,13 @@ function existingMaxTextureSize(getCanvas) {
   }
 }
 
+// Accept only finite positive numeric values for graphics dimensions and limits.
 function finitePositive(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 
+// Load the stored recovery journal and normalize it before using its state.
 function readJournal(getStorage) {
   try {
     const parsed = JSON.parse(getStorage()?.getItem?.(GRAPHICS_SAFETY_STORAGE_KEY) ?? "null");
@@ -299,6 +313,7 @@ function readJournal(getStorage) {
   }
 }
 
+// Create the initial versioned recovery journal with empty bounded histories.
 function emptyJournal() {
   return {
     version: JOURNAL_VERSION,
@@ -327,6 +342,7 @@ function emptyJournal() {
   };
 }
 
+// Convert supported prior journal shapes to the current schema without changing world policy.
 function migrateJournal(value) {
   if (!value || typeof value !== "object") return null;
   if (Number(value.version) >= JOURNAL_VERSION) return { ...emptyJournal(), ...cloneJournal(value) };
@@ -351,6 +367,7 @@ function migrateJournal(value) {
   };
 }
 
+// Derive current recovery status and recent failure counts from journal history.
 function recoveryFor(value, timestamp, unexpectedPreviousExit = false, interruptedSceneDrawAt = 0) {
   const losses = recentLosses(value?.recentContextLosses, timestamp);
   const lastContextLossAt = Number(value?.lastContextLossAt ?? 0);
@@ -383,6 +400,7 @@ function recoveryFor(value, timestamp, unexpectedPreviousExit = false, interrupt
   });
 }
 
+// Validate recovery timestamps, counts, and flags before publishing the recovery snapshot.
 function normalizeRecoveryState(value, legacy) {
   if (!value || typeof value !== "object") {
     return Object.freeze({
@@ -418,6 +436,7 @@ function normalizeRecoveryState(value, legacy) {
   });
 }
 
+// Classify a startup/shutdown record as an interrupted or unexpected mobile session.
 function isUnexpectedExit(value, timestamp) {
   if (!value?.active) return false;
   const startedAt = Number(value.startedAt ?? 0);
@@ -430,6 +449,7 @@ function isUnexpectedExit(value, timestamp) {
     && timestamp - lastRiskAt <= RECENT_RISK_WINDOW_MS;
 }
 
+// Count recent graphics losses within the configured recovery window.
 function recentLosses(values, timestamp) {
   if (!Array.isArray(values)) return [];
   return values
@@ -438,6 +458,7 @@ function recentLosses(values, timestamp) {
     .slice(-MAX_RECENT_LOSSES);
 }
 
+// Copy a journal into an owned mutable record before recording another event.
 function cloneJournal(value) {
   if (!value || typeof value !== "object") return null;
   return {
@@ -450,11 +471,13 @@ function cloneJournal(value) {
   };
 }
 
+// Normalize a scene-risk category to the supported recommendation scale.
 function normalizeRisk(value) {
   if (!value || typeof value !== "object") return null;
   return { kind: String(value.kind ?? ""), detail: value.detail == null ? null : String(value.detail) };
 }
 
+// Create a plain bounded journal record suitable for persistence.
 function serializableJournal(value) {
   if (!value || typeof value !== "object") return null;
   const copy = cloneJournal(value);
@@ -466,6 +489,7 @@ function serializableJournal(value) {
   });
 }
 
+// Serialize the context-loss event details while excluding live renderer and canvas objects.
 function serializableContextLoss(value, fallback = {}) {
   const source = value && typeof value === "object" ? value : {};
   const risk = source.sceneRisk && typeof source.sceneRisk === "object" ? source.sceneRisk : {};

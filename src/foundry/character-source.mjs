@@ -10,6 +10,8 @@ export function actorSourceUuid(actor) {
 }
 
 export function actorSourceRecord(actor) {
+  // Keep both Actor and Token identity so consumers can distinguish an unlinked
+  // token Actor from its world Actor without retaining either live document.
   const sourceUuid = actorSourceUuid(actor);
   const token = actor?.isToken ? actor.token ?? actor.parent ?? null : null;
   return Object.freeze({
@@ -45,6 +47,7 @@ export function resolveActorSource(sourceUuid, {
 }
 
 export function validSourceUuid(value, field = "actorSourceUuid") {
+  // Keep accepted forms narrow: world Actor UUIDs and exact Scene/Token Actor UUIDs.
   const uuid = String(value ?? "").trim();
   if (!uuid || uuid.length > 512) throw new Error(localizeFoundry("VEMOBILE.Interface.CharacterSource.IsRequired", "{field} is required.", { field: (field) }));
   if (!/^Actor\.[^.]+$|^Scene\.[^.]+\.Token\.[^.]+\.Actor\.[^.]+$/u.test(uuid)) {
@@ -53,6 +56,8 @@ export function validSourceUuid(value, field = "actorSourceUuid") {
   return uuid;
 }
 
+/** Match chat to the exact Actor source; synthetic speakers also need the same
+ * Scene and Token because their Actor IDs can overlap world Actors. */
 export function speakerMatchesActor(message, actor) {
   const source = message?._source ?? message;
   const speaker = message?.speaker ?? source?.speaker ?? {};
@@ -62,6 +67,7 @@ export function speakerMatchesActor(message, actor) {
     && String(speaker.token ?? "") === String(actor.token?.id ?? "");
 }
 
+// Convert Foundry document collections and arrays to a safe list.
 function collectionValues(collection) {
   if (!collection) return [];
   try { return Array.from(collection); } catch { return Object.values(collection); }

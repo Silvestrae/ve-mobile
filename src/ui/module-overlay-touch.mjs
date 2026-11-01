@@ -34,6 +34,7 @@ export function enableModuleOverlayTouch(root, scope, {
     preparePointerWindowTouchOwnership(root, scope, { includeRoot: dragStrategy === "pointer-root" });
   }
 
+  // Emit a plain gesture trace including the effective touch-action for diagnosing browser ownership.
   const record = (eventName, event, phase = gesture?.phase ?? "none") => trace(Object.freeze({
     event: eventName,
     phase,
@@ -46,6 +47,7 @@ export function enableModuleOverlayTouch(root, scope, {
     touchAction: touchActionAt(root, event?.target)
   }));
 
+  // Relay a marked synthetic mouse event so the bridge does not interpret its own output as fresh hardware input.
   const dispatchMouse = (target, type, source, { button = 0, buttons = 0 } = {}) => {
     if (!target?.dispatchEvent) return false;
     const event = createMouseEvent(type, {
@@ -65,6 +67,7 @@ export function enableModuleOverlayTouch(root, scope, {
     return target.dispatchEvent(event);
   };
 
+  // Relay a marked mouse-like pointer event through the overlay's native pointer workflow.
   const dispatchPointer = (target, type, source, { button = 0, buttons = 0, pointerId = 1 } = {}) => {
     if (!target?.dispatchEvent) return false;
     const event = createPointerEvent(type, {
@@ -86,6 +89,7 @@ export function enableModuleOverlayTouch(root, scope, {
     return target.dispatchEvent(event);
   };
 
+  // Choose the admitted drag contract: dedicated handle, injected window mover, pointer stream or mouse stream.
   const dragEvent = (active, type, source, buttons) => {
     if (active.dedicatedHandle) {
       const captured = active.dedicatedHandle.hasPointerCapture?.(active.pointerId) === true;
@@ -114,18 +118,21 @@ export function enableModuleOverlayTouch(root, scope, {
     return dispatchMouse(releaseTarget(active), mouseType, source, { button: 0, buttons });
   };
 
+  // Retire an active hold timer before the gesture changes phase.
   const clearTimer = (active = gesture) => {
     if (active?.timer === null || active?.timer === undefined) return;
     cancel(active.timer);
     active.timer = null;
   };
 
+  // Consume a hardware event once VE's overlay bridge owns it, keeping it away from the Scene beneath.
   const ownPointer = (event) => {
     event.preventDefault?.();
     event.stopImmediatePropagation?.();
     event.stopPropagation?.();
   };
 
+  // Release the root's hardware capture safely even when its DOM was removed during the gesture.
   const releaseCapture = (pointerId) => {
     try {
       if (root.hasPointerCapture?.(pointerId)) root.releasePointerCapture(pointerId);
@@ -134,14 +141,17 @@ export function enableModuleOverlayTouch(root, scope, {
     }
   };
 
+  // Block the browser's delayed click after this bridge has already handled the touch.
   const suppressGhostClick = () => {
     suppressClickUntil = Math.max(suppressClickUntil, now() + GHOST_CLICK_WINDOW_MS);
   };
 
+  // Keep an ending mouse event deliverable if a native drag detached its original target.
   const releaseTarget = (active) => active?.target?.isConnected === false
     ? (root.ownerDocument ?? active.target)
     : active.target;
 
+  // Mark a stationary pending gesture ready for hold/context interaction and give one haptic signal.
   const arm = (active = gesture) => {
     if (!active || active !== gesture || active.phase !== "pending") return false;
     clearTimer(active);
@@ -151,11 +161,13 @@ export function enableModuleOverlayTouch(root, scope, {
     return true;
   };
 
+  // Recover an expired hold when browser scheduling delayed the timer callback.
   const armIfElapsed = (active = gesture) => {
     if (active?.phase === "pending" && now() - active.startedAt >= longPressMs) arm(active);
     return active?.phase === "armed";
   };
 
+  // Release the native drag, timer, capture and temporary selection suppression as one owned gesture.
   const cancelGesture = ({ releaseMouse = true } = {}) => {
     if (!gesture) return;
     const active = gesture;
@@ -171,6 +183,7 @@ export function enableModuleOverlayTouch(root, scope, {
     suppressGhostClick();
   };
 
+  // Admit one primary non-editable touch and acquire the appropriate hold/drag ownership.
   const onPointerDown = (event) => {
     if (synthetic.has(event)) return;
     if (gesture || event.pointerType !== "touch" || event.isPrimary === false || event.button > 0) return;
@@ -205,6 +218,7 @@ export function enableModuleOverlayTouch(root, scope, {
     if (!dedicatedHandle) active.timer = schedule(() => arm(active), longPressMs);
   };
 
+  // Turn the active touch into the admitted drag contract while keeping synthetic relay events out of the input path.
   const onPointerMove = (event) => {
     if (synthetic.has(event)) return;
     if (!gesture || event.pointerId !== gesture.pointerId) return;
@@ -259,6 +273,7 @@ export function enableModuleOverlayTouch(root, scope, {
     if (active.phase === "dragging") dragEvent(active, "pointermove", event, 1);
   };
 
+  // Complete the current tap, hold or drag once and suppress its follow-up browser click.
   const onPointerUp = (event) => {
     if (synthetic.has(event)) return;
     if (!gesture || event.pointerId !== gesture.pointerId) return;
@@ -288,6 +303,7 @@ export function enableModuleOverlayTouch(root, scope, {
     releaseCapture(active.pointerId);
   };
 
+  // Abort this hardware gesture rather than leaving native drag state pressed.
   const onPointerCancel = (event) => {
     if (synthetic.has(event)) return;
     if (!gesture || event.pointerId !== gesture.pointerId) return;
@@ -298,6 +314,7 @@ export function enableModuleOverlayTouch(root, scope, {
     cancelGesture({ releaseMouse: !dedicatedHandle });
   };
 
+  // Cancel ordinary overlay gestures when capture disappears; dedicated window handles retain their separate relay.
   const onLostPointerCapture = (event) => {
     if (!gesture || event.pointerId !== gesture.pointerId) return;
     record("lostpointercapture", event);
@@ -328,6 +345,7 @@ export function enableModuleOverlayTouch(root, scope, {
     dispatchPointer(active.dedicatedHandle, "pointermove", event, { button: 0, buttons: 1, pointerId: active.pointerId });
   };
 
+  // Deliver the matching release/cancel to the original handle and then clear bridge ownership.
   const finishDedicatedWindowGesture = (event, type) => {
     if (synthetic.has(event) || !gesture?.dedicatedHandle || event.pointerId !== gesture.pointerId) return;
     const active = gesture;
@@ -341,9 +359,12 @@ export function enableModuleOverlayTouch(root, scope, {
     suppressGhostClick();
   };
 
+  // Finish the dedicated handle's hardware stream as a normal pointer release.
   const onDedicatedWindowUp = (event) => finishDedicatedWindowGesture(event, "pointerup");
+  // Finish the dedicated handle's hardware stream as a cancellation.
   const onDedicatedWindowCancel = (event) => finishDedicatedWindowGesture(event, "pointercancel");
 
+  // Suppress only follow-up hardware clicks; the bridge's own synthetic activation remains deliverable.
   const onClick = (event) => {
     if (synthetic.has(event) || now() > suppressClickUntil) return;
     event.preventDefault?.();
@@ -364,6 +385,7 @@ export function enableModuleOverlayTouch(root, scope, {
     scope.listen(pointerWindow, "pointercancel", onDedicatedWindowCancel, { capture: true, passive: false });
   }
   prepareDedicatedDragHandleTouchOwnership(root, scope);
+  // Prevent browser text selection/native dragging only while an overlay gesture is owned.
   const suppressOwnedSelection = (event) => {
     if (!gesture) return;
     event.preventDefault?.();
@@ -431,6 +453,7 @@ export function preparePointerWindowTouchOwnership(root, scope, { includeRoot = 
   return surfaces.length;
 }
 
+// Capture and temporarily replace selection/callout styles, returning the exact restoration callback.
 function suppressSelection(root) {
   const style = root?.style;
   const properties = ["user-select", "-webkit-user-select", "-webkit-touch-callout", "-webkit-user-drag"];
@@ -446,15 +469,18 @@ function suppressSelection(root) {
   };
 }
 
+// Restore those captured styles once and discard the callback from the finished gesture.
 function restoreSelectionSuppression(active) {
   active?.selectionRestore?.();
   if (active) active.selectionRestore = null;
 }
 
+// Leave form controls and sliders to their native touch interaction.
 function editableControl(target) {
   return Boolean(target?.closest?.("input, textarea, select, option, [contenteditable]:not([contenteditable='false']), [role='slider']"));
 }
 
+// Read the relevant surface's effective touch policy for diagnostics without changing it.
 function touchActionAt(root, target) {
   try {
     const header = target?.closest?.(".window-header") ?? target ?? root;
@@ -466,6 +492,7 @@ function touchActionAt(root, target) {
   }
 }
 
+// Read cursor evidence defensively when identifying a dedicated drag handle.
 function computedCursor(root, target) {
   try {
     return String(root?.ownerDocument?.defaultView?.getComputedStyle?.(target)?.cursor

@@ -14,22 +14,32 @@ export const LOW_MEMORY_PROFILE = MEMORY_PROFILES.balanced.settings;
 const FCS_MODULE_ID = "force-client-settings";
 const MANAGED_GRAPHICS_KEYS = GRAPHICS_KEYS;
 
+/** Own client-local graphics profile capture, application and verified Desktop
+ * restoration. The write-ahead ledger survives interruption; mobile authority
+ * is checked again after asynchronous boundaries before every setting write. */
 export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, getCanvas = () => globalThis.canvas, getDevicePixelRatio = () => globalThis.devicePixelRatio ?? 1, getGraphicsPolicy = () => null, getForceClientSettingsRuntime = defaultForceClientSettingsRuntime, mobileAuthority = null, authority: suppliedAuthority = null, now = () => Date.now(), diagnostics = null } = {}) {
   let applying = false;
   let restoration = null;
   let idle = Promise.resolve();
   let releaseIdle = null;
 
+  // Check whether mobile enforcement currently owns the canvas setting.
   const mobileActive = () => mobileAuthority?.active?.() ?? true;
+  // Capture the owner, mode, and policy needed to decide whether a setting mutation is allowed.
   const captureAuthority = () => mobileAuthority?.capture?.() ?? 0;
+  // Verify that the captured authority still permits the requested settings write.
   const allowsAuthority = token => mobileAuthority?.allows?.(token) ?? true;
   const authority = suppliedAuthority ?? createGraphicsAuthority({ getGame, resolveTargets: resolvedProfileSettings, isMobileAuthorityActive: mobileActive });
+  // Read the base setting value beneath any Force Client Settings override.
   const underlying = () => Object.fromEntries(GRAPHICS_KEYS.map(key => [key, authority.readUnderlying(...splitSettingKey(key))]));
+  // Read the durable client-local baseline used when restoring a mobile canvas preference.
   const localBaseline = () => Object.fromEntries(GRAPHICS_KEYS.map(key => [key, readLocalSetting(getGame(), key)]));
+  // Persist the restoration ledger before changing a setting that can survive reload.
   const saveLedger = async (value) => {
     await getGame().settings.set(MODULE_ID, KEYS.GRAPHICS_SETTINGS_SNAPSHOT, value);
     if (JSON.stringify(safeGet(getGame(), MODULE_ID, KEYS.GRAPHICS_SETTINGS_SNAPSHOT)) !== JSON.stringify(value)) throw new Error(localizeFoundry("VEMOBILE.Interface.LowMemoryCanvasGateway.GraphicsRestorationLedgerCouldNotBeVerified", "Graphics restoration ledger could not be verified."));
   };
+  // Resolve the current Force Client Settings runtime and the target setting's effective lock state.
   const runtimeSettings = () => {
     const canvas = getCanvas();
     if (!canvas?.initialized || !canvas.app?.renderer) return {};
@@ -41,6 +51,7 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
       "core.pixelRatioResolutionScaling": canvas.app.renderer.resolution > 1
     };
   };
+  // Check whether the requested canvas profile can take effect without a Foundry reload.
   const needsReload = key => settingRequiresReload(getGame(), key)
     || (key === "core.mipmap" && getCanvas()?.ready === true);
   // A 1x renderer cannot distinguish enabled from disabled scaling at DPR1.
@@ -52,6 +63,8 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
       && Number.isFinite(dpr) && dpr > 0 && dpr <= 1;
   };
   const restoreDesktop = async ({ notify = true } = {}) => {
+    // Leave an invalid ledger intact for recovery. For a valid ledger, restore
+    // only values VE previously owned and clear it after every restore verifies.
     await idle;
     const game = getGame();
     const saved = normalizeSnapshot(safeGet(game, MODULE_ID, KEYS.GRAPHICS_SETTINGS_SNAPSHOT), localBaseline());
@@ -96,12 +109,14 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
       await saveLedger(saved);
       return Object.freeze({ active: true, previous: normalizeSnapshot(saved), reused: false });
     },
+    // Report local graphics keys whose current values no longer match the saved restoration baseline.
     pendingRestoration() {
       const saved = normalizeSnapshot(safeGet(getGame(), MODULE_ID, KEYS.GRAPHICS_SETTINGS_SNAPSHOT), localBaseline());
       if (!saved) return [];
       return [...Object.keys(saved.applied), ...(typeof saved.noCanvasOriginal === "boolean" ? ["core.noCanvas"] : [])]
         .filter(key => !sameSettingValue(readLocalSetting(getGame(), key), key === "core.noCanvas" ? saved.noCanvasOriginal : saved.original[key]));
     },
+    // Apply a user-requested Canvas visibility change under mobile authority and ledger ownership.
     async setNoCanvas(value) {
       const token = captureAuthority();
       if (!allowsAuthority(token)) throw new Error(localizeFoundry("VEMOBILE.Interface.LowMemoryCanvasGateway.MobilePerformanceAuthorityIsUnavailable", "Mobile performance authority is unavailable."));
@@ -136,6 +151,7 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
       await game.settings.set(FCS_MODULE_ID, "unlocked", unlocked);
       await game.settings.set(MODULE_ID, KEYS.FCS_MANAGED_UNLOCK_KEYS, []);
     },
+    // Publish configured, native, runtime, and authority-aware graphics status as one immutable record.
     snapshot() {
       const game = getGame();
       const saved = normalizeSnapshot(safeGet(game, MODULE_ID, KEYS.GRAPHICS_SETTINGS_SNAPSHOT), underlying());
@@ -144,7 +160,7 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
       const mobile = mobileActive();
       const intended = mobile ? resolvedProfileSettings(profile, saved?.original ?? underlying()) : {};
       const runtime = runtimeSettings();
-      const fcs = readForceClientSettingsState(game, intended);
+      const forceClientSettingsState = readForceClientSettingsState(game, intended);
       const conflicts = detectForceClientSettingsConflicts(game, intended);
       const unmetSettings = Object.entries(intended).flatMap(([key, target]) => {
         const runtimeMismatch = Object.hasOwn(runtime, key) && !equivalentScalingRuntime(key, target, runtime[key])
@@ -166,9 +182,10 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
         profileVersion: MEMORY_PROFILE_SNAPSHOT_VERSION, intended, requiredSettings: intended,
         current, actualEffectiveSettings: current, runtime: Object.freeze(runtime),
         previous: saved, restoreAvailable: Boolean(saved), changing: applying,
-        forceClientSettings: Object.freeze({ ...fcs, authorityInstalled: authority.installed, conflicts })
+        forceClientSettings: Object.freeze({ ...forceClientSettingsState, authorityInstalled: authority.installed, conflicts })
       });
     },
+    // Compare a requested profile with current settings and report required writes, conflicts, and reloads.
     plan(profile) {
       const requestedProfile = normalizeProfile(profile);
       const snapshot = api.snapshot();
@@ -186,6 +203,7 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
       const conflicts = detectForceClientSettingsConflicts(game, intended);
       const runtime = runtimeSettings();
       const changes = Object.entries(intended).flatMap(([key, next]) => {
+        // Compare current settings with the profile required by the requested canvas mode.
         const satisfies = value => requestedProfile === "normal" ? sameSettingValue(value, next) : settingSatisfiesProfileRequirement(key, value, next);
         // At DPR1 a 1x renderer satisfies enabled scaling as well as disabled
         // scaling. It is not evidence that an enabled native setting failed.
@@ -208,6 +226,7 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
         reloadRequired: changes.some(entry => entry.requiresReload && !blockedSettings.includes(entry)),
         requirementsSatisfied, configuredSufficient, satisfied: configuredSufficient && (requestedProfile === "normal" || requirementsSatisfied || strongerConfiguredProfileSatisfied) });
     },
+    // Include graphics and effects/dice policy changes in the preview shown before applying a profile.
     preview(profile) {
       const target = normalizeProfile(profile);
       const current = memoryProfilePolicy(api.snapshot().profile, getGraphicsPolicy?.() ?? {});
@@ -217,9 +236,11 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
       return Object.freeze([...api.plan(target).changes, ...extras]);
     },
     previewEnable() { return api.preview("balanced"); },
+    // Persist restoration ownership before applying profile writes, then return their verified outcome.
     async apply(profile) {
       if (applying || restoration) throw new Error(localizeFoundry("VEMOBILE.Interface.LowMemoryCanvasGateway.MemoryProtectionSettingsAreAlreadyBeingApplied", "Memory Protection settings are already being applied."));
       const authorityToken = captureAuthority();
+      // Reject mobile enforcement writes when Phone or Tablet presentation no longer owns them.
       const assertMobile = () => {
         if (!allowsAuthority(authorityToken)) throw new Error(localizeFoundry("VEMOBILE.Interface.LowMemoryCanvasGateway.MobilePerformanceAuthorityEndedBeforeTheGraphicsWrite", "Mobile performance authority ended before the graphics write."));
       };
@@ -290,6 +311,7 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
     enable() { return api.apply("balanced"); },
     disable() { return api.apply("normal"); },
     restorePrevious() { return api.apply("normal"); },
+    // Mirror the selected profile on the document body and remove those classes with the owning scope.
     applyPresentationClass(scope, getDocument = () => globalThis.document) {
       const body = getDocument()?.body;
       if (!body) return false;
@@ -305,8 +327,10 @@ export function createLowMemoryCanvasGateway({ getGame = () => globalThis.game, 
   return Object.freeze(api);
 }
 
+// Choose the next less resource-intensive graphics profile within the supported levels.
 export function nextMemoryProfile(profile) { return MEMORY_PROFILE_ORDER[Math.min(MEMORY_PROFILE_ORDER.length - 1, profileLevel(profile) + 1)]; }
 
+/** Read the configured native graphics values, failing closed per setting. */
 export function readNativeGraphicsSettings(game = globalThis.game) {
   return Object.freeze(Object.fromEntries(MANAGED_GRAPHICS_KEYS.map((compoundKey) => {
     const [namespace, key] = splitSettingKey(compoundKey);
@@ -315,6 +339,8 @@ export function readNativeGraphicsSettings(game = globalThis.game) {
 }
 
 export function detectForceClientSettingsConflicts(game = globalThis.game, intended = LOW_MEMORY_PROFILE) {
+  // Compare intended local values with active FCS locks; never modify the GM's
+  // forced/world policy while producing this diagnostic.
   if (!game?.modules?.get?.(FCS_MODULE_ID)?.active) return Object.freeze([]);
   const forced = normalizeObject(safeGet(game, FCS_MODULE_ID, "forced"));
   const unlocked = normalizeObject(safeGet(game, FCS_MODULE_ID, "unlocked"));
@@ -328,6 +354,7 @@ export function detectForceClientSettingsConflicts(game = globalThis.game, inten
   }));
 }
 
+// Read current Force Client Settings state without mutating another module’s policy.
 export function readForceClientSettingsState(game = globalThis.game, intended = LOW_MEMORY_PROFILE) {
   const module = game?.modules?.get?.(FCS_MODULE_ID);
   const present = Boolean(module?.active);
@@ -339,12 +366,15 @@ export function readForceClientSettingsState(game = globalThis.game, intended = 
     managedUnlockKeys: Object.freeze(normalizeManagedKeys(safeGet(game, MODULE_ID, KEYS.FCS_MANAGED_UNLOCK_KEYS))) });
 }
 
+// Adapt the loaded Force Client Settings module to the gateway’s read-only runtime interface.
 function defaultForceClientSettingsRuntime() {
   try { if (typeof ForceClientSettings !== "undefined") return ForceClientSettings; } catch {}
   return globalThis.ForceClientSettings ?? null;
 }
 
 export function normalizeSnapshot(value, migrationBaseline = {}) {
+  // Validate and migrate only recognized ledger fields, preserving malformed
+  // non-empty state as an error signal for recovery rather than clearing it.
   const sourceSchema = Number(value?.schemaVersion);
   if (!value || ![1, 2, 3, MEMORY_PROFILE_SNAPSHOT_VERSION].includes(sourceSchema)) return null;
   const legacy = sourceSchema < MEMORY_PROFILE_SNAPSHOT_VERSION;
@@ -358,19 +388,31 @@ export function normalizeSnapshot(value, migrationBaseline = {}) {
   return Object.freeze({ schemaVersion: MEMORY_PROFILE_SNAPSHOT_VERSION, migratedFromSchema: sourceSchema < MEMORY_PROFILE_SNAPSHOT_VERSION ? sourceSchema : null, capturedAt: Number(value.capturedAt) || 0, profile, original: Object.freeze(original), applied: Object.freeze(applied), phase: String(value.phase ?? "applied"), pending: Object.freeze(Array.isArray(value.pending) ? value.pending.filter(key => [...MANAGED_GRAPHICS_KEYS, "core.noCanvas"].includes(key)) : []), noCanvasOwned: value.noCanvasOwned === true, noCanvasOriginal: typeof value.noCanvasOriginal === "boolean" ? value.noCanvasOriginal : null, entryToken: String(value.entryToken ?? "").slice(0, 120), conflicts: Object.freeze(Array.isArray(value.conflicts) ? value.conflicts.map((entry) => Object.freeze({ key: String(entry?.key ?? ""), mode: String(entry?.mode ?? "unknown"), forcedValue: serializableSettingValue(entry?.forcedValue), intendedValue: serializableSettingValue(entry?.intendedValue), reason: String(entry?.reason ?? "") })).filter((entry) => MANAGED_GRAPHICS_KEYS.includes(entry.key)) : []) });
 }
 
+// Resolve the configured mobile graphics profile from current settings and device policy.
 function configuredProfile(game) { return normalizedMemoryProfile(safeGet(game, MODULE_ID, KEYS.MEMORY_PROTECTION_PROFILE), safeGet(game, MODULE_ID, KEYS.LOW_MEMORY_CANVAS)); }
+// Normalize a profile identifier to a supported graphics level.
 function normalizeProfile(value) { const profile = String(value ?? "").toLowerCase(); if (!MEMORY_PROFILE_ORDER.includes(profile)) throw new Error(localizeFoundry("VEMOBILE.Interface.LowMemoryCanvasGateway.ThatMemoryProtectionProfileIsNotSupported", "That Memory Protection profile is not supported.")); return profile; }
+// Validate and normalize the per-setting restoration records.
 function normalizeSettingsRecord(value, { requireAll, keys = MANAGED_GRAPHICS_KEYS }) { if (!value || typeof value !== "object" || Array.isArray(value)) return requireAll ? null : {}; const result = {}; for (const key of keys) { if (!Object.hasOwn(value, key)) { if (requireAll) return null; continue; } const candidate = value[key]; if (!["boolean", "number"].includes(typeof candidate) && candidate !== null) return null; result[key] = candidate; } return result; }
+// Restrict managed-setting names to the gateway’s supported setting set.
 function normalizeManagedKeys(value) { return Array.isArray(value) ? [...new Set(value.map((key) => String(key)).filter((key) => MANAGED_GRAPHICS_KEYS.includes(key)))] : []; }
+// Accept a plain serializable settings object or return an empty record.
 function normalizeObject(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
+// Split a namespaced setting key into module and key components.
 function splitSettingKey(value) { const separator = value.indexOf("."); return [value.slice(0, separator), value.slice(separator + 1)]; }
+// Read a nested setting value defensively without invoking a setter.
 function safeGet(game, namespace, key) { try { return game?.settings?.get?.(namespace, key); } catch { return undefined; } }
+// Require the current setting context and authority before applying or restoring settings.
 function assertSettings(game) { if (!game?.settings?.get || !game?.settings?.set) throw new Error(localizeFoundry("VEMOBILE.Interface.LowMemoryCanvasGateway.FoundrySettingsAreUnavailable", "Foundry settings are unavailable.")); }
+// Compare setting values structurally for supported plain serializable values.
 function sameSettingValue(left, right) { return left === right || (typeof right === "number" && Number(left) === right); }
+// Copy only serializable setting data into durable restoration records.
 function serializableSettingValue(value) { return ["string", "number", "boolean"].includes(typeof value) || value === null ? value : null; }
+// Check the Foundry setting metadata for a required reload.
 function settingRequiresReload(game, key) {
   const registered = game?.settings?.settings?.get?.(key);
   if (registered && typeof registered.requiresReload === "boolean") return registered.requiresReload;
   return key === "core.performanceMode" || key === "core.pixelRatioResolutionScaling";
 }
+// Synchronize the canvas presentation classes with the committed mobile graphics state.
 function syncPresentationClasses(document, profile) { const body = document?.body; if (!body) return; if (body.dataset) body.dataset.veMemoryProfile = profile; if (profile !== "normal") body.classList.add("ve-mobile-low-memory"); else body.classList.remove("ve-mobile-low-memory"); if (profile === "maximum") body.classList.add("ve-mobile-memory-maximum"); else body.classList.remove("ve-mobile-memory-maximum"); }

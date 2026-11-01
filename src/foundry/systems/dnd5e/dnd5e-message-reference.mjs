@@ -15,10 +15,12 @@ export function readDnd5eMessageOriginId(message) {
 }
 
 export function readDnd5eMessageItem(message) {
+  // The shared reference reader handles both typed 6.x data and legacy flags.
   return messageReference(message, "item");
 }
 
 export function readDnd5eMessageActivity(message) {
+  // Activity identity is needed to match a card to the exact item's activity.
   return messageReference(message, "activity");
 }
 
@@ -43,6 +45,7 @@ export function readDnd5eMessageRoll(message) {
     tool: text(modern ? system.tool : legacy.toolId ?? legacy.tool ?? system.tool) });
 }
 
+// Extract the D&D5e item or activity reference from a native chat message.
 function messageReference(message, kind) {
   const reference = message?.system?.[kind] ?? message?._source?.system?.[kind]
     ?? message?.flags?.dnd5e?.[kind] ?? message?._source?.flags?.dnd5e?.[kind];
@@ -52,10 +55,12 @@ function messageReference(message, kind) {
   };
 }
 
+// Resolve a stable identifier from a reference string or document reference.
 function referenceId(reference) {
   return text(typeof reference === "string" ? reference : reference?.id ?? reference?._id);
 }
 
+// Read a nonempty text value from a native message reference.
 function text(value) {
   return typeof value === "string" ? value.trim().slice(0, 256) : "";
 }

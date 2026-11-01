@@ -41,6 +41,7 @@ export function enableMobilePresentation(scope, { isPersistentOverlay = () => fa
   suppressFutureResolutionWarnings(scope);
   const applications = enableMobileApplications(scope, { isPersistentOverlay, isSettingsApplication, isActorEditor, now, trace });
 
+  // Remove Foundry’s desktop minimum-resolution warning while mobile presentation owns the surface.
   const removeResolutionWarnings = () => {
     for (const notification of document.querySelectorAll("#notifications .notification")) {
       if (!isResolutionWarning(notification.textContent)) continue;
@@ -65,7 +66,9 @@ export function enableVeStyleAuthority(scope, {
   trace = () => {}
 } = {}) {
   let enabled = Boolean(initialEnabled);
+  // Return the current persistent mobile root elements used for presentation reconciliation.
   const roots = () => [...(document?.querySelectorAll?.(".ve-mobile-app") ?? [])];
+  // Apply the current mobile/desktop state to the presentation roots and owned patches.
   const reconcile = () => {
     const activeRoots = roots();
     for (const root of activeRoots) {
@@ -91,6 +94,8 @@ export function enableVeStyleAuthority(scope, {
   });
 }
 
+/** Admit native windows by live role and user interaction, then restore their
+ * layers, viewport variables, listeners and lineage timers with this scope. */
 export function enableMobileApplications(scope, {
   isPersistentOverlay = () => false,
   isSettingsApplication = () => false,
@@ -117,8 +122,11 @@ export function enableMobileApplications(scope, {
   }
   for (const element of document?.querySelectorAll?.(".application, .app.window-app, dialog, [role='dialog']") ?? []) baselineElements.add(element);
   const lineage = createUserInteractionLineage({ now, trace, schedule, cancel });
+  // Capture application ancestry before classifying a native application’s presentation role.
   const beginLineage = (event) => lineage.begin(event);
   const admit = (application, rendered, { preExisting = false } = {}) => {
+    // A native app is admitted only when its live role and a recent user action
+    // support it; retained identity does not bypass reclassification.
     const element = applicationElement(application, rendered);
     const key = application ?? element;
     if (application && (!element || element.isConnected === false)) pendingApplications.set(application, rendered);
@@ -148,6 +156,8 @@ export function enableMobileApplications(scope, {
     traceApplication(trace, "admitted", application, element, correlation, classification, now(), document?.body, baseline);
   };
   const release = (application, rendered) => {
+    // Closing an Application releases both its identity record and the modal
+    // layer it may have owned, even when the rendered root is already detached.
     const element = applicationElement(application, rendered);
     pendingApplications.delete(application);
     admissions.release(application ?? element, element);
@@ -176,6 +186,8 @@ export function enableMobileApplications(scope, {
 
   let pruneQueued = false;
   const observer = MutationObserverType && document?.body ? new MutationObserverType((mutations) => {
+    // Hooks provide the strongest Application identity; this observer covers
+    // dialog roots that Foundry mounts directly into DOM without a hook.
     // A lifecycle-owned root wins over the DOM-only dialog fallback when both
     // become connected in the same mutation delivery.
     for (const [application, rendered] of pendingApplications) {
@@ -204,6 +216,7 @@ export function enableMobileApplications(scope, {
   const visualViewport = browser?.visualViewport;
   const viewportProperties = ["--ve-mobile-viewport-height", "--ve-mobile-viewport-width", "--ve-mobile-viewport-top", "--ve-mobile-viewport-left"];
   const previousViewport = viewportProperties.map(name => [name, document.body.style.getPropertyValue(name), document.body.style.getPropertyPriority(name)]);
+  // Refresh the viewport-dependent mobile layout and shared layer measurements.
   const updateViewport = () => {
     const values = [visualViewport?.height ?? browser?.innerHeight ?? 0, visualViewport?.width ?? browser?.innerWidth ?? 0,
       visualViewport?.offsetTop ?? 0, visualViewport?.offsetLeft ?? 0];
@@ -223,6 +236,7 @@ export function enableMobileApplications(scope, {
       else document.body.style.removeProperty(name);
     }
   });
+  // Reclassify currently open applications and update their mobile admission or suppression state.
   const reconcileApplications = () => admissions.reconcile(record => classifyMobileApplication(record.element, record.application, {
     retained: true, isPersistentOverlay, isSettingsApplication, isActorEditor
   }).admitted);
@@ -232,21 +246,27 @@ export function enableMobileApplications(scope, {
 /** Track admission by Application identity so a rerendered or already-closed
  * Application cannot leave a disconnected modal root holding the backdrop. */
 export function createMobileApplicationAdmissions(body) {
+  // Centralize admitted-root classes, layer ordering, active-modal backdrop
+  // ownership and subscriber updates in one deterministic lifecycle object.
   const records = new Map();
   const closing = new Set();
   const listeners = new Set();
+  // Publish the current presentation state to the owning service callback.
   const publish = () => { for (const listener of listeners) listener(); };
+  // Remove presentation-owned classes from elements left by the previous render.
   const clearClasses = (element, record) => {
     element?.classList?.remove?.("ve-mobile-admitted-app", "ve-mobile-dialog", "ve-mobile-transient-app");
     if (!element?.style || !record) return;
     if (record.priorLayer) element.style.setProperty(NATIVE_APPLICATION_LAYER_PROPERTY, record.priorLayer, record.priorLayerPriority);
     else element.style.removeProperty(NATIVE_APPLICATION_LAYER_PROPERTY);
   };
+  // Reapply the authoritative layer values to current VE and admitted native surfaces.
   const refreshLayers = () => {
     let index = 0;
     for (const record of records.values()) record.element?.style?.setProperty?.(NATIVE_APPLICATION_LAYER_PROPERTY, String(NATIVE_APPLICATION_LAYER + index++));
     publish();
   };
+  // Show or restore the Foundry canvas backdrop only for Scene presentation with the map enabled.
   const reconcileBackdrop = (forceLayers = false, retain = null) => {
     let removed = false;
     for (const [key, record] of records) {
@@ -265,12 +285,14 @@ export function createMobileApplicationAdmissions(body) {
     get layers() { return [...records.values()].map((_, index) => `native-app:${index}`); },
     has: (key) => records.has(key),
     hasElement: (element) => [...records.values()].some((record) => record.element === element),
+    // Return the highest admitted native application still owned by the current presentation.
     topmost() {
       this.reconcile();
       const entries = [...records.entries()];
       const [key, record] = entries.at(-1) ?? [];
       return record ? Object.freeze({ key, application: record.application, element: record.element }) : null;
     },
+    // Close the highest admitted transient application while preventing duplicate close requests.
     closeTopmost() {
       const top = this.topmost();
       if (!top || closing.has(top.key)) return false;
@@ -292,6 +314,7 @@ export function createMobileApplicationAdmissions(body) {
       }
       return true;
     },
+    // Move an admitted element to the top of the shared native application layer order.
     raise(element) {
       const entry = [...records].find(([, record]) => record.element === element);
       if (!entry) return false;
@@ -300,6 +323,7 @@ export function createMobileApplicationAdmissions(body) {
       refreshLayers();
       return true;
     },
+    // Admit a connected compatible application root and retain its original layer styling for cleanup.
     admit(key, element, modal, lineage = null, application = null) {
       if (!key || !element?.classList) return false;
       if (element.isConnected === false) {
@@ -322,6 +346,7 @@ export function createMobileApplicationAdmissions(body) {
       reconcileBackdrop(true);
       return true;
     },
+    // Release an application's admission and restore the presentation classes and layer state it owned.
     release(key, element = null) {
       const previous = records.get(key);
       clearClasses(previous?.element, previous);
@@ -335,6 +360,7 @@ export function createMobileApplicationAdmissions(body) {
       reconcileBackdrop(false, retain);
       return before - records.size;
     },
+    // Restore all admitted application state when mobile presentation ownership ends.
     clear() {
       for (const record of records.values()) clearClasses(record.element, record);
       records.clear();
@@ -345,6 +371,8 @@ export function createMobileApplicationAdmissions(body) {
   });
 }
 
+/** Find dialog-like roots inside a mutation node without promoting nested
+ * controls that already belong to an admitted native application. */
 export function mobileDialogElements(root) {
   if (!root?.matches || !root?.querySelectorAll) return [];
   const selector = [
@@ -386,6 +414,7 @@ export function classifyMobileApplication(element, application = null, { preExis
   return Object.freeze({ admitted: true, modal, reason: modal ? localizeFoundry("VEMOBILE.Interface.MobilePresentation.NativeModalApplication", "native modal application") : activeBaseline ? localizeFoundry("VEMOBILE.Interface.MobilePresentation.ActiveBaselineWorkflow", "active baseline workflow") : preExisting ? localizeFoundry("VEMOBILE.Interface.MobilePresentation.RetainedApplicationLifecycle", "retained application lifecycle") : localizeFoundry("VEMOBILE.Interface.MobilePresentation.NewNativeApplicationLifecycle", "new native application lifecycle") });
 }
 
+// Check whether an admitted module overlay already owns the candidate’s ancestor surface.
 function hasPersistentOverlayAncestor(element, isPersistentOverlay) {
   for (let parent = element?.parentElement; parent; parent = parent.parentElement) {
     // Foundry's body and desktop shell also contain module identity classes
@@ -397,6 +426,7 @@ function hasPersistentOverlayAncestor(element, isPersistentOverlay) {
   return false;
 }
 
+// Recognize an actual persistent Actor sheet from its application role and capabilities.
 function actorSheetApplication(application) {
   if (!application) return false;
   // Ownership/configuration forms can also own an Actor document. Only the
@@ -438,6 +468,8 @@ export function deliberateApplicationControl(event) {
   return control;
 }
 
+/** Resolve the nearest actionable origin so admission follows the user's actual
+ * click/keyboard path rather than any recent activity on the page. */
 export function applicationInteractionOrigin(event) {
   const control = deliberateApplicationControl(event);
   if (!control) return null;
@@ -463,22 +495,26 @@ export function createUserInteractionLineage({
   let timer = null;
   let lastClaim = null;
   let claimTimer = null;
+  // Cancel an expiry timer owned by an application admission record.
   const clearTimer = () => {
     if (timer === null) return;
     cancel(timer);
     timer = null;
   };
+  // Release a temporary application admission claim and its presentation markers.
   const clearClaim = () => {
     if (claimTimer !== null) cancel(claimTimer);
     claimTimer = null;
     lastClaim = null;
   };
+  // End an admission claim when its bounded intent window has elapsed.
   const expire = (reason) => {
     if (!active) return;
     trace({ type: "user-interaction-lineage", result: reason, generation: active.generation, source: active.source, control: active.controlName });
     active = null;
     clearTimer();
   };
+  // Capture the application properties the presentation patch may need to restore.
   const snapshot = (record) => record ? Object.freeze({
     generation: record.generation,
     source: record.source,
@@ -487,6 +523,7 @@ export function createUserInteractionLineage({
     expiresAt: record.expiresAt
   }) : null;
   return Object.freeze({
+    // Capture the opener lineage for a native interaction that may render its application later.
     begin(event) {
       const origin = applicationInteractionOrigin(event);
       if (!origin) return null;
@@ -514,6 +551,7 @@ export function createUserInteractionLineage({
       }, durationMs);
       return snapshot(active);
     },
+    // Find the unclaimed opener lineage that matches the application currently being rendered.
     match() {
       if (!active) return null;
       if (now() > active.expiresAt) {
@@ -522,6 +560,7 @@ export function createUserInteractionLineage({
       }
       return snapshot(active);
     },
+    // Mark a matching opener lineage as claimed so one native application cannot consume it twice.
     claim(application, element) {
       if (!active) return null;
       const matched = snapshot(active);
@@ -549,6 +588,7 @@ export function createUserInteractionLineage({
   });
 }
 
+/** Prefer stable Foundry Application identity and use its root only as fallback. */
 export function applicationIdentity(application, element = applicationElement(application)) {
   const parent = application?.parent ?? application?.options?.parent ?? null;
   return Object.freeze({
@@ -559,6 +599,7 @@ export function applicationIdentity(application, element = applicationElement(ap
   });
 }
 
+// Record bounded diagnostic details for the application classification decision.
 function traceApplication(trace, result, application, element, lineage, classification, timestamp, body, baseline = false) {
   trace({
     type: "application-render",
@@ -573,6 +614,7 @@ function traceApplication(trace, result, application, element, lineage, classifi
   });
 }
 
+// Resolve which native control or interaction opened the application.
 function interactionSource(root) {
   if (root?.matches?.("#hud.ve-mobile-native-hud-host")) return "native HUD";
   if (root?.matches?.(".ve-mobile-module-overlay-visible")) return "admitted Scene overlay";
@@ -582,6 +624,7 @@ function interactionSource(root) {
   return "VE Mobile";
 }
 
+// Read the semantic name of the initiating control for classification diagnostics.
 function interactionControlName(control) {
   return String(control?.dataset?.action
     ?? control?.getAttribute?.("aria-label")
@@ -592,6 +635,7 @@ function interactionControlName(control) {
     ?? "control").slice(0, 120);
 }
 
+// Resolve the live root element of a Foundry application instance.
 function applicationElement(application, rendered) {
   const candidates = [rendered, rendered?.[0], application?.element, application?.element?.[0]];
   const candidate = candidates.find(candidate => candidate?.nodeType === 1 && candidate.isConnected !== false)
@@ -611,17 +655,20 @@ function nativeApplicationRoot(element) {
   return applicationRoot ?? element;
 }
 
+// Read application instances from the supported Foundry registry shape.
 function registryValues(registry) {
   if (!registry) return [];
   if (typeof registry.values === "function") return [...registry.values()];
   return Object.values(registry);
 }
 
+// Filter future Foundry resolution warnings only while mobile presentation is active, retaining the original reporting path.
 function suppressFutureResolutionWarnings(scope) {
   const notifications = globalThis.ui?.notifications;
   if (!notifications || typeof notifications.error !== "function") return;
 
   const original = notifications.error;
+  // Pass unrelated Foundry errors through unchanged and handle only the targeted resolution warning.
   const filteredError = function (message, options) {
     if (RESOLUTION_MESSAGE_KEYS.has(message)) return null;
     return original.call(this, message, options);
@@ -633,6 +680,7 @@ function suppressFutureResolutionWarnings(scope) {
   });
 }
 
+// Match the desktop minimum-resolution warning using its known Foundry message shape.
 function isResolutionWarning(text) {
   const normalized = normalize(text);
   if (!normalized) return false;
@@ -645,15 +693,18 @@ function isResolutionWarning(text) {
   return false;
 }
 
+// Build a matcher for the supported warning template without treating its placeholders as literal text.
 function templatePattern(template) {
   const parts = normalize(template).split(/\{[^}]+\}/u).map(escapePattern);
   return new RegExp(`^${parts.join(".*?")}$`, "u");
 }
 
+// Normalize warning text before comparing it with the known Foundry resolution message.
 function normalize(value) {
   return String(value ?? "").replace(/\s+/gu, " ").trim();
 }
 
+// Escape literal template text before constructing the warning matcher.
 function escapePattern(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }

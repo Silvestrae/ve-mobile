@@ -1,3 +1,4 @@
+// Stable actor-action names shared by the kernel and system command adapters; display text never selects an action.
 export const ACTOR_COMMANDS = Object.freeze({
   ROLL_STATISTIC: "actor.roll-statistic",
   ROLL_PF2E_RECOVERY: "actor.roll-pf2e-recovery",

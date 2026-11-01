@@ -12,7 +12,10 @@ import { createPf2eHotbarGateway } from "./hotbar-gateway.mjs";
 import { CommandError } from "../../command-support.mjs";
 import { localizeFoundry } from "../../localization.mjs";
 
+/** PF2e's explicit integration: character Actors only, with unsupported edits
+ * routed to native sheets instead of being guessed from another system. */
 const actorTypes = Object.freeze(["character"]);
+// Create the common unavailable-action result for unsupported PF2e integrations.
 const unavailable = () => { throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.PF2E.NativeEditorRequired", "Use the native PF2e sheet for this operation.")); };
 export const pf2eIntegration = Object.freeze({
   id: "pf2e",
@@ -45,7 +48,7 @@ export const pf2eIntegration = Object.freeze({
     itemDetails: createPf2eItemDetailsGateway,
     quickbar: createPf2eQuickbarGateway,
     hotbar: createPf2eHotbarGateway,
-    templates: options => createFoundryTemplatePlacementGateway({ ...options,
+    templates: /* Supply the PF2e Region-template signature and its native Shift-confirm rotation semantics. */ options => createFoundryTemplatePlacementGateway({ ...options,
       isRegionTemplate: data => Boolean(data?.flags?.pf2e?.origin && data?.flags?.pf2e?.areaShape && data?.displayMeasurements && data?.highlightMode === "coverage"),
       // VE already exposes separate origin and direction handles. Native PF2e
       // supports Shift-confirm to commit that aimed shape in one step.

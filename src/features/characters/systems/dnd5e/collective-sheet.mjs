@@ -1,12 +1,14 @@
 import { icon, node } from "../../../../ui/dom.mjs";
 import { bindDetailsDisclosure } from "../../../../ui/disclosure.mjs";
 
+// Select the sheet tabs supported by group and vehicle Actors.
 export function actorSheetTabs(type) {
   if (type === "group") return [["overview", "overview", "Members"], ["inventory", "inventory", "Supplies"], ["biography", "biography", "About"]];
   if (type === "vehicle") return [["overview", "overview", "Status"], ["features", "features", "Actions"], ["inventory", "inventory", "Cargo"], ["biography", "biography", "Details"]];
   return null;
 }
 
+// Return from a selected collective Actor to its originating list when available.
 export function actorOriginBack(state, commands, scope) {
   const origin = state.characterNavigation?.at(-1);
   if (!origin) return null;
@@ -16,6 +18,7 @@ export function actorOriginBack(state, commands, scope) {
     })] }, scope);
 }
 
+// Compose identity and role-specific header content for collective Actors.
 export function collectiveHeaderContent(actor, { portraitButton, characterName, trigger, commands, scope, status }) {
   const data = actor.collective;
   return [node("div", { className: "ve-collective-identity", children: [
@@ -23,7 +26,7 @@ export function collectiveHeaderContent(actor, { portraitButton, characterName, 
       text: actor.type === "group" ? translate(commands, "Group", "Group") : data.variantLabel
     })] }), trigger
   ] }), actor.capabilities?.nativeActorEditor ? node("button", { className: "ve-collective-native-editor", attrs: { type: "button" },
-    on: { click: async event => {
+    on: { /* Prevent duplicate editor taps and restore the button only while its source presenter still owns it. */ click: async event => {
       const button = event.currentTarget;
       button.disabled = true;
       try { await commands.openNativeActorEditor({ actorSourceUuid: actor.sourceUuid }); }
@@ -35,6 +38,7 @@ export function collectiveHeaderContent(actor, { portraitButton, characterName, 
 
 /** Every supplied record is plain. Shared collection/roll surfaces are passed
  * by this feature's parent presenter, without reaching into another feature. */
+// Dispatch a collective Actor page while reusing shared character renderers.
 export function renderCollectivePanel(actor, page, context, shared) {
   const { commands, scope } = context;
   const data = actor.collective;
@@ -85,6 +89,7 @@ export function renderCollectivePanel(actor, page, context, shared) {
   ] });
 }
 
+// Render vehicle movement and combat actions from the current capability record.
 function vehicleActions(actor, context, shared) {
   const { commands, scope } = context;
   const components = actor.collective.components;
@@ -112,6 +117,7 @@ function vehicleActions(actor, context, shared) {
   ] });
 }
 
+// Summarize vehicle dimensions, crew, and travel facts as read-only cards.
 function vehicleDetails(actor, context) {
   const { commands } = context;
   const data = actor.collective;
@@ -133,6 +139,7 @@ function vehicleDetails(actor, context) {
   ] });
 }
 
+// Render linked references with optional compact vital details.
 function referenceList(title, records, actor, context, vitals = false) {
   const { commands, scope, status } = context;
   return card(title, [node("div", { className: "ve-collective-roster", children: records.length ? records.map(member => {
@@ -159,12 +166,14 @@ function referenceList(title, records, actor, context, vitals = false) {
   }) : [node("p", { className: "ve-sheet-empty", text: translate(commands, "NoMembers", "No members recorded.") })] })]);
 }
 
+// Create a lazy collective disclosure whose rendered children share its scope.
 function disclosure(key, title, render, context) {
   const { commands, scope, state } = context;
   const initiallyOpen = state.characterOpenSections?.includes(key);
   const summary = node("summary", { text: title });
   const details = node("details", { className: "ve-sheet-card ve-collective-disclosure", attrs: { open: initiallyOpen }, children: [summary] });
   let childScope = null;
+  // Replace the lazy disclosure content and dispose its listeners when closed.
   const fill = open => {
     childScope?.dispose(); childScope = null;
     details.querySelector(":scope > div")?.remove();
@@ -176,12 +185,18 @@ function disclosure(key, title, render, context) {
   fill(initiallyOpen);
   return details;
 }
+// Present a localized list of travel or movement facts.
 function travelFacts(rows = [], commands, key, title) {
   return rows.length ? [node("dl", { className: "ve-collective-facts", children: rows.map(row => fact(
     `${key ? `${translate(commands, key, title)} · ` : ""}${row.label}`, `${row.text}${row.hover ? ` (${translate(commands, "Hover", "Hover")})` : ""}`)) })] : [];
 }
+// Wrap collective values in the shared sheet card style.
 function card(title, children) { return node("section", { className: "ve-sheet-card ve-collective-card", children: [node("h3", { text: title }), ...children] }); }
+// Render one definition-list fact with a safe empty-value fallback.
 function fact(label, value) { return node("div", { children: [node("dt", { text: label }), node("dd", { text: value ?? "—" })] }); }
+// Add a plus sign to non-negative modifier values.
 function modifier(value) { return value >= 0 ? `+${value}` : String(value); }
+// Map the numeric cover fraction to localized text.
 function coverLabel(value, commands) { return translate(commands, ({0: "CoverNone", 0.5: "CoverHalf", 0.75: "CoverThreeQuarters", 1: "CoverTotal"})[value] ?? "Cover", ({0: "None", 0.5: "Half", 0.75: "Three-quarters", 1: "Total"})[value] ?? String(value)); }
+// Localize a collective-sheet key with its plain-language fallback.
 function translate(commands, key, fallback, data) { return commands.localize?.(`VEMOBILE.Collective.${key}`, fallback, data) ?? fallback; }

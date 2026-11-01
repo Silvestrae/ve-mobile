@@ -1,3 +1,4 @@
+// Plain application state for app-kernel.mjs; reducers never read live Foundry documents.
 const ROUTES = new Set(["characters", "chat", "journals", "scene", "combat", "settings"]);
 const NAVIGATION_INTENTS = new Set(["navigate", "navigate-back", "return-to-character", "select-actor", "select-character-tab",
   "open-scene-chooser", "open-split-scene-chooser", "close-scene-chooser", "toggle-scene-chooser", "toggle-split-screen",
@@ -51,6 +52,7 @@ export const initialAppState = Object.freeze({
   viewRevision: 0
 });
 
+// Apply the event, then advance navigation intent when a route, layout or Scene change invalidates pending actions.
 export function reduceAppState(state, event) {
   const next = reduceState(state, event);
   const layoutChanged = event.type === "layout-policy-changed" && ["formFactor", "orientation", "splitScreen", "canvasAvailable"]
@@ -61,6 +63,7 @@ export function reduceAppState(state, event) {
     ? { ...next, navigationRevision: (state.navigationRevision ?? 0) + 1 } : next;
 }
 
+// Handle named UI/session events while keeping stale selection, modal and reconnect state out of later renders.
 function reduceState(state, event) {
   switch (event.type) {
     case "action-navigation-invalidated": return { ...state };
@@ -386,30 +389,36 @@ function reduceState(state, event) {
   }
 }
 
+// Keep only the latest sixteen routes so Back history stays bounded.
 function pushRouteHistory(history, route) {
   return Object.freeze([...(history ?? []), route].slice(-16));
 }
 
+// Return the most recent route and a new history record without mutating the old one.
 function popRouteHistory(history) {
   const entries = history ?? [];
   return { route: entries.at(-1) ?? "", history: Object.freeze(entries.slice(0, -1)) };
 }
 
+// Treat the actor's separate item collections as one set when checking whether an open detail still exists.
 function actorItems(actor) {
   if (!actor) return [];
   return [...(actor.inventory ?? []), ...(actor.spells ?? []), ...(actor.features ?? []), ...(actor.items ?? [])];
 }
 
+// Keep token/synthetic identity when present, using a world Actor key only for older state records.
 function activeActorSource(state) {
   return String(state?.selectedActorSourceUuid ?? (state?.selectedActorId ? `Actor.${state.selectedActorId}` : ""));
 }
 
+// Separate expanded sections by exact actor source and character tab.
 function disclosureContextKey(actorSourceUuid, tab) {
   const actor = String(actorSourceUuid ?? "");
   const view = String(tab ?? "overview");
   return actor && view ? `${actor}\u001f${view}` : "";
 }
 
+// Read a context's unique open sections from a plain stored record.
 function disclosureSections(record, actorSourceUuid, tab) {
   const key = disclosureContextKey(actorSourceUuid, tab);
   const sections = key && Object.hasOwn(record ?? {}, key) && Array.isArray(record[key])
@@ -418,6 +427,7 @@ function disclosureSections(record, actorSourceUuid, tab) {
   return Object.freeze([...new Set(sections.map(String).filter(Boolean))]);
 }
 
+// Replace the current context and keep only the latest 128 expansion-state entries.
 function storeDisclosure(state, sections) {
   const key = disclosureContextKey(activeActorSource(state), state.characterTab);
   if (!key) return state.characterDisclosureByContext ?? Object.freeze({});
@@ -426,10 +436,12 @@ function storeDisclosure(state, sections) {
   return Object.freeze(Object.fromEntries(entries.slice(-128)));
 }
 
+// Distinguish a deliberately saved empty expansion state from a context that has never been opened.
 export function hasCharacterDisclosure(state, sourceUuid = activeActorSource(state), tab = state.characterTab) {
   return Object.hasOwn(state.characterDisclosureByContext ?? {}, disclosureContextKey(sourceUuid, tab));
 }
 
+// Compare ordered section lists so unchanged disclosure state can keep its existing identity.
 function arraysEqual(left = [], right = []) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }

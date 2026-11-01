@@ -19,6 +19,7 @@ export function createSceneChoiceTransition({
   let pending = null;
   let sequence = 0;
 
+  // Emit a plain gesture trace without letting a diagnostic failure interrupt input.
   const describe = (phase, details = {}) => {
     try {
       trace(Object.freeze({
@@ -30,26 +31,31 @@ export function createSceneChoiceTransition({
     } catch { /* Diagnostics must never interrupt input handling. */ }
   };
 
+  // Make each mounted picker control reflect the shared pending transition.
   const setControlState = (control) => {
     if (!control) return;
     control.disabled = Boolean(pending);
     if (pending) control.setAttribute?.("aria-busy", "true");
     else control.removeAttribute?.("aria-busy");
   };
+  // Refresh every currently bound row when a Scene activation begins or settles.
   const publishControlState = () => {
     for (const control of controls) setControlState(control);
   };
+  // Release this row's pointer capture when its press ends or is cancelled.
   const releaseCapture = (current) => {
     if (!current) return;
     try {
       if (current.target.hasPointerCapture?.(current.pointerId)) current.target.releasePointerCapture(current.pointerId);
     } catch { /* Pointer capture is best-effort on WebKit. */ }
   };
+  // Reserve a brief follow-up window so cancelled or already-consumed touches cannot activate another row.
   const suppressTouchClick = (current, phase) => {
     releasedTap = null;
     suppressClicksUntil = Math.max(suppressClicksUntil, now() + SCENE_CHOICE_GHOST_WINDOW_MS);
     describe(phase, pointerDetails(current));
   };
+  // Forget the active press, release its pointer and suppress the resulting browser click.
   const cancelPress = (phase, event = press) => {
     if (!press) return;
     const current = press;
@@ -58,6 +64,7 @@ export function createSceneChoiceTransition({
     suppressTouchClick({ ...current, event }, phase);
   };
 
+  // Share one in-flight Scene activation and unlock the picker when that exact promise settles.
   const run = (sceneId, activate) => {
     if (pending) {
       describe("activation-ignored", { sceneId, reason: "transition-pending" });
@@ -97,6 +104,7 @@ export function createSceneChoiceTransition({
     get sceneId() {
       return pending?.sceneId ?? "";
     },
+    // Attach one remountable picker row to the shared transition and scope all of its touch/click listeners.
     bind(target, sceneId, activate, scope, { getWindow = () => target?.ownerDocument?.defaultView ?? globalThis.window } = {}) {
       const eventWindow = getWindow?.() ?? target;
       controls.add(target);
@@ -107,6 +115,7 @@ export function createSceneChoiceTransition({
         if (releasedTap?.target === target) releasedTap = null;
       });
 
+      // Track touch/pen presses while leaving normal mouse and keyboard activation to click.
       const pointerDown = (event) => {
         if (pending || target.disabled || (event.button !== undefined && event.button !== 0)) return;
         const pointerType = String(event.pointerType ?? "mouse");
@@ -126,6 +135,7 @@ export function createSceneChoiceTransition({
         try { target.setPointerCapture?.(event.pointerId); } catch { /* Best-effort on WebKit. */ }
         describe("pointerdown", pointerDetails(press));
       };
+      // Treat movement beyond the threshold as scrolling instead of a Scene selection.
       const pointerMove = (event) => {
         if (!press || press.pointerId !== (Number(event.pointerId) || 0)) return;
         const distance = Math.hypot((Number(event.clientX) || 0) - press.x, (Number(event.clientY) || 0) - press.y);
@@ -133,6 +143,7 @@ export function createSceneChoiceTransition({
         press.moved = true;
         cancelPress("pointer-scroll", event);
       };
+      // Admit a short stationary tap and reject holds or scrolls before their click arrives.
       const pointerUp = (event) => {
         if (!press || press.pointerId !== (Number(event.pointerId) || 0)) return;
         const current = press;
@@ -146,10 +157,12 @@ export function createSceneChoiceTransition({
         releasedTap = { ...current, elapsedMs, event };
         describe("pointerup", pointerDetails(releasedTap));
       };
+      // Retire a cancelled or lost-capture press through the same ghost-click suppression path.
       const pointerCancel = (event) => {
         if (!press || press.pointerId !== (Number(event.pointerId) || 0)) return;
         cancelPress(event.type === "lostpointercapture" ? "lostpointercapture" : "pointercancel", event);
       };
+      // Consume the accepted activation once, then defer the Scene change until the current event finishes.
       const click = (event) => {
         const timestamp = now();
         const touchTap = releasedTap?.target === target && releasedTap.sceneId === sceneId ? releasedTap : null;
@@ -184,6 +197,7 @@ export function createSceneChoiceTransition({
   });
 }
 
+// Keep gesture diagnostics limited to plain pointer/Scene identity and timing fields.
 function pointerDetails(current) {
   return {
     sceneId: current?.sceneId ?? "",

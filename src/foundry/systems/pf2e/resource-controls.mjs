@@ -1,9 +1,13 @@
 import { CommandError, canOwn } from "../../command-support.mjs";
 import { localizeFoundry } from "../../localization.mjs";
 
+// Raise the capability error for a PF2e resource action that is not supported.
 const unavailable = () => { throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.PF2E.Unavailable", "This PF2e action is unavailable.")); };
+// Raise the validation error for malformed resource input.
 const invalid = () => { throw new CommandError("INVALID_INPUT", localizeFoundry("VEMOBILE.PF2E.InvalidInput", "This PF2e action is invalid or has changed. Refresh and try again.")); };
+// Raise the stale-value error when the saved resource count changed.
 const stale = () => { throw new CommandError("STALE_VALUE", localizeFoundry("VEMOBILE.PF2E.ResourceChanged", "This resource changed. Refresh and try again.")); };
+// Validate an integer resource amount within the supported range.
 const integer = value => Number.isSafeInteger(value) && value >= 0;
 const CORE_RESOURCES = Object.freeze(["hero-points", "mythic-points", "focus"]);
 
@@ -26,6 +30,7 @@ export function pf2eResourceRecords(actor) {
   return Object.freeze([...resources.values()].sort((a, b) => a.slug.localeCompare(b.slug)));
 }
 
+// Adjust a supported PF2e resource through the native Actor/resource API after rechecking its current value.
 function addResource(records, actor, slug, synthetic) {
   let native;
   try { native = actor.getResource(slug); } catch { return; }
@@ -65,6 +70,8 @@ export function setPf2eResource(actor, payload, context = {}) {
 
 /** List item frequency and charged uses separately, using PF2e's live fields. */
 export function pf2eLimitedUseRecords(actor) {
+  // Keep frequency and charged-use records separate because PF2e exposes and
+  // updates them through different fields and their maxima mean different things.
   const items = Array.from(actor?.items?.values?.() ?? actor?.items ?? []);
   const records = [];
   for (const item of items) {

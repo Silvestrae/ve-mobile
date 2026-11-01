@@ -1,3 +1,4 @@
+// Build searchable, sortable optimizer rows from the asset gateway's plain catalogue.
 import { localizedText, localizedNumber } from "../ui/localized-text.mjs";
 import { targetDimensions } from "./mobile-memory-risk.mjs";
 
@@ -36,12 +37,14 @@ export const OPTIMIZER_SORTS = Object.freeze([
   Object.freeze({ key: "derivative", label: "Derivative", labelKey: "VEMOBILE.Optimizer.derivative.Label" })
 ]);
 
+// Preserve missing scan data as unknown rather than misleadingly displaying it as zero.
 function numericOrNaN(value) {
   if (value === null || value === undefined || value === "") return Number.NaN;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
+// Prepare one row, including a safe proposed size; this calculates a preview and never generates an image.
 export function optimizerAssetModel(asset, { profile = "balanced", customLongEdge = 2048, localize = null, locale = "en" } = {}) {
   const canonicalSource = String(asset?.canonicalSource ?? "");
   const name = basename(canonicalSource) || localizedText(localize, "VEMOBILE.Optimizer.UnnamedAsset", "Unnamed asset");
@@ -106,6 +109,7 @@ export function optimizerAssetModel(asset, { profile = "balanced", customLongEdg
   });
 }
 
+// Build rows once, apply the requested filter/search, and sort the resulting view.
 export function buildOptimizerView(assets, {
   filter = "all",
   query = "",
@@ -124,6 +128,7 @@ export function buildOptimizerView(assets, {
   return Object.freeze(rows);
 }
 
+// Sort by the requested column, then use memory pressure and natural names for stable ties.
 export function optimizerComparator(sortKey = "risk", sortDirection = "desc") {
   const direction = sortDirection === "asc" ? 1 : -1;
   return (left, right) => {
@@ -137,6 +142,7 @@ export function optimizerComparator(sortKey = "risk", sortDirection = "desc") {
   };
 }
 
+// Describe the select-all checkbox using only visible assets that can actually be processed.
 export function visibleSelectionState(rows, selected) {
   const eligibleIds = rows.filter((row) => row.eligible).map((row) => row.id);
   const selectedVisible = eligibleIds.filter((id) => selected.has(id)).length;
@@ -149,6 +155,7 @@ export function visibleSelectionState(rows, selected) {
   });
 }
 
+// Add or remove eligible visible rows without disturbing selections hidden by the current filter.
 export function applyVisibleSelection(rows, selected, checked) {
   const next = new Set(selected);
   for (const row of rows) {
@@ -159,6 +166,7 @@ export function applyVisibleSelection(rows, selected, checked) {
   return next;
 }
 
+// Format compressed file bytes for display, retaining Unknown for missing measurements.
 export function formatFileSize(bytes, localize = null, locale = "en") {
   const value = Number(bytes);
   if (!Number.isFinite(value) || value < 0) return localizedText(localize, "VEMOBILE.Optimizer.Unknown", "Unknown");
@@ -167,29 +175,34 @@ export function formatFileSize(bytes, localize = null, locale = "en") {
   return `${localizedNumber(value / MIB, locale, 2)} MiB`;
 }
 
+// Display estimated in-memory image size separately from the smaller downloaded file size.
 export function formatDecodedSize(bytes, localize = null, locale = "en") {
   const value = Number(bytes);
   return Number.isFinite(value) && value >= 0 ? `${localizedNumber(value / MIB, locale, 1)} MiB` : localizedText(localize, "VEMOBILE.Optimizer.Unknown", "Unknown");
 }
 
+// Show the first Scene name and a count when an asset is shared by several Scenes.
 export function sharedSceneLabel(scenes, localize = null, locale = "en") {
   const names = [...(scenes ?? [])].filter(Boolean);
   if (!names.length) return localizedText(localize, "VEMOBILE.Optimizer.None", "None");
   return names.length === 1 ? names[0] : localizedText(localize, "VEMOBILE.Optimizer.MoreScenes", "{name} + {count} more", { name: names[0], count: localizedNumber(names.length - 1, locale) });
 }
 
+// Translate a known risk category and use Unknown for unsupported values.
 export function riskLabel(value, localize = null) {
   const labels = { low: "Low", moderate: "Moderate", high: "High", "very-high": "Very High", unknown: "Unknown" };
   const risk = Object.hasOwn(labels, value) ? value : "unknown";
   return localizedText(localize, `VEMOBILE.Optimizer.Risk.${risk}`, labels[risk]);
 }
 
+// Translate the optimized-copy state used by the row and its search text.
 export function derivativeLabel(value, localize = null) {
   const labels = { none: "None", active: "Active", stale: "Stale", disabled: "Disabled" };
   const status = Object.hasOwn(labels, value) ? value : "none";
   return localizedText(localize, `VEMOBILE.Optimizer.Derivative.${status}`, labels[status]);
 }
 
+// Apply the selected risk/derivative filter to an already-built row.
 function matchesFilter(row, filter) {
   if (filter === "high") return ["high", "very-high"].includes(row.risk);
   if (filter === "very-high") return row.risk === "very-high";
@@ -198,6 +211,7 @@ function matchesFilter(row, filter) {
   return true;
 }
 
+// Convert each sortable column to a comparable value without rescanning the underlying asset.
 function sortValue(row, key) {
   if (key === "name") return row.name.toLocaleLowerCase();
   if (key === "size") return finiteSort(row.fileSize);
@@ -208,19 +222,26 @@ function sortValue(row, key) {
   return RISK_ORDER[row.risk] ?? -1;
 }
 
+// Compare either numeric metrics or case-insensitive natural text in one sorting path.
 function compareValues(left, right) {
   if (typeof left === "string" || typeof right === "string") return String(left).localeCompare(String(right), undefined, { sensitivity: "base", numeric: true });
   return Number(left) - Number(right);
 }
 
+// Put unknown numeric scan values below measured values before sort direction is applied.
 function finiteSort(value) { return Number.isFinite(value) ? value : -1; }
+// Require a finite positive measurement before calculating output dimensions.
 function positive(value) { return Number.isFinite(Number(value)) && Number(value) > 0; }
+// Ignore case and repeated whitespace in the user's search phrase.
 function normalizeSearch(value) { return String(value ?? "").trim().toLocaleLowerCase().replace(/\s+/gu, " "); }
+// Use the last non-empty path segment as the asset's short display name.
 function basename(path) { return String(path ?? "").split("/").filter(Boolean).at(-1) ?? ""; }
+// Translate recognised Scene asset roles while retaining an unknown role's supplied name.
 function formatRole(role, localize) {
   const labels = { background: "Background", foreground: "Foreground", "fog-overlay": "Fog overlay", tile: "Tile", "video-tile": "Video tile" };
   return localizedText(localize, `VEMOBILE.Optimizer.Role.${role}`, labels[role] ?? String(role ?? ""));
 }
+// Explain which scan prerequisite is missing before enabling image conversion.
 function generationUnavailableReason(asset, localize) {
   if (asset?.mediaKind !== "raster") return localizedText(localize, "VEMOBILE.Optimizer.RasterOnly", "Only raster assets can be generated.");
   if (!positive(asset?.width) || !positive(asset?.height)) return localizedText(localize, "VEMOBILE.Optimizer.ScanDimensions", "Scan this asset to read its dimensions.");

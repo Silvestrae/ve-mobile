@@ -18,6 +18,7 @@ export function createFoundryBiographyGateway({
     ?? globalThis.ChatMessage
 } = {}) {
   return Object.freeze({
+    // Read the selected Actor's D&D5e biography fields into a plain presentation record.
     async read({ actorSourceUuid }, expectedSession = {}) {
       const game = getGame();
       assertSession(game, expectedSession, getConnectionGeneration);
@@ -63,6 +64,7 @@ export function createFoundryBiographyGateway({
       });
     },
 
+    // Submit a validated biography formula through the native roll/chat path for the selected Actor.
     async roll({ actorSourceUuid, formula, mode = "roll", flavor = "" }, expectedSession = {}) {
       const game = getGame();
       assertSession(game, expectedSession, getConnectionGeneration);
@@ -106,6 +108,7 @@ export function selectBiographyField(actor, { owner = false, isGM = false } = {}
   return "public";
 }
 
+// Choose the biography source field currently shown for this Actor type.
 function biographySource(actor, field) {
   return String((actor?.type === "group" ? actor.system?.description?.[field] : actor?.system?.details?.biography?.[field]) ?? "");
 }
@@ -121,6 +124,7 @@ export function normalizeLegacyBiography(content, { decodeHTML, cleanHTML } = {}
   return Object.freeze({ content: String(cleanHTML(decoded)), normalizedLegacy: true });
 }
 
+// Resolve the exact Actor source UUID requested by the session.
 function exactSourceUuid(value) {
   try {
     return validSourceUuid(value);
@@ -129,6 +133,7 @@ function exactSourceUuid(value) {
   }
 }
 
+// Require a live Actor that the current user may read.
 function requireReadableActor(sourceUuid, game) {
   const actor = resolveActorSource(sourceUuid, { game });
   if (!actor) throw new Error(localizeFoundry("VEMOBILE.Character.BiographyGateway.TheSelectedActorIsNoLongerAvailable", "The selected actor is no longer available."));
@@ -136,6 +141,7 @@ function requireReadableActor(sourceUuid, game) {
   return actor;
 }
 
+// Check current observer permission and fail closed on Foundry errors.
 function canRead(actor, user) {
   if (actor?.type === "npc" && user?.isGM) return true;
   try {
@@ -145,6 +151,7 @@ function canRead(actor, user) {
   }
 }
 
+// Check current owner permission before allowing biography edits.
 function canOwn(actor, user) {
   try {
     return actor?.testUserPermission?.(user, "OWNER") ?? Boolean(actor?.isOwner);
@@ -153,6 +160,7 @@ function canOwn(actor, user) {
   }
 }
 
+// Reject biography requests when world, user, or connection generation changed.
 function assertSession(game, expected, getConnectionGeneration) {
   if (!game?.user || !game?.world) throw new Error(localizeFoundry("VEMOBILE.Character.BiographyGateway.TheFoundrySessionIsNotReady", "The Foundry session is not ready."));
   if (expected.worldId && expected.worldId !== game.world.id) throw new Error(localizeFoundry("VEMOBILE.Character.BiographyGateway.TheActiveFoundryWorldHasChanged", "The active Foundry world has changed."));

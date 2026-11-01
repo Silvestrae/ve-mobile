@@ -4,6 +4,7 @@
  * the single click that activates the disclosure.
  */
 export function bindDetailsDisclosure(details, summary, onChange, scope) {
+  // Keep the native open property and the accessible expanded state in agreement.
   const apply = (open) => {
     details.open = Boolean(open);
     summary.setAttribute?.("aria-expanded", String(details.open));

@@ -1,3 +1,4 @@
+// Create an element, apply text/attributes and register event handlers with its task scope.
 export function node(tag, options = {}, scope) {
   const element = document.createElement(tag);
   if (String(tag).toLowerCase() === "img" && options.attrs?.draggable === undefined) {
@@ -18,6 +19,7 @@ export function node(tag, options = {}, scope) {
   return element;
 }
 
+// Append real nodes or text while ignoring absent optional children.
 export function append(parent, children) {
   for (const child of Array.isArray(children) ? children : [children]) {
     if (child === undefined || child === null || child === false) continue;
@@ -26,11 +28,13 @@ export function append(parent, children) {
   return parent;
 }
 
+// Build an accessible decorative Font Awesome glyph using the requested style family.
 export function icon(name, style = "solid") {
   const styleClass = style === "solid" ? "fa-solid" : `fa-${style}`;
   return node("i", { className: `${styleClass} ${name}`, attrs: { "aria-hidden": "true" } });
 }
 
+// Build a decorative SVG from explicit shape records rather than injecting an HTML string.
 export function vectorIcon(viewBox, shapes, className = "") {
   const namespace = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(namespace, "svg");

@@ -15,7 +15,9 @@ export function characterHeaderRecord(actor, game = globalThis.game, config = gl
   const details = actor.system?.details ?? {};
   const preparedLevel = details.level?.value ?? details.level;
   const level = actor.type === "character" && Number.isSafeInteger(preparedLevel) && preparedLevel >= 0 ? preparedLevel : null;
+  // Normalize a value to display text without exposing arbitrary document records.
   const text = value => typeof value === "string" ? value.trim() : "";
+  // Resolve a configured header label through Foundry localization.
   const localized = value => text(value) ? text(game?.i18n?.localize?.(value) || value) : "";
   const type = details.type;
   const typeKey = typeof type === "string" ? type : type?.value;
@@ -26,12 +28,14 @@ export function characterHeaderRecord(actor, game = globalThis.game, config = gl
   return { labels, level, metadata, locale: String(game?.i18n?.lang || "en"), experience: characterExperienceRecord(actor, game) };
 }
 
+/** Read prepared XP progress only for D&D5e character modes that support it. */
 export function characterExperienceRecord(actor, game = globalThis.game) {
   if (actor?.type !== "character") return null;
   let mode;
   try { mode = game?.settings?.get?.("dnd5e", "levelingMode"); } catch { return null; }
   if (!["xp", "xpBoons"].includes(mode)) return null;
   const xp = actor.system?.details?.xp;
+  // Return a finite numeric header value or null when unavailable.
   const finite = value => typeof value === "number" && Number.isFinite(value);
   if (!xp || !finite(xp.value) || xp.value < 0 || !finite(xp.min) || xp.min < 0 || !finite(xp.pct)) return null;
   const capped = xp.max === Infinity;

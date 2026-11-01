@@ -16,16 +16,19 @@ export function createBootstrapWatchdog({
   let resumeGraceUntil = 0;
   let stopped = false;
 
+  // Retire this watchdog; its already-owned timer will become harmless when it fires.
   const stop = () => {
     stopped = true;
   };
 
+  // Report one recovery reason at most, even if several stall checks notice it.
   const trigger = (reason) => {
     if (stopped) return;
     stopped = true;
     onStall?.(reason);
   };
 
+  // Give a long-suspended page a chance to resume before calling startup stuck.
   const handleVisible = () => {
     if (hiddenAt === null) return;
     const hiddenDuration = Math.max(0, now() - hiddenAt);
@@ -39,6 +42,7 @@ export function createBootstrapWatchdog({
     }, resumeGraceMs);
   };
 
+  // Remember when the tab hides and start the resume grace period when it returns.
   const reconcileVisibility = () => {
     if (document?.visibilityState === "hidden") {
       if (hiddenAt === null) hiddenAt = now();
@@ -48,6 +52,7 @@ export function createBootstrapWatchdog({
     return true;
   };
 
+  // Recheck progress while visible, then schedule the next check through the owning task scope.
   const check = () => {
     if (stopped) return;
     const visible = reconcileVisibility();
@@ -64,6 +69,7 @@ export function createBootstrapWatchdog({
   scope.own(stop);
 
   return Object.freeze({
+    // Record real lifecycle progress and end any resume-grace period.
     progress() {
       if (stopped) return;
       lastProgressAt = now();

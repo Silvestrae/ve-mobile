@@ -1,3 +1,4 @@
+// Pure profile targets; the Foundry gateways own applying and restoring real settings.
 export const MEMORY_PROFILE_ORDER = Object.freeze(["normal", "balanced", "strong", "maximum"]);
 
 export const MEMORY_PROFILES = Object.freeze({
@@ -25,6 +26,7 @@ export const MEMORY_PROFILES = Object.freeze({
   })
 });
 
+// Combine the profile with explicit VE effect choices without weakening a stricter user preference.
 export function memoryProfilePolicy(profile, policy) {
   const normalized = normalizeProfile(profile);
   const staged = MEMORY_PROFILES[normalized];
@@ -42,6 +44,7 @@ export function memoryProfilePolicy(profile, policy) {
     memoryProfile: normalized });
 }
 
+// Build the profile's native setting targets; Balanced keeps an already-lower FPS/performance baseline.
 export function resolvedProfileSettings(profile, baseline = {}) {
   const normalized = normalizeProfile(profile);
   const configured = MEMORY_PROFILES[normalized].settings;
@@ -57,8 +60,10 @@ export function resolvedProfileSettings(profile, baseline = {}) {
   });
 }
 
+// Give profiles a stable severity rank for comparisons.
 export function profileLevel(profile) { return Math.max(0, MEMORY_PROFILE_ORDER.indexOf(normalizeProfile(profile))); }
 
+// Check each setting's own safety rule rather than treating every target as simple equality.
 export function settingSatisfiesProfileRequirement(key, current, target) {
   if (key === "core.performanceMode" || key === "core.maxFPS") {
     return typeof current === "number" && Number.isFinite(current) && current <= Number(target);
@@ -71,11 +76,14 @@ export function settingSatisfiesProfileRequirement(key, current, target) {
   return sameSettingValue(current, target);
 }
 
+// Reject unknown profiles instead of silently selecting a different graphics policy.
 function normalizeProfile(value) {
   const profile = String(value ?? "").toLowerCase();
   if (!MEMORY_PROFILE_ORDER.includes(profile)) throw new Error("That Memory Protection profile is not supported.");
   return profile;
 }
 
+// Use a recorded numeric baseline when valid; otherwise use the profile's target.
 function finiteSetting(value, fallback) { return value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : Number(fallback); }
+// Compare stored values while tolerating a numeric setting represented as a string.
 function sameSettingValue(left, right) { return left === right || (typeof right === "number" && Number(left) === right); }

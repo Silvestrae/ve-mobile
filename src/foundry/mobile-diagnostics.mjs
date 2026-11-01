@@ -28,6 +28,7 @@ export function createMobileDiagnostics({
 } = {}) {
   const entries = [];
 
+  // Add a bounded diagnostic entry after normalizing severity and filtering sensitive or repetitive data.
   const record = (level, message, error) => {
     const normalizedLevel = normalizeLevel(level);
     if (!shouldRecord(normalizedLevel, readLevel())) return null;
@@ -43,12 +44,14 @@ export function createMobileDiagnostics({
     return entry;
   };
 
+  // Return the current diagnostics report using the gateway’s safe plain-record shape.
   const report = () => formatReport(entries, { getGame, getNavigator, getLocation, getDiceRuntime, getGraphicsPolicy, getModuleOverlays, getMobileMemory, getChatDom, getMobileBack, getLightingPrecision, getLoadTiming, readLevel });
 
   return Object.freeze({
     record,
     snapshot: () => Object.freeze(entries.slice()),
     report,
+    // Subscribe to scoped runtime diagnostics and keep only the current bounded sample set.
     watch(scope) {
       const browser = getWindow();
       if (!browser?.addEventListener) return;
@@ -59,6 +62,7 @@ export function createMobileDiagnostics({
         record("error", "Unhandled promise rejection", event?.reason);
       });
     },
+    // Copy the supplied or freshly assembled diagnostic report through the available clipboard path.
     async copy(reportText = report()) {
       const text = String(reportText);
       const clipboard = getNavigator()?.clipboard;
@@ -73,16 +77,20 @@ export function createMobileDiagnostics({
   });
 }
 
+// Normalize the requested severity to one of the supported diagnostic levels.
 function normalizeLevel(level) {
+  // Read a finite value or return the diagnostic fallback.
   const value = String(level ?? "warn").toLowerCase();
   return Object.hasOwn(LEVEL_RANK, value) ? value : "warn";
 }
 
+// Apply the current logging policy and capacity limit before storing an entry.
 function shouldRecord(level, configuredLevel) {
   const configured = normalizeLevel(configuredLevel);
   return configured !== "off" && LEVEL_RANK[level] <= LEVEL_RANK[configured];
 }
 
+// Convert a supplied timestamp to a finite bounded diagnostic value.
 function safeTimestamp(now) {
   try {
     return now()?.toISOString?.() ?? new Date().toISOString();
@@ -91,6 +99,7 @@ function safeTimestamp(now) {
   }
 }
 
+// Extract a concise safe message from an Error or unknown failure value.
 function errorText(error) {
   if (error instanceof Error) return error.stack || error.message;
   if (typeof error === "string") return error;
@@ -101,6 +110,7 @@ function errorText(error) {
   }
 }
 
+// Format the diagnostics snapshot into the shareable text report without exposing raw objects.
 function formatReport(entries, { getGame, getNavigator, getLocation, getDiceRuntime, getGraphicsPolicy, getModuleOverlays, getMobileMemory, getChatDom, getMobileBack, getLightingPrecision, getLoadTiming, readLevel }) {
   const game = getGame();
   const navigator = getNavigator();
@@ -131,7 +141,9 @@ function formatReport(entries, { getGame, getNavigator, getLocation, getDiceRunt
   return lines.join("\n");
 }
 
+// Format startup timing measurements for inclusion in the diagnostics report.
 function loadTimingLines(timing) {
+  // Format positive durations in milliseconds; unavailable values are reported as "none".
   const duration = (value) => Number.isFinite(value) && value > 0 ? `${Math.round(value)} ms` : "none";
   return [
     "",
@@ -145,7 +157,9 @@ function loadTimingLines(timing) {
   ];
 }
 
+// Format native lighting precision settings and capability results for diagnostics.
 function lightingPrecisionLines(precision) {
+  // Format one optional lighting precision value with its supported fallback.
   const format = (record) => record
     ? `precision=${record.precision} rangeMin=${record.rangeMin} rangeMax=${record.rangeMax}`
     : "unavailable";
@@ -160,6 +174,7 @@ function lightingPrecisionLines(precision) {
   ];
 }
 
+// Summarize the current mobile back-navigation state and recent recovery result.
 function mobileBackLines(back) {
   return [
     "",
@@ -173,13 +188,14 @@ function mobileBackLines(back) {
   ];
 }
 
+// Format scene memory estimates, asset risks, and recommendation reasons for diagnostics.
 function mobileMemoryLines(memory) {
   const risk = memory?.scene?.risk ?? {};
   const aggregate = risk.aggregate ?? risk;
   const assets = memory?.assets ?? {};
   const low = memory?.lowMemory ?? {};
   const current = low.current ?? {};
-  const fcs = low.forceClientSettings ?? {};
+  const forceClientSettingsState = low.forceClientSettings ?? {};
   const recovery = memory?.recovery ?? {};
   const preflight = memory?.preflight ?? {};
   const lastPreflight = preflight.last ?? {};
@@ -222,12 +238,13 @@ function mobileMemoryLines(memory) {
     `${localizeFoundry("VEMOBILE.Report.NativeGraphics", "Native graphics")}: performanceMode=${value(current["core.performanceMode"])} maxFPS=${value(current["core.maxFPS"])} resolutionScaling=${value(current["core.pixelRatioResolutionScaling"])} mipmap=${value(current["core.mipmap"])} lightAnimation=${value(current["core.lightAnimation"])}`,
     `${localizeFoundry("VEMOBILE.Report.ScenePresentation", "Scene presentation")}: splitScreen=${Boolean(memory?.splitScreen)} viewportCSS=${dimensions(memory?.sceneViewport?.width, memory?.sceneViewport?.height)} canvasBacking=${dimensions(memory?.canvasBacking?.width, memory?.canvasBacking?.height)}`,
     `${localizeFoundry("VEMOBILE.Report.Renderer", "Renderer")}: resolution=${value(memory?.rendererResolution)} DPR=${value(memory?.devicePixelRatio)}`,
-    `${localizeFoundry("VEMOBILE.Report.ForceClientSettings", "Force Client Settings")}: present=${Boolean(fcs.present)} version=${value(fcs.version)} precedence=${Boolean(fcs.precedenceEnabled)} authorityInstalled=${Boolean(fcs.authorityInstalled)} softKeys=${listValue(fcs.softKeys)} hardKeys=${listValue(fcs.hardKeys)} managedUnlocks=${listValue(fcs.managedUnlockKeys)} conflicts=${Array.isArray(fcs.conflicts) ? fcs.conflicts.length : 0}`,
-    ...((fcs.conflicts ?? []).map((conflict) => `FCS conflict ${value(conflict.key)}: forced=${value(conflict.forcedValue)} intended=${value(conflict.intendedValue)} mode=${value(conflict.mode)}`)),
+    `${localizeFoundry("VEMOBILE.Report.ForceClientSettings", "Force Client Settings")}: present=${Boolean(forceClientSettingsState.present)} version=${value(forceClientSettingsState.version)} precedence=${Boolean(forceClientSettingsState.precedenceEnabled)} authorityInstalled=${Boolean(forceClientSettingsState.authorityInstalled)} softKeys=${listValue(forceClientSettingsState.softKeys)} hardKeys=${listValue(forceClientSettingsState.hardKeys)} managedUnlocks=${listValue(forceClientSettingsState.managedUnlockKeys)} conflicts=${Array.isArray(forceClientSettingsState.conflicts) ? forceClientSettingsState.conflicts.length : 0}`,
+    ...((forceClientSettingsState.conflicts ?? []).map((conflict) => `FCS conflict ${value(conflict.key)}: forced=${value(conflict.forcedValue)} intended=${value(conflict.intendedValue)} mode=${value(conflict.mode)}`)),
     `${localizeFoundry("VEMOBILE.Report.PriorContextLoss", "Prior context loss")}: reliablePending=${Boolean(recovery.reliablePending)} ambiguousPending=${Boolean(recovery.ambiguousPending)} lastScene=${value(context.sceneName)} (${value(context.sceneId)}) lastTime=${timestampValue(context.at ?? context.timestamp ?? recovery.failureAt)} lowMemory=${Boolean(context.lowMemory)} effective=${Boolean(context.lowMemoryEffective)} splitScreen=${Boolean(context.splitScreen)} viewportCSS=${dimensions(context.sceneViewport?.width, context.sceneViewport?.height)} canvasBacking=${dimensions(context.canvasBacking?.width, context.canvasBacking?.height)}`
   ];
 }
 
+// Summarize chat composer DOM measurements and current diagnostic state.
 function chatDomLines(chat) {
   return [
     "",
@@ -242,6 +259,7 @@ function chatDomLines(chat) {
   ];
 }
 
+// Format discovered module overlay ownership and layer information.
 function overlayRuntimeLines(overlays) {
   if (!Array.isArray(overlays) || !overlays.length) return [localizeFoundry("VEMOBILE.Report.EnabledModuleOverlaysNone", "Enabled module overlays: none")];
   return [
@@ -256,14 +274,17 @@ function overlayRuntimeLines(overlays) {
   ];
 }
 
+// Read Dice So Nice runtime state without allowing failures to interrupt diagnostics.
 function safeDiceRuntime(getDiceRuntime) {
   try { return getDiceRuntime?.() ?? null; } catch { return null; }
 }
 
+// Convert a diagnostic value to bounded display text without leaking arbitrary object contents.
 function safeValue(read) {
   try { return read?.() ?? null; } catch { return null; }
 }
 
+// Summarize active graphics policy, recovery status, and selected profile.
 function graphicsPolicyLines(policy) {
   if (!policy) return [localizeFoundry("VEMOBILE.Report.VeDicePolicyUnavailable", "VE dice policy: unavailable")];
   const device = policy.device ?? {};
@@ -281,6 +302,7 @@ function graphicsPolicyLines(policy) {
   ];
 }
 
+// Format safe Dice So Nice renderer and activity diagnostics.
 function diceRuntimeLines(runtime) {
   if (!runtime) return [localizeFoundry("VEMOBILE.Report.DiceRuntimeUnavailable", "Dice runtime: unavailable")];
   const viewport = runtime.viewport ?? {};
@@ -299,34 +321,41 @@ function diceRuntimeLines(runtime) {
   ];
 }
 
+// Format an available renderer width and height pair.
 function dimensions(width, height) {
   return `${value(width)}x${value(height)}`;
 }
 
+// Render a present diagnostic value as text and label missing values unknown.
 function value(input) {
   return input === null || input === undefined || input === "" ? "unknown" : String(input);
 }
 
+// Normalize numeric diagnostics while excluding NaN and infinite values.
 function numberValue(input) {
   const number = Number(input);
   return Number.isFinite(number) ? String(number) : "unknown";
 }
 
+// Join a bounded list of diagnostic labels into one display field.
 function listValue(input) {
   return Array.isArray(input) && input.length ? input.join(",") : "none";
 }
 
+// Format an optional timestamp as readable diagnostic text.
 function timestampValue(input) {
   const timestamp = Number(input);
   if (!(timestamp > 0)) return "none";
   try { return new Date(timestamp).toISOString(); } catch { return String(timestamp); }
 }
 
+// Render byte counts with a stable unit for the report.
 function byteValue(input) {
   const bytes = Number(input);
   return Number.isFinite(bytes) ? `${(bytes / (1024 * 1024)).toFixed(3)} MiB` : "unknown";
 }
 
+// Format a boolean diagnostic state as a readable yes/no label.
 function yesNo(input) {
   return input ? "yes" : "no";
 }

@@ -2,6 +2,7 @@ import { localizedText } from "./localized-text.mjs";
 
 /** Plain records and one named action; no Foundry state enters this surface. */
 export function showDesktopRestorationRecovery({ scope, labels = {}, keys, retry, localize, document = globalThis.document }) {
+  // Resolve recovery copy without teaching this DOM surface about Foundry settings.
   const text = (key, fallback) => localizedText(localize, `VEMOBILE.Recovery.${key}`, fallback);
   const titleText = labels.title ?? text("Title", "Graphics settings need recovery");
   const detailText = labels.detail ?? text("Detail", "Some graphics settings could not be restored automatically. Retry recovery to return to your saved settings.");
@@ -19,13 +20,16 @@ export function showDesktopRestorationRecovery({ scope, labels = {}, keys, retry
   const detail = document.createElement("p"); detail.textContent = detailText;
   const pending = document.createElement("p"); pending.textContent = `${pendingText}: ${keys.join(", ") || savedText}`;
   const status = document.createElement("p"); status.setAttribute("aria-live", "polite");
+  status.style.overflowWrap = "anywhere";
   const button = document.createElement("button"); button.type = "button"; button.textContent = retryText;
   scope.listen(button, "click", async () => {
     if (button.disabled) return;
     button.disabled = true; status.textContent = workingText;
     try { await retry(); }
-    catch { status.textContent = failedText; }
-    finally { button.disabled = false; }
+    catch (error) {
+      if (!scope.disposed) status.textContent = error?.message ? `${failedText} ${error.message}` : failedText;
+    }
+    finally { if (!scope.disposed) button.disabled = false; }
   });
   root.append(title, detail, pending, status, button);
   scope.own(() => root.remove());

@@ -1,6 +1,7 @@
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
 
+// Render bounded item art and an inert descriptor for optional hold actions.
 export function itemArt(item, descriptor = { kind: "item", itemId: item.id, label: item.name, img: item.img ?? "" }, className = "") {
   const art = item.img ? node("img", { attrs: { src: item.img, alt: "", draggable: false } }) : icon(descriptor.kind === "skill" ? "fa-dice-d20" : "fa-scroll");
   art.dataset.pf2eShortcut = JSON.stringify(descriptor);
@@ -9,6 +10,7 @@ export function itemArt(item, descriptor = { kind: "item", itemId: item.id, labe
 }
 
 /** A row owns its reading surface; native descriptions load only when opened. */
+// Compose an accessible row from supplied data and scoped row controls.
 export function itemRow({ item, actor, commands, scope, className, header, actions = [], extraDetails = null, dataset = {}, depth = 0, primaryAction = null, disclosureKey = `item:${item.id}` }) {
   const rowHeader = [...header];
   const shortcutArtIndex = primaryAction ? rowHeader.findIndex(child => child?.dataset?.pf2eShortcut) : -1;
@@ -20,7 +22,7 @@ export function itemRow({ item, actor, commands, scope, className, header, actio
       disabled: !enabled,
       "aria-label": primaryAction.label || item.name,
       title: primaryAction.label || item.name
-    }, on: { click: event => {
+    }, on: { /* Let the item row perform only its enabled primary action without also toggling the surrounding disclosure. */ click: event => {
       event.preventDefault();
       event.stopPropagation();
       if (!enabled || typeof primaryAction.activate !== "function") return;

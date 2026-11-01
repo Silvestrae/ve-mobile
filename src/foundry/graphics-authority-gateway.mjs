@@ -16,10 +16,14 @@ export function createGraphicsAuthority({
 } = {}) {
   let installed = false;
   let bypassDepth = 0;
-  const read = (ns, key) => getGame()?.settings?.get?.(ns, key);
+  // Read the effective graphics authority record for the current user and policy.
+  const read = (namespace, key) => getGame()?.settings?.get?.(namespace, key);
+  // Check whether the graphics operation is enabled under the current authority and module state.
   const enabled = () => Boolean(getGame()?.modules?.get?.("force-client-settings")?.active)
     && read(MODULE_ID, KEYS.FCS_AUTO_SOFT_OVERRIDE) !== false;
   function wrapper(wrapped, namespace, key, options, ...args) {
+    // Preserve the complete libWrapper chain first, then narrow only the five
+    // graphics reads VE owns while mobile authority and the profile are active.
     const result = wrapped(namespace, key, options, ...args);
     const compound = `${namespace}.${key}`;
     if (bypassDepth || !GRAPHICS_KEYS.includes(compound) || !isMobileAuthorityActive() || !enabled()) return result;
@@ -40,14 +44,16 @@ export function createGraphicsAuthority({
     get installed() { return installed; },
     enabled,
     install(scope) {
+      // This page-scoped wrapper is acquired once and removed with its owner;
+      // a missing libWrapper leaves Foundry's native/FCS behavior untouched.
       if (installed) return true;
-      const lib = getLibWrapper();
-      if (!lib?.register) return false;
+      const libWrapper = getLibWrapper();
+      if (!libWrapper?.register) return false;
       // libWrapper sorts WRAPPER before MIXED, then by package priority.
       // Always invoke the chain, including FCS, before narrowing its result.
-      const id = lib.register(MODULE_ID, GET_TARGET, wrapper, "WRAPPER");
+      const id = libWrapper.register(MODULE_ID, GET_TARGET, wrapper, "WRAPPER");
       installed = true;
-      scope.own(() => { lib.unregister(MODULE_ID, id ?? GET_TARGET); installed = false; });
+      scope.own(() => { libWrapper.unregister(MODULE_ID, id ?? GET_TARGET); installed = false; });
       return true;
     },
     readUnderlying(namespace, key) {

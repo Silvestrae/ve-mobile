@@ -23,17 +23,20 @@ export function bindLongPress(target, scope, onLongPress, {
 
   if (claimPointer) prepareLongPressOwnership(target, scope);
 
+  // Give up pointer capture only when this gesture requested it.
   const releaseCapture = (current) => {
     if (!current || !claimPointer) return;
     try { if (target.hasPointerCapture?.(current.pointerId)) target.releasePointerCapture(current.pointerId); } catch {}
   };
 
+  // Clear the hold timer and pointer ownership so cancelled touches cannot fire later.
   const cancel = (reason = "cancelled") => {
     if (press?.timer !== null && press?.timer !== undefined) clearTimeoutFn(press.timer);
     if (press) trace(Object.freeze({ phase: "cancelled", reason, pointerId: press.pointerId }));
     releaseCapture(press);
     press = null;
   };
+  // Mark the stationary press ready once; invoke now or wait for release according to the caller's contract.
   const arm = (current) => {
     if (!current || press !== current) return false;
     if (current.armed) return true;
@@ -45,6 +48,7 @@ export function bindLongPress(target, scope, onLongPress, {
     if (invokeOnRelease) return true;
     return invoke(current, current.startEvent, true);
   };
+  // Consume this press before calling the action, so synchronous rerenders cannot trigger it twice.
   const invoke = (current, event, hapticDone = false) => {
     if (!current || press !== current) return false;
     if (current.timer !== null && current.timer !== undefined) clearTimeoutFn(current.timer);
@@ -60,6 +64,7 @@ export function bindLongPress(target, scope, onLongPress, {
     onLongPress(event);
     return true;
   };
+  // Start timing a primary-button press and remember the coordinates used to detect scrolling.
   const pointerDown = (event) => {
     if (event.button !== undefined && event.button !== 0) return;
     if (target.disabled) return;
@@ -76,6 +81,7 @@ export function bindLongPress(target, scope, onLongPress, {
     press = current;
     trace(Object.freeze({ phase: "timer-armed", pointerId: current.pointerId, durationMs }));
   };
+  // Cancel a moving press so normal scrolling wins over the long-press action.
   const pointerMove = (event) => {
     if (!press || press.pointerId !== event.pointerId) return;
     // Until the hold threshold is reached, movement belongs to the nearest
@@ -89,6 +95,7 @@ export function bindLongPress(target, scope, onLongPress, {
     }
     if (distance >= movementThreshold) cancel("movement-threshold");
   };
+  // Resolve an armed release, including browsers whose timer was delayed, or cancel the unfinished press.
   const pointerEnd = (event) => {
     if (press?.pointerId !== event.pointerId) return;
     if (event.type === "pointerup" && invokeOnRelease && press.armed && invoke(press, event, true)) return;
@@ -101,12 +108,14 @@ export function bindLongPress(target, scope, onLongPress, {
     }
     cancel(event.type ?? "pointer-end");
   };
+  // Swallow the single follow-up click generated after a completed hold.
   const click = (event) => {
     if (now() > suppressClickUntil) return;
     suppressClickUntil = 0;
     event.preventDefault();
     event.stopImmediatePropagation();
   };
+  // Reconcile native context-menu events with the same hold action instead of invoking a second path.
   const contextMenu = (event) => {
     event.preventDefault?.();
     if (!press) {

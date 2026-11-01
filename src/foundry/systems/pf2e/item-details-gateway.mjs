@@ -5,9 +5,11 @@ import { localizeFoundry } from "../../localization.mjs";
 /** Read the user-visible PF2e item summary without returning the native document. */
 export function createPf2eItemDetailsGateway({ getGame = () => globalThis.game, getConnectionGeneration = () => 0,
   getEditor = () => globalThis.CONFIG?.ux?.TextEditor } = {}) {
+  // Return the common unavailable result when PF2e item details cannot be read.
   const unavailable = () => { throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.PF2E.NativeEditorRequired", "Use the native PF2e sheet for this operation.")); };
 
   return Object.freeze({
+    // Read the requested current PF2e item as a plain details record after source and ownership checks.
     async read({ actorSourceUuid, itemId }, expected = {}) {
       const game = getGame();
       assertSession(game, expected, getConnectionGeneration);
@@ -17,7 +19,9 @@ export function createPf2eItemDetailsGateway({ getGame = () => globalThis.game, 
       const source = validSourceUuid(actorSourceUuid);
       const id = identifier(itemId, "itemId");
       const actor = resolveActorSource(source, { game });
+      // Resolve the exact current PF2e Item by its stable ID.
       const resolveItem = () => actor?.items?.get?.(id) ?? null;
+      // Check the current user's permission to read the Item.
       const canRead = () => actor && resolveActorSource(source, { game }) === actor
         && actor.testUserPermission?.(game.user, "OWNER") === true;
       const item = resolveItem();
@@ -70,6 +74,7 @@ export function createPf2eItemDetailsGateway({ getGame = () => globalThis.game, 
   });
 }
 
+// Build a stable signature for the Item details that may be cached or compared.
 function itemSignature(item) {
   try {
     return JSON.stringify(item._source ?? (typeof item.toObject === "function" ? item.toObject() : {

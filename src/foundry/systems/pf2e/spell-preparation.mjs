@@ -1,10 +1,13 @@
 import { CommandError } from "../../command-support.mjs";
 import { localizeFoundry } from "../../localization.mjs";
 
+// Create a localized PF2e spell-preparation command error.
 const fail = (code, key, fallback) => {
   throw new CommandError(code, localizeFoundry(`VEMOBILE.PF2E.SpellPreparation.${key}`, fallback));
 };
+// Raise the stale or malformed spell-choice error shared by preparation commands.
 const invalid = () => fail("INVALID_INPUT", "InvalidInput", "This spell preparation choice is invalid or has changed. Refresh and try again.");
+// Raise the capability error when the Actor cannot perform this preparation action.
 const unavailable = () => fail("CAPABILITY_UNAVAILABLE", "Unavailable", "This PF2e spell preparation action is unavailable.");
 const SLOT_GROUPS = Object.freeze(Array.from({ length: 11 }, (_, rank) => `slot${rank}`));
 
@@ -71,6 +74,9 @@ export function spellManagementRecord(entry) {
 
 /** Read a small, permission-safe catalogue from installed PF2e system packs. */
 export async function readSpellCatalog(actor, payload, context) {
+  // Only loaded system spell packs visible to this user are searched. After
+  // each asynchronous index read, recheck both command lifetime and pack/entry
+  // identity before returning any matches.
   if (!payload || typeof payload !== "object") invalid();
   const entry = resolveEntry(actor, payload.entryId);
   if (!entry || !entry.spells) unavailable();
@@ -113,6 +119,8 @@ export async function readSpellCatalog(actor, payload, context) {
 
 /** Execute bounded compendium import, signature toggle, or direct spell-attack roll. */
 export async function editSpellManagement(actor, payload, context) {
+  // Imports, signature changes and attack rolls share one command boundary;
+  // each branch validates current native membership before invoking PF2e.
   if (!payload || typeof payload !== "object") invalid();
   const entry = resolveEntry(actor, payload.entryId);
   if (!entry || !entry.spells) unavailable();
@@ -161,6 +169,7 @@ export async function editSpellManagement(actor, payload, context) {
   invalid();
 }
 
+// Allow only compendium spells eligible for the requested PF2e preparation operation.
 function eligibleCompendiumSpell(spell) {
   return spell?.type === "spell" && !isFocusSpell(spell) && !isRitual(spell)
     && typeof spell.id === "string" && Number.isSafeInteger(spell.baseRank) && spell.baseRank >= 1 && spell.baseRank <= 10;
@@ -203,6 +212,7 @@ export async function editSpellPreparation(actor, payload, context) {
 }
 
 function toggleFlexible(entry, payload, context) {
+  // Flexible entries use signature status instead of individual slot assignment.
   if (entry.isFlexible !== true || typeof payload.spellId !== "string" || !payload.spellId
     || typeof payload.selected !== "boolean" || typeof payload.originalSelected !== "boolean") invalid();
   const spell = resolveEntrySpell(entry.actor, entry, payload.spellId);
@@ -218,6 +228,7 @@ function toggleFlexible(entry, payload, context) {
   return spell.update({ "system.location.signature": payload.selected });
 }
 
+// Resolve a spellcasting entry by its current stable identifier.
 function resolveEntry(actor, id) {
   if (typeof id !== "string" || !id) invalid();
   const item = actor?.items?.get?.(id);
@@ -226,6 +237,7 @@ function resolveEntry(actor, id) {
   return entries.find(entry => entry === item && entry.id === id) ?? null;
 }
 
+// Resolve the exact spell Item owned by the selected spellcasting entry.
 function resolveEntrySpell(actor, entry, id) {
   const spell = collectionGet(entry.spells, id);
   if (!spell || spell.id !== id || spell.type !== "spell" || spell.actor !== actor
@@ -233,54 +245,66 @@ function resolveEntrySpell(actor, entry, id) {
   return spell;
 }
 
+// Count signature spells in a flexible spellcasting entry.
 function flexibleSignatureCount(entry) {
   return Array.from(entry.spells ?? []).filter(spell => spell.system?.location?.signature === true
     && !isCantrip(spell) && !isFocusSpell(spell) && !isRitual(spell)).length;
 }
 
+// Read the flexible entry's available capacity for a spell rank.
 function flexibleSlotCapacity(entry) {
   return SLOT_GROUPS.slice(1).reduce((sum, group) => sum + nonNegativeInteger(entry.system?.slots?.[group]?.max), 0);
 }
 
+// Build the prepared spell option from its current Item and entry data.
 function spellOption(spell) {
   return { spellId: String(spell.id), name: String(spell.name ?? ""), img: String(spell.img ?? "") };
 }
 
+// Resolve a spell's current rank from its prepared and system fields.
 function spellRank(spell) {
   const rank = Number(spell.baseRank ?? spell.rank ?? spell.system?.level?.value ?? 0);
   return Number.isSafeInteger(rank) ? rank : 0;
 }
 
+// Find the highest spell rank supported by the selected entry.
 function highestRank(entry) {
   return Number.isSafeInteger(entry?.highestRank) && entry.highestRank >= 0 && entry.highestRank <= 10
     ? entry.highestRank : -1;
 }
 
+// Identify cantrips from PF2e's current spell record.
 function isCantrip(spell) {
   return spell?.isCantrip === true || spell?.system?.traits?.value?.includes?.("cantrip") === true;
 }
 
+// Identify focus spells from the current PF2e spell data.
 function isFocusSpell(spell) {
   return spell?.isFocusSpell === true || spell?.system?.traits?.value?.includes?.("focus") === true;
 }
 
+// Identify ritual spells that use the ritual workflow.
 function isRitual(spell) {
   return spell?.isRitual === true || Boolean(spell?.system?.ritual);
 }
 
+// Resolve an entry by ID through Foundry's indexed or iterable collection interface.
 function collectionGet(collection, id) {
   return collection?.get?.(id) ?? Array.from(collection ?? []).find(spell => spell?.id === id) ?? null;
 }
 
+// Validate an integer within the preparation command's bounds.
 function integer(value, min, max) {
   if (!Number.isSafeInteger(value) || value < min || value > max) invalid();
   return value;
 }
 
+// Validate an integer that represents a nonnegative count.
 function nonNegativeInteger(value) {
   return Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
+// Raise the stale-value error when the preparation state changed after the menu opened.
 function stale() {
   fail("STALE_VALUE", "Changed", "Spell preparation changed. Refresh and try again.");
 }

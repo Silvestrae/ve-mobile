@@ -1,4 +1,6 @@
-import { ACTOR_COMMANDS as C } from "../../../kernel/command-names.mjs";
+/** PF2e native action boundary. It maps allowlisted commands to system methods,
+ * with exact embedded-item validation and per-action stale-value checks. */
+import { ACTOR_COMMANDS } from "../../../kernel/command-names.mjs";
 import { CommandError, canOwn } from "../../command-support.mjs";
 import { localizeFoundry } from "../../localization.mjs";
 import { editAcModifier, editShield, updateBiography } from "./character-edits.mjs";
@@ -11,32 +13,42 @@ import { useSpellReference } from "./spell-reference-actions.mjs";
 import { setPf2eResource, setPf2eItemLimit } from "./resource-controls.mjs";
 import { editPersistentDamage } from "./persistent-damage.mjs";
 
+// Create a localized command error with the supplied code and message key.
 const fail = (code, key, fallback) => { throw new CommandError(code, localizeFoundry(`VEMOBILE.PF2E.${key}`, fallback)); };
+// Raise the capability error used when this PF2e action is not supported.
 const unavailable = () => fail("CAPABILITY_UNAVAILABLE", "Unavailable", "This PF2e action is unavailable.");
+// Raise the stale or malformed input error shared by the PF2e command handlers.
 const invalid = () => fail("INVALID_INPUT", "InvalidInput", "This PF2e action is invalid or has changed. Refresh and try again.");
 const MOVEMENT_ACTIONS = Object.freeze(["swim", "climb"]);
+// List PF2e movement actions currently exposed by the active system.
 const nativeMovementActions = () => MOVEMENT_ACTIONS.filter(slug => typeof globalThis.game?.pf2e?.actions?.[slug] === "function");
+// Check whether the Actor’s current dying state allows recovery actions.
 function recoveryAvailable(actor) {
   const dying = actor.attributes?.dying ?? actor.system?.attributes?.dying;
   return actor.type === "character" && typeof actor.rollRecovery === "function" && actor.isDead !== true
     && Number.isFinite(dying?.value) && dying.value > 0 && Number.isFinite(dying?.max) && dying.value < dying.max;
 }
+// Validate an integer within the command-specific lower and upper bounds.
 const integer = (value, min, max) => {
   if (!Number.isSafeInteger(value) || value < min || value > max) invalid();
   return value;
 };
 export function resolvePf2eItem(actor, id) {
+  // Resolve from this Actor's current embedded items/actions; never fall back to
+  // a same-ID world item or a different Actor's document.
   if (typeof id !== "string" || !id) invalid();
   const item = actor.items?.get?.(id) ?? Array.from(actor.system?.actions ?? []).find(action => action.item?.id === id)?.item;
   if (!item) fail("TARGET_MISSING", "ItemMissing", "This item is no longer available.");
   return item;
 }
+// Resolve a PF2e statistic only for a valid slug and current Actor record.
 const statistic = (actor, slug) => {
   if (typeof slug !== "string" || !/^[a-z0-9][a-z0-9-]{0,99}$/u.test(slug)) invalid();
-  const stat = actor.getStatistic?.(slug);
-  if (typeof stat?.check?.roll !== "function") unavailable();
-  return stat;
+  const statistic = actor.getStatistic?.(slug);
+  if (typeof statistic?.check?.roll !== "function") unavailable();
+  return statistic;
 };
+// Update a supported PF2e resource through its native resource API when available.
 function resource(actor, payload, context) {
   if (typeof actor.getResource === "function") return setPf2eResource(actor, { ...payload, resource: payload.resource === "heroPoints" ? "hero-points" : payload.resource }, context);
   if (!["heroPoints", "focus"].includes(payload.resource)) invalid();
@@ -48,6 +60,7 @@ function resource(actor, payload, context) {
   if (payload.originalValue !== current.value) fail("STALE_VALUE", "ResourceChanged", "This resource changed. Refresh and try again.");
   return actor.updateResource(payload.resource, value);
 }
+// Apply the requested condition through PF2e’s current condition controls.
 async function condition(actor, payload) {
   const slug = payload.conditionId;
   const types = globalThis.CONFIG?.PF2E?.conditionTypes;
@@ -57,6 +70,7 @@ async function condition(actor, payload) {
   if (typeof actor[method] !== "function") unavailable();
   return actor[method](slug);
 }
+// Validate and update HP using the supported PF2e Actor operation.
 async function hitPoints(actor, payload, context) {
   const hp = actor.system?.attributes?.hp;
   if (!hp || typeof actor.update !== "function") unavailable();
@@ -80,6 +94,7 @@ async function hitPoints(actor, payload, context) {
   if (field === "value" && value > hp.max) invalid();
   return actor.update({ [`system.attributes.hp.${field}`]: value });
 }
+// Route the requested item action through the matching native PF2e workflow.
 async function useItem(actor, payload) {
   if (["activation", "ritual"].includes(payload.kind)) return useSpellReference(actor, payload);
   const item = resolvePf2eItem(actor, payload.itemId);
@@ -151,6 +166,7 @@ async function useItem(actor, payload) {
   if (typeof item.toMessage !== "function") unavailable();
   return item.toMessage();
 }
+// Set carried state on the exact current PF2e inventory Item.
 async function carry(actor, payload) {
   const item = resolvePf2eItem(actor, payload.itemId);
   if (item.isOfType?.("physical") !== true || typeof actor.changeCarryType !== "function") unavailable();
@@ -160,15 +176,18 @@ async function carry(actor, payload) {
   if (payload.inSlot !== undefined && typeof payload.inSlot !== "boolean") invalid();
   return actor.changeCarryType(item, { carryType: payload.carryType, handsHeld, inSlot: payload.inSlot === true });
 }
+// Set investment state on the exact current Item when PF2e allows it.
 async function invest(actor, payload) {
   const item = resolvePf2eItem(actor, payload.itemId);
   if (typeof actor.toggleInvested !== "function" || !item.traits?.has?.("invested") || typeof payload.invested !== "boolean") unavailable();
   if (Boolean(item.isInvested) === payload.invested) return null;
   return actor.toggleInvested(item.id);
 }
+// Validate the currency payload and update only supported PF2e coin fields.
 async function currency(actor, payload, context) {
   if (payload.values !== undefined) {
     const keys = ["pp", "gp", "sp", "cp"];
+    // Check that a record contains exactly the allowed currency keys.
     const validRecord = record => record && typeof record === "object" && !Array.isArray(record)
       && Object.keys(record).length === keys.length && Object.keys(record).every(key => keys.includes(key));
     if (!validRecord(payload.values) || !validRecord(payload.originalValues)) invalid();
@@ -208,6 +227,7 @@ async function currency(actor, payload, context) {
   if (value < current) return inventory.removeCoins({ [denomination]: current - value }, { byValue: false });
   return null;
 }
+// Adjust character XP through its supported PF2e field with bounded input.
 async function addExperience(actor, payload) {
   const xp = actor.system?.details?.xp;
   if (actor.type !== "character" || typeof actor.update !== "function" || !xp
@@ -221,6 +241,7 @@ async function addExperience(actor, payload) {
   await actor.update({ "system.details.xp.value": value });
   return Object.freeze({ previous, added: amount, value });
 }
+// Invoke the named PF2e swim or climb action after rechecking availability.
 function useMovementAction(actor, payload, context) {
   if (!MOVEMENT_ACTIONS.includes(payload.slug)) invalid();
   const action = globalThis.game?.pf2e?.actions?.[payload.slug];
@@ -229,49 +250,51 @@ function useMovementAction(actor, payload, context) {
   return action({ actors: [actor] });
 }
 const handlers = Object.freeze({
-  [C.ROLL_PF2E_RECOVERY]: (actor, _payload, context) => {
+  // The command gateway enforces Actor identity and ownership before dispatch;
+  // handlers still validate each operation's current native capability/values.
+  [ACTOR_COMMANDS.ROLL_PF2E_RECOVERY]: (actor, _payload, context) => {
     if (!recoveryAvailable(actor)) unavailable();
     context?.assertCurrent();
     return actor.rollRecovery();
   },
-  [C.ROLL_STATISTIC]: (actor, payload) => statistic(actor, payload.statistic).check.roll({}),
-  [C.ROLL_SKILL]: (actor, payload) => {
+  [ACTOR_COMMANDS.ROLL_STATISTIC]: (actor, payload) => statistic(actor, payload.statistic).check.roll({}),
+  [ACTOR_COMMANDS.ROLL_SKILL]: (actor, payload) => {
     if (!Object.hasOwn(actor.skills ?? {}, payload.skill)) invalid();
     return statistic(actor, payload.skill).check.roll({});
   },
-  [C.USE_PF2E_MOVEMENT_ACTION]: useMovementAction,
-  [C.EDIT_PF2E_SPELL_PREPARATION]: editSpellPreparation,
-  [C.EDIT_PF2E_PLAY]: editPlayControl,
-  [C.EDIT_PF2E_INVENTORY]: (actor, payload, context) => payload.operation === "limit" ? setPf2eItemLimit(actor, payload, context) : editInventory(actor, payload, context),
-  [C.EDIT_PF2E_EFFECT]: editEffect,
-  [C.EDIT_PF2E_SPELLS]: (actor,payload,context) => payload.operation === "search" ? readSpellCatalog(actor,payload,context) : editSpellManagement(actor,payload,context),
-  [C.ROLL_SAVE]: (actor, payload) => {
+  [ACTOR_COMMANDS.USE_PF2E_MOVEMENT_ACTION]: useMovementAction,
+  [ACTOR_COMMANDS.EDIT_PF2E_SPELL_PREPARATION]: editSpellPreparation,
+  [ACTOR_COMMANDS.EDIT_PF2E_PLAY]: editPlayControl,
+  [ACTOR_COMMANDS.EDIT_PF2E_INVENTORY]: (actor, payload, context) => payload.operation === "limit" ? setPf2eItemLimit(actor, payload, context) : editInventory(actor, payload, context),
+  [ACTOR_COMMANDS.EDIT_PF2E_EFFECT]: editEffect,
+  [ACTOR_COMMANDS.EDIT_PF2E_SPELLS]: (actor,payload,context) => payload.operation === "search" ? readSpellCatalog(actor,payload,context) : editSpellManagement(actor,payload,context),
+  [ACTOR_COMMANDS.ROLL_SAVE]: (actor, payload) => {
     if (!["fortitude", "reflex", "will"].includes(payload.ability)) invalid();
     return statistic(actor, payload.ability).check.roll({});
   },
-  [C.ROLL_INITIATIVE]: actor => {
+  [ACTOR_COMMANDS.ROLL_INITIATIVE]: actor => {
     if (typeof actor.initiative?.roll !== "function") unavailable();
     return actor.initiative.roll({});
   },
-  [C.SET_PF2E_RESOURCE]: resource,
-  [C.SET_PF2E_CONDITION]: condition,
-  [C.EDIT_PF2E_PERSISTENT_DAMAGE]: editPersistentDamage,
-  [C.EDIT_HIT_POINTS]: hitPoints,
-  [C.USE_ITEM]: useItem,
-  [C.SET_ITEM_EQUIPPED]: carry,
-  [C.SET_ITEM_ATTUNED]: invest,
-  [C.UPDATE_CURRENCY]: currency,
-  [C.UPDATE_BIOGRAPHY_SECTION]: updateBiography,
-  [C.EDIT_PF2E_AC_MODIFIER]: editAcModifier,
-  [C.EDIT_PF2E_SHIELD]: editShield,
-  [C.EDIT_PF2E_DEFENSES]: editDefenses,
-  [C.ADD_EXPERIENCE]: addExperience,
-  [C.OPEN_ITEM_SHEET]: (actor, payload) => {
+  [ACTOR_COMMANDS.SET_PF2E_RESOURCE]: resource,
+  [ACTOR_COMMANDS.SET_PF2E_CONDITION]: condition,
+  [ACTOR_COMMANDS.EDIT_PF2E_PERSISTENT_DAMAGE]: editPersistentDamage,
+  [ACTOR_COMMANDS.EDIT_HIT_POINTS]: hitPoints,
+  [ACTOR_COMMANDS.USE_ITEM]: useItem,
+  [ACTOR_COMMANDS.SET_ITEM_EQUIPPED]: carry,
+  [ACTOR_COMMANDS.SET_ITEM_ATTUNED]: invest,
+  [ACTOR_COMMANDS.UPDATE_CURRENCY]: currency,
+  [ACTOR_COMMANDS.UPDATE_BIOGRAPHY_SECTION]: updateBiography,
+  [ACTOR_COMMANDS.EDIT_PF2E_AC_MODIFIER]: editAcModifier,
+  [ACTOR_COMMANDS.EDIT_PF2E_SHIELD]: editShield,
+  [ACTOR_COMMANDS.EDIT_PF2E_DEFENSES]: editDefenses,
+  [ACTOR_COMMANDS.ADD_EXPERIENCE]: addExperience,
+  [ACTOR_COMMANDS.OPEN_ITEM_SHEET]: (actor, payload) => {
     const item = resolvePf2eItem(actor, payload.itemId);
     if (typeof item.sheet?.render !== "function") unavailable();
     return item.sheet.render(item.sheet.isV2 === true ? { force: true } : true);
   },
-  [C.TAKE_REST]: (actor, payload) => {
+  [ACTOR_COMMANDS.TAKE_REST]: (actor, payload) => {
     if (actor.type !== "character" || payload.rest !== "night" || typeof globalThis.game?.pf2e?.actions?.restForTheNight !== "function") unavailable();
     return globalThis.game.pf2e.actions.restForTheNight({ actors: actor });
   }
@@ -284,10 +307,11 @@ export const pf2eActorActions = Object.freeze({
     if (!Object.hasOwn(handlers, name) || !actor) unavailable();
   },
   fingerprint(name, sourceUuid, payload) {
-    const rolling = [C.ROLL_STATISTIC, C.ROLL_SKILL, C.ROLL_SAVE, C.ROLL_INITIATIVE, C.ROLL_PF2E_RECOVERY, C.USE_PF2E_MOVEMENT_ACTION].includes(name);
+    const rolling = [ACTOR_COMMANDS.ROLL_STATISTIC, ACTOR_COMMANDS.ROLL_SKILL, ACTOR_COMMANDS.ROLL_SAVE, ACTOR_COMMANDS.ROLL_INITIATIVE, ACTOR_COMMANDS.ROLL_PF2E_RECOVERY, ACTOR_COMMANDS.USE_PF2E_MOVEMENT_ACTION].includes(name);
     return `${sourceUuid}:${rolling ? `${name}:${payload.statistic ?? payload.skill ?? payload.ability ?? payload.slug ?? ""}` : "pf2e-action"}`;
   },
-  capabilitiesForActor(actor, user) {
+    // Derive the PF2e actions exposed for this Actor from its current type and user authority.
+    capabilitiesForActor(actor, user) {
     const owner = canOwn(actor, user);
     return Object.freeze({ owner, rollSkill: owner ? Object.keys(actor.skills ?? {}) : [],
       rollRecovery: owner && recoveryAvailable(actor),
@@ -313,5 +337,5 @@ export const pf2eActorActions = Object.freeze({
     const item = resolvePf2eItem(actor, payload.itemId);
     return Object.freeze({ itemId: item.id, name: String(item.name), activities: [] });
   },
-  resultFields(name,output) { return name === C.EDIT_PF2E_SPELLS && Array.isArray(output?.spells) ? {catalog:output} : {}; }
+  resultFields(name,output) { return name === ACTOR_COMMANDS.EDIT_PF2E_SPELLS && Array.isArray(output?.spells) ? {catalog:output} : {}; }
 });

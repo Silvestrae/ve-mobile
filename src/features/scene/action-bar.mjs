@@ -5,6 +5,7 @@ import { ACTOR_COMMANDS } from "../../kernel/command-names.mjs";
 import { ACTION_BAR_PAGE_SIZE, ACTION_BAR_SLOT_COUNT, actionBarPage, actionBarColumns, cycleActionBarPage } from "../../kernel/action-bar-model.mjs";
 
 /** Both sources share a presentation, while all native reads/writes stay injected. */
+// Render the Scene action bar from current hotbar records and injected commands.
 export function renderActionBar({ actor, hotbar, source = "character", commands, scope, collapsed = false, onCollapsedVisualChange = () => {} }) {
   const native = source === "foundry";
   const label = native ? localizedText(commands.localize, "VEMOBILE.Interface.ActionBar.FoundryHotbar", "Foundry Hotbar") : localizedText(commands.localize, "VEMOBILE.Interface.ActionBar.CharacterQuickbar", "Character Quickbar");
@@ -26,6 +27,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
   const picker = node("div", { className: "ve-action-bar-picker", attrs: { hidden: true, role: "dialog", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.ActionBar.ChooseAMacro", "Choose a macro") } });
   const bar = node("div", { className: "ve-quickbar", attrs: { role: "toolbar", "aria-label": label }, children: [board, message, controls] });
   const wrapper = node("div", { className: `ve-quickbar-wrap${collapsed ? " is-collapsed" : ""}`, attrs: { "data-ve-scene-control": true, "data-source": source, "data-columns": 5 } });
+  // Create a scoped action-bar button with consistent icon and label treatment.
   const button = (name, glyph, action, className = "") => node("button", {
     className, attrs: { type: "button", "aria-label": name, title: name, "data-ve-scene-control": true },
     on: { click: action }, children: [icon(glyph)]
@@ -44,14 +46,18 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
   wrapper.append(status, handle, picker, editControls, bar);
   const slots = Array.from({ length: ACTION_BAR_PAGE_SIZE }, () => node("button", { className: "ve-quickbar-slot", attrs: { type: "button", "data-ve-scene-control": true } }));
   board.append(...slots);
+  // Dispose picker row listeners before hiding and clearing its current results.
   const closePicker = () => { pickerScope?.dispose(); pickerScope = null; picker.hidden = true; picker.replaceChildren(); };
   scope.own(closePicker);
+  // Replace the picker heading and close control for the current picker view.
   const pickerHeader = (title, closeLabel, owner) => {
     const dismiss = node("button", { attrs: { type: "button", "aria-label": closeLabel },
       children: [icon("fa-xmark"), node("span", { text: localizedText(commands.localize, "VEMOBILE.Interface.ActionBar.Close", "Close") })], on: { click: closePicker } }, owner);
     return { dismiss, element: node("div", { className: "ve-action-bar-picker-header", children: [node("strong", { text: title }), dismiss] }) };
   };
+  // Keep command failures visible only while this action bar still owns its host.
   const report = (error) => { if (scope.disposed) return; status.classList.add("is-error"); status.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Interface.ActionBar.ActionFailed", "Action failed"); };
+  // Lock duplicate actions, await the supplied native command, and show failures.
   const run = async (action) => {
     if (pending || scope.disposed) return;
     pending = true;
@@ -59,6 +65,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
     try { await action(); } catch (error) { report(error); }
     finally { pending = false; if (!scope.disposed) update(); }
   };
+  // Change the visible hotbar page without changing the underlying shortcut records.
   const changePage = (next) => {
     if (pending) return;
     gesture?.reset();
@@ -99,7 +106,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
     const destinations = node("div", { className: "ve-action-bar-destinations" });
     for (let index = 0; index < staged.length; index++) destinations.append(node("button", {
       attrs: { type: "button", disabled: index === from, "aria-label": staged[index] ? localizedText(commands.localize, "VEMOBILE.ActionBar.MoveSwap", "Move to slot {slot}; swap with {name}", { slot: index + 1, name: staged[index].label }) : localizedText(commands.localize, "VEMOBILE.ActionBar.MoveEmpty", "Move to slot {slot}; empty", { slot: index + 1 }) },
-      text: String(index + 1), on: { click: () => run(async () => {
+      text: String(index + 1), on: { /* Move the native macro slot or reorder staged VE entries according to the configured action-bar source. */ click: () => run(async () => {
         if (native) await commands.moveHotbarMacro({ fromSlot: from + 1, slot: index + 1, macroId: staged[from]?.macroId, expectedMacroId: staged[index]?.macroId ?? null });
         else {
           [staged[from], staged[index]] = [staged[index], staged[from]]; dirty = true; selected = index;
@@ -114,6 +121,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
     header.dismiss.focus?.({ preventScroll: true });
   });
   editControls.append(done, cancel, finishNative, move, remove, edit);
+  // Open the macro picker for a slot and preserve its source slot identity.
   const chooseMacro = (index) => {
     if (hotbar?.locked || pending) return;
     closePicker();
@@ -139,7 +147,9 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
     const back = node("button", { attrs: { type: "button", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.ActionBar.BackToParentMacroFolder", "Back to parent macro folder") }, children: [icon("fa-chevron-left"), node("span", { text: localizedText(commands.localize, "VEMOBILE.Interface.ActionBar.Back", "Back") })],
       on: { click: () => { if (currentFolder.parent) openFolder(currentFolder.parent); } } }, owner);
     const navigation = node("div", { className: "ve-action-bar-folder-path", children: [back, folderName] });
+    // Enter a directory and restart its result pagination.
     const openFolder = (folder) => { currentFolder = folder; resultPage = 0; drawResults(); };
+    // Render the current folder's macros and child folders for this picker page.
     function drawResults() {
       resultsScope?.dispose();
       resultsScope = owner.child("macro-results");
@@ -155,6 +165,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
         children: [icon("fa-folder"), node("span", { text: entry.folder.name }), node("small", { text: entry.count }), icon("fa-chevron-right")],
         on: { click: () => openFolder(entry) }
       }, resultsScope) : macroChoice(entry)));
+      // Assign the chosen macro to the requested slot through the named command.
       function macroChoice(macro) { return node("button", { attrs: { type: "button", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.ActionBar.Assign", "Assign {label}", { label: (macro.label) }) },
         children: [macro.img ? node("img", { attrs: { src: macro.img, alt: "", loading: "lazy", decoding: "async" } }) : icon("fa-code"), node("span", { text: macro.label })],
         on: { click: () => run(async () => {
@@ -175,6 +186,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
     // A non-editable control gives the picker focus without a software keyboard.
     header.dismiss.focus?.({ preventScroll: true });
   };
+  // Activate, roll, or open the shortcut stored in one slot.
   const activate = (index) => run(async () => {
     const shortcut = staged[index];
     if (native && !shortcut) { chooseMacro(index); return; }
@@ -189,6 +201,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
       ? { skill: shortcut.skill }
       : { itemId: shortcut.itemId, ...(shortcut.activityId ? { activityId: shortcut.activityId } : {}) };
     let openedId = "";
+    // Tie a continuing movement session to the action bar's scoped surface.
     const openActionSession = (session) => {
       const id = String(session?.rootMessageId ?? "");
       if (scope.disposed || !id || id === openedId) return;
@@ -198,6 +211,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
     const outcome = await commands.execute(command, { ...payload, actorSourceUuid: actor.sourceUuid }, { onActionSession: openActionSession });
     if (outcome?.actionSession) openActionSession(outcome.actionSession);
   });
+  // Refresh slot labels, pending status, page count, and compact layout state.
   function update() {
     const idle = !native && !actor;
     wrapper.classList.toggle("is-idle", idle);
@@ -225,6 +239,7 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
       element.replaceChildren(shortcut?.img ? node("img", { attrs: { src: shortcut.img, alt: "" } }) : icon(shortcut?.kind === "skill" ? "fa-dice-d20" : shortcut ? "fa-code" : "fa-plus"), node("span", { className: "ve-action-bar-slot-number", text: cell + 1 }));
     }
   }
+  // Enter edit mode only for a populated, idle slot.
   const enterEdit = (index) => { if (pending || !staged[index]) return; editing = true; selected = index; update(); };
   gesture = bindQuickbarController({ bar, scope, getSlots: () => staged, isEditing: () => editing, deferSwap: native,
     canPress: (index) => !pending && (Boolean(staged[index]) || (native && !hotbar?.locked)),
@@ -260,8 +275,10 @@ export function renderActionBar({ actor, hotbar, source = "character", commands,
   return wrapper;
 }
 
+// Observe the available Scene width and select the compact bar presentation.
 export function bindActionBarLayout(surface, wrapper, scope, { Observer = globalThis.ResizeObserver } = {}) {
   if (!wrapper) return;
+  // Recalculate compact mode from the current measured width.
   const resize = () => {
     if (scope.disposed) return;
     const columns = actionBarColumns(surface.getBoundingClientRect().width);
@@ -279,7 +296,9 @@ export function bindActionBarLayout(surface, wrapper, scope, { Observer = global
   resize();
 }
 
+// Build and sort a folder tree for the macro assignment picker.
 function macroDirectory(macros, rootSorting = "m") {
+  // Create a macro directory node with its parent and local sort preference.
   const branch = (folder, parent) => ({ folder, parent, count: 0, folders: new Map(), macros: [], sorting: folder?.sorting ?? rootSorting });
   const root = branch(null, null);
   for (const macro of macros) {
@@ -292,7 +311,9 @@ function macroDirectory(macros, rootSorting = "m") {
     }
     current.macros.push(macro);
   }
+  // Sort a directory and its children, then cache its total macro count.
   const sort = current => {
+    // Fall back to labels for ties and use alphabetical order when selected.
     const compare = (a, b) => (current.sorting === "a" ? 0 : (Number(a.sort) || 0) - (Number(b.sort) || 0))
       || String(a.name ?? a.label).localeCompare(String(b.name ?? b.label));
     current.folders = [...current.folders.values()].sort((a, b) => compare(a.folder, b.folder));
@@ -303,6 +324,7 @@ function macroDirectory(macros, rootSorting = "m") {
   return root;
 }
 
+// Resolve a saved slot record into the bounded type needed by the action UI.
 function storedDescriptor(shortcut) {
   if (!shortcut) return null;
   if (shortcut.kind === "macro") return { kind: "macro", macroId: shortcut.macroId };

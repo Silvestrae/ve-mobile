@@ -5,6 +5,7 @@ import { pulseHoldHaptic } from "../../ui/haptics.mjs";
 import { currentFirstCombatants } from "./model.mjs";
 import { tokenPortraitFit, tokenPortraitStyle } from "../../ui/token-portrait.mjs";
 
+// Render initiative state and current-user combat actions from published records.
 export function renderCombat({ state, commands, scope }) {
   const combat = state.snapshot?.combat;
   if (!combat) return emptyCombat(localizedText(commands.localize, "VEMOBILE.Interface.Presenter.NoActiveCombat", "No active combat"), localizedText(commands.localize, "VEMOBILE.Interface.Presenter.JoinAnEncounterToSeeItsTurnOrderHere", "Join an encounter to see its turn order here."));
@@ -17,7 +18,7 @@ export function renderCombat({ state, commands, scope }) {
   const endTurn = combat.canEndTurn ? node("button", {
     className: "ve-combat-end-turn ve-scene-combat-end-turn",
     attrs: { type: "button", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.Presenter.EndTurn", "End Turn"), title: localizedText(commands.localize, "VEMOBILE.Interface.Presenter.EndTurn", "End Turn") },
-    on: { click: async (event) => {
+    on: { /* Finish the current turn once and keep a rejected native action visible in this surviving combat control. */ click: async (event) => {
       const button = event.currentTarget;
       if (button.disabled) return;
       button.disabled = true;
@@ -48,9 +49,11 @@ export function renderCombat({ state, commands, scope }) {
   ].filter(Boolean) });
 }
 
+// Render GM encounter controls with per-action pending and error feedback.
 export function renderGmCombatControls({ controls, commands, scope }) {
   if (!controls?.isGM) return null;
   const combatExists = Boolean(controls.combatId);
+  // Capture stable IDs and selected values; command execution rechecks authority.
   const request = () => ({
     combatId: controls.combatId,
     combatInstanceRevision: controls.combatInstanceRevision,
@@ -59,6 +62,7 @@ export function renderGmCombatControls({ controls, commands, scope }) {
     currentCombatantId: controls.currentCombatantId
   });
   const status = node("span", { className: "ve-gm-combat-controls-status", attrs: { role: "status", "aria-live": "polite" } });
+  // Disable duplicate combat actions until their named command settles.
   const run = async (button, action) => {
     if (button.disabled) return;
     button.disabled = true;
@@ -70,6 +74,7 @@ export function renderGmCombatControls({ controls, commands, scope }) {
     }
     finally { if (!scope.disposed && button.isConnected) button.disabled = button.dataset.available !== "true"; }
   };
+  // Keep visible, enabled, and accessible states derived from current permissions.
   const button = ({ className, visible, accessible, enabled, iconName, invoke, reason }) => node("button", {
     className,
     attrs: {
@@ -137,6 +142,7 @@ export function renderGmCombatControls({ controls, commands, scope }) {
   });
 }
 
+// Render the compact initiative rail for combatants shown in the current Scene.
 export function renderSceneCombatCarousel({ combat, commands, scope, carouselState = createCombatCarouselUiState(), getSceneViewport = () => null }) {
   const collapsed = carouselState.synchronize(combat);
   const status = node("span", { className: "ve-scene-combat-status", attrs: { role: "status", "aria-live": "polite" } });
@@ -194,7 +200,7 @@ export function renderSceneCombatCarousel({ combat, commands, scope, carouselSta
       disabled: !combat.canEndTurn,
       "data-ve-scene-control": true
     },
-    on: { click: async (event) => {
+    on: { /* Lock End Turn during the native request and release its busy state only while the control remains owned. */ click: async (event) => {
       const button = event.currentTarget;
       if (button.disabled) return;
       button.disabled = true;
@@ -221,6 +227,7 @@ export function renderSceneCombatCarousel({ combat, commands, scope, carouselSta
       status
     ]
   });
+  // Reflect the saved collapsed state in the rail and its control label.
   const applyCollapsed = (value) => {
     carousel.classList.toggle("is-collapsed", value);
     round.setAttribute("aria-label", value ? localizedText(commands.localize, "VEMOBILE.Interface.Presenter.ExpandCombatCarousel", "Expand Combat Carousel") : localizedText(commands.localize, "VEMOBILE.Interface.Presenter.CollapseCombatCarousel", "Collapse Combat Carousel"));
@@ -234,6 +241,7 @@ export function renderSceneCombatCarousel({ combat, commands, scope, carouselSta
     if (!value) drag.reset();
   };
   scope.listen(round, "click", () => applyCollapsed(carouselState.toggle()));
+  // Build an action only when its current combatant record grants that capability.
   const actionFor = (combatantId, capability, action, fallback) => {
     const combatant = combatants.find((entry) => entry.id === combatantId);
     if (!combatant?.[capability]) return;
@@ -250,6 +258,7 @@ export function renderSceneCombatCarousel({ combat, commands, scope, carouselSta
   return carousel;
 }
 
+// Return the compact label used for the current combatant's end-turn action.
 function endTurnContents(commands) {
   return [
     node("span", { className: "ve-scene-combat-end-turn-copy ve-scene-combat-end-turn-line", text: localizedText(commands.localize, "VEMOBILE.Interface.Presenter.EndTurn", "End Turn") }),
@@ -258,10 +267,12 @@ function endTurnContents(commands) {
 }
 
 /** Scene-lifetime UI state; intentionally separate from authoritative Combat state. */
+// Retain carousel scroll and collapse preferences between renders.
 export function createCombatCarouselUiState() {
   let combatId = "";
   let collapsed = false;
   return Object.freeze({
+    // Reset carousel collapse state when a different encounter replaces the currently remembered combat.
     synchronize(combat) {
       const nextCombatId = String(combat?.id ?? "");
       if (!nextCombatId || nextCombatId !== combatId) collapsed = false;
@@ -281,6 +292,7 @@ export function createCombatCarouselUiState() {
 }
 
 /** Shared 500ms press, tap, and horizontal-drag arbitration for the portrait rail. */
+// Bind long-press rail dragging and click suppression to the carousel owner scope.
 export function bindCombatantCarouselDrag(viewport, scope, {
   rail = viewport,
   movementThreshold = LONG_PRESS_MOVEMENT_THRESHOLD,
@@ -299,12 +311,14 @@ export function bindCombatantCarouselDrag(viewport, scope, {
   let drag = null;
   let suppressTap = false;
   let railOffset = 0;
+  // Release pointer capture and reset the active drag without changing rail state.
   const cancel = () => {
     const active = drag;
     drag = null;
     if (active?.timer !== null && active?.timer !== undefined) clearTimeoutFn(active.timer);
     if (active?.captured) viewport.releasePointerCapture?.(active.pointerId);
   };
+  // Arm dragging after the hold delay only while the pressed row remains mounted.
   const armLongPress = (interaction) => {
     if (!interaction.combatantId) return;
     interaction.timer = setTimeoutFn(() => {
@@ -316,6 +330,7 @@ export function bindCombatantCarouselDrag(viewport, scope, {
       onLongPress(interaction.combatantId);
     }, Math.max(0, Number(longPressMs) || LONG_PRESS_DURATION_MS));
   };
+  // Record the pressed combatant and schedule its scoped long-press timer.
   const pointerDown = (event) => {
     if (event.button !== undefined && event.button !== 0) return;
     cancel();
@@ -340,6 +355,7 @@ export function bindCombatantCarouselDrag(viewport, scope, {
     event.preventDefault?.();
     event.stopPropagation?.();
   };
+  // Move the rail after arming and cancel if its screen geometry has changed.
   const pointerMove = (event) => {
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.longPressed) {
@@ -357,6 +373,7 @@ export function bindCombatantCarouselDrag(viewport, scope, {
     event.preventDefault?.();
     event.stopPropagation?.();
   };
+  // End the gesture and suppress the synthetic click produced by a drag.
   const pointerEnd = (event, cancelled = false) => {
     if (!drag || drag.pointerId !== event.pointerId) return;
     const active = drag;
@@ -364,12 +381,14 @@ export function bindCombatantCarouselDrag(viewport, scope, {
     cancel();
     if (!cancelled && active.combatantId && !active.dragged && !active.longPressed) onTap(active.combatantId);
   };
+  // Consume only a post-drag click, leaving ordinary row selection available.
   const click = (event) => {
     if (!suppressTap) return;
     suppressTap = false;
     event.preventDefault();
     event.stopImmediatePropagation();
   };
+  // Cancel pending gesture state and remove temporary drag presentation.
   const reset = () => {
     railOffset = 0;
     rail.style.transform = "";
@@ -390,10 +409,12 @@ export function bindCombatantCarouselDrag(viewport, scope, {
   return Object.freeze({ reset });
 }
 
+// Resolve the nearest rail row to its stable combatant ID.
 function combatantIdFromPointer(event) {
   return event.target?.closest?.("[data-ve-combatant-id]")?.getAttribute?.("data-ve-combatant-id") ?? "";
 }
 
+// Clamp the rail's horizontal offset to its current measured content bounds.
 function clampCarouselRailOffset(offset, viewport, rail) {
   const visibleWidth = Number(viewport.clientWidth ?? viewport.offsetWidth ?? 0);
   const railWidth = Number(rail.scrollWidth ?? rail.offsetWidth ?? 0);
@@ -401,7 +422,9 @@ function clampCarouselRailOffset(offset, viewport, rail) {
   return Math.min(Math.max(0, Number(offset) || 0), maximum);
 }
 
+// Render one combatant's initiative, health, and currently permitted controls.
 function combatantRow(combat, combatant, commands, status, scope) {
+  // Prevent duplicate row actions and report failures while this row is mounted.
   const run = async (button, action) => {
     button.disabled = true;
     status.classList.remove("is-error");
@@ -449,10 +472,12 @@ function combatantRow(combat, combatant, commands, status, scope) {
   });
 }
 
+// Explain why this combat view has no active combat rows to show.
 function emptyCombat(title, detail) {
   return node("div", { className: "ve-combat-empty", children: [icon("fa-shield-halved"), node("h2", { text: title }), node("p", { text: detail })] });
 }
 
+// Format initiative using localized digits and the requested decimal precision.
 export function formatInitiative(value, decimals = 0, locale = "en") {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return "—";
   return localizedNumber(Number(value), locale, Number(decimals) === 2 ? 2 : 0);

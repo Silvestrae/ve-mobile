@@ -27,8 +27,11 @@ export function createFoundryAuthoritativeSessionGateway({
   let initialSources = null;
   let knownSources = new WeakMap();
   let baselineSession = null;
+  // Capture the current world and user IDs that own the authoritative session.
   const sessionIdentity = game => ({ game, userId: game?.user?.id ?? game?.userId ?? game?.data?.userId, worldId: game?.world?.id });
+  // Compare a captured session identity with the currently active world and user.
   const sameSession = (left, right) => left?.game === right.game && left?.userId === right.userId && left?.worldId === right.worldId;
+  // Reset authoritative source caches when the owning world or user changes.
   const ensureSession = game => {
     const identity = sessionIdentity(game);
     if (!sameSession(baselineSession, identity)) {
@@ -49,6 +52,7 @@ export function createFoundryAuthoritativeSessionGateway({
         (game.data[SOURCE_KEYS[name]] ?? []).map(source => [source._id, sourceSignature(source)]))]));
       return true;
     },
+    // Associate initial remote documents with their local source signatures for later provenance checks.
     bindInitialDocuments() {
       const game = getGame();
       ensureSession(game);
@@ -64,12 +68,16 @@ export function createFoundryAuthoritativeSessionGateway({
       return true;
     },
     async resync({ isCurrent = () => true, onProgress = () => {} } = {}) {
+      // Fetch all permission-filtered source collections, then reconcile only
+      // changed records. Session identity and caller generation guard each
+      // asynchronous boundary so an old reconnect cannot overwrite a new world.
       performanceObserver?.increment?.("reconnect.authoritative.run");
       const finishTotal = performanceObserver?.start?.("reconnect.authoritative.total") ?? (() => {});
       const startedAt = now();
       const checkpointStartedAt = new Map();
       const timings = {};
       const collectionTimings = {};
+      // Report bounded progress for the current authoritative source request.
       const progress = (checkpoint, detail, complete = false) => {
         if (!isCurrent()) return;
         const timestamp = now();
@@ -82,24 +90,25 @@ export function createFoundryAuthoritativeSessionGateway({
       ensureSession(game);
       const userId = game.user.id;
       const worldId = game.world?.id;
+      // Check whether the captured authoritative session and request remain active.
       const currentSession = () => isCurrent() && getGame() === game && game.user?.id === userId && game.world?.id === worldId;
       progress("collections", localizeFoundry("VEMOBILE.Interface.AppFrame.RefreshingWorldData2", "Refreshing world data…"));
       const finishFetch = performanceObserver?.start?.("reconnect.authoritative.fetch") ?? (() => {});
       let fetchFailed = false;
       const fetched = await Promise.all(COLLECTIONS.map(async (documentName) => {
         const collection = game.collections.get?.(documentName);
-        const cls = collection?.documentClass ?? collection?.constructor?.documentClass;
-        if (!collection || !cls) return [documentName, collection, null, cls];
+        const documentClass = collection?.documentClass ?? collection?.constructor?.documentClass;
+        if (!collection || !documentClass) return [documentName, collection, null, documentClass];
         const collectionStartedAt = now();
         try {
           performanceObserver?.increment?.("reconnect.collection.fetched");
-          const sources = validateSources(await requestSources({ documentName, documentClass: cls, user: game.user }));
+          const sources = validateSources(await requestSources({ documentName, documentClass: documentClass, user: game.user }));
           const values = sources;
           collectionTimings[documentName] = Math.max(0, now() - collectionStartedAt);
           performanceObserver?.increment?.("reconnect.document.fetched", values.length);
           // A collection count is a completion fact, never incremental progress.
           if (!fetchFailed) diagnostics?.record?.("debug", `Refreshed ${COLLECTION_LABELS[documentName]} (${values.length})`);
-          return [documentName, collection, values, cls];
+          return [documentName, collection, values, documentClass];
         } catch (error) {
           fetchFailed = true;
           error.reconnectCheckpoint = "collections";
@@ -174,6 +183,8 @@ export function createFoundryAuthoritativeSessionGateway({
 // mapping result through documentClass.fromSource. Keep the full server-filtered
 // sources and construct only new documents; `index:true` would change the query.
 async function requestWorldSources({ documentName }) {
+  // Use Foundry's authenticated socket transport and its normal permission
+  // filtering instead of reading unrestricted database/world source data.
   const socket = globalThis.foundry?.helpers?.SocketInterface;
   if (typeof socket?.dispatch !== "function") throw new Error(localizeFoundry("VEMOBILE.Interface.AuthoritativeSessionGateway.DocumentTransportUnavailable", "Foundry's document connection is unavailable."));
   const response = await socket.dispatch("modifyDocument", {
@@ -184,6 +195,7 @@ async function requestWorldSources({ documentName }) {
   return response?.result;
 }
 
+// Validate each returned document source for type, stable identity, uniqueness, and expected provenance.
 function validateSources(sources) {
   if (!Array.isArray(sources)) throw new Error(localizeFoundry("VEMOBILE.Interface.AuthoritativeSessionGateway.InvalidDocumentCollection", "Foundry returned invalid world data."));
   const ids = new Set();
@@ -197,6 +209,8 @@ function validateSources(sources) {
 }
 
 async function reconcileCollection(collection, authoritative, { documentClass, knownSources, isCurrent, yieldControl, now }) {
+  // Reuse unchanged document objects and prepare only changed/new sources;
+  // yield between bounded slices so a large world does not monopolize the UI.
   let changed = false;
   let prepared = 0;
   let updated = 0;
@@ -204,6 +218,7 @@ async function reconcileCollection(collection, authoritative, { documentClass, k
   let deleted = 0;
   const remote = new Map(authoritative.map(source => [source._id, source]));
   let sliceStartedAt = now();
+  // Yield between large source batches while cancelling if the session becomes stale.
   const yieldIfNeeded = async () => {
     if (now() - sliceStartedAt >= 12) {
       await yieldControl();
@@ -260,11 +275,13 @@ async function reconcileCollection(collection, authoritative, { documentClass, k
   return Object.freeze({ changed, prepared, updated, added, deleted });
 }
 
+// Build a stable signature for source data used to detect unchanged records.
 function sourceSignature(source) {
   return JSON.stringify(source, (_key, value) => value && typeof value === "object" && !Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value);
 }
 
+// Compare source signatures without comparing live Foundry documents.
 function sourceEqual(left, right) {
   if (left === right) return true;
   if (!left || !right || typeof left !== "object" || typeof right !== "object" || Array.isArray(left) !== Array.isArray(right)) return false;

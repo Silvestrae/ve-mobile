@@ -209,6 +209,8 @@ export function createActorViewRecord(actor, user, capabilitiesForActor = () => 
   };
 }
 
+// Project a D&D5e Group or Vehicle Actor into the same plain character-view
+// contract, including its owned item actions and system-specific details.
 function createCollectiveViewRecord(actor, user, capabilitiesForActor) {
   const system = actor.system ?? {};
   const items = Array.from(actor.items ?? []);
@@ -236,6 +238,8 @@ function createCollectiveViewRecord(actor, user, capabilitiesForActor) {
   };
 }
 
+// Normalize optional collective hit points without inventing values when the
+// system has not supplied either a current or maximum amount.
 function collectiveHealth(hp) {
   if (!hp || (numericOrNull(hp.value) === null && numericOrNull(hp.max) === null)) return null;
   return { value: numericOrNull(hp.value), max: numericOrNull(hp.effectiveMax ?? hp.max), temp: numericOrNull(hp.temp) };
@@ -297,6 +301,8 @@ function favouriteItemRecords(actor, items, itemRecords) {
     })));
 }
 
+// Resolve a saved favourite relative to this Actor and accept only an Item ID
+// present in its current item index.
 function favouriteResolvedItemId(actor, favoriteId, byItemId) {
   try {
     const resolved = (globalThis.fromUuidSync ?? globalThis.foundry?.utils?.fromUuidSync)?.(favoriteId, { relative: actor });
@@ -308,6 +314,8 @@ function favouriteResolvedItemId(actor, favoriteId, byItemId) {
   }
 }
 
+// Explain where favourite data is coming from and why it may not match the
+// entries currently exposed by the character view.
 function favouriteDiagnostics(actor, favourites) {
   const actorFavoriteCount = Array.from(actor?.system?.favorites ?? []).length;
   const game = globalThis.game;
@@ -330,6 +338,8 @@ function favouriteDiagnostics(actor, favourites) {
   });
 }
 
+// Publish action identifiers only when this exact item belongs to an Actor the
+// current user can own; presentation data alone never grants an action.
 function itemActionFields(actor, item, user) {
   const system = item.system ?? {};
   const owned = Boolean(item.parent === actor || actor.items?.get?.(item.id) === item || itemsContain(actor.items, item))
@@ -364,6 +374,8 @@ export function createItemMenuRecord(actor, item, user, { activityId = "", favou
     favouriteIds: Object.freeze(favouriteIds), ...(activityId ? { activityId: String(activityId) } : {}) });
 }
 
+// Convert a native Item into its serializable list-row record, combining safe
+// details with the narrowly authorized item actions.
 function itemViewRecord(actor, item, user) {
   const system = item.system ?? {};
   const sourceItem = resolveItemSourceItem(actor, item);
@@ -402,6 +414,7 @@ function itemViewRecord(actor, item, user) {
   };
 }
 
+// Prefer D&D5e's prepared item-type label and fall back to its configured type.
 function itemTypeLabel(item) {
   const system = item.system ?? {};
   const prepared = humanLabel(system.type?.label);
@@ -411,6 +424,8 @@ function itemTypeLabel(item) {
   return humanLabel(typeof category === "string" ? category : category?.label) || titleCase(item.type);
 }
 
+// Select identified or unidentified description data before sanitizing it for
+// display, so unidentified items do not leak their full description.
 function itemDetailRecord(item) {
   const system = item.system ?? {};
   const identified = system.identified !== false;
@@ -430,10 +445,12 @@ function itemDetailRecord(item) {
   };
 }
 
+// Assemble the concise key/value detail rows used by the item detail surface.
 function itemDetailEntries(item, damage = []) {
   const system = item.system ?? {};
   const labels = item.labels ?? {};
   const entries = [];
+  // Normalize and deduplicate repeated native labels as detail rows are added.
   const add = (label, value) => {
     const prepared = humanLabel(value);
     if (!prepared || entries.some((entry) => entry.key === label && entry.value === prepared)) return;
@@ -461,6 +478,8 @@ function itemDetailEntries(item, damage = []) {
   return entries;
 }
 
+// Merge prepared item property labels with explicit native property sets while
+// preserving a stable, duplicate-free list for the view record.
 function itemProperties(item) {
   const system = item.system ?? {};
   const labels = item.labels ?? {};
@@ -473,6 +492,8 @@ function itemProperties(item) {
   return Array.from(new Set(values.map(humanLabel).filter(Boolean)));
 }
 
+// Project configurable D&D5e activities and their activation, target, damage,
+// and usage details without returning the native activity documents.
 function itemActivities(item) {
   return collectionValues(item.system?.activities)
     .filter((activity) => activity?.canConfigure !== false)
@@ -485,6 +506,8 @@ function itemActivities(item) {
       }
       const labels = context.labels ?? activity.labels ?? {};
       const details = [];
+      // Add only displayable activity details; labels can be absent on passive
+      // activities and should not create empty rows.
       const add = (label, value) => {
         const prepared = humanLabel(value);
         if (prepared) details.push({ key: label, label: detailLabel(label), value: prepared });
@@ -524,6 +547,8 @@ function itemActivities(item) {
     });
 }
 
+// Prefer the system's prepared activity-uses label, otherwise describe its
+// finite uses and recovery period in a compact form.
 function activityUsesLabel(uses = {}, preparedLabel = "") {
   const label = humanLabel(preparedLabel ?? uses?.label);
   if (label) return label;
@@ -537,6 +562,7 @@ function activityUsesLabel(uses = {}, preparedLabel = "") {
   return recovery ? `${remaining} / ${recoveryLabel(recovery)}` : `${remaining} / ${max}`;
 }
 
+// Build the equivalent compact uses label for an item's own use counter.
 function itemUsesLabel(uses = {}, preparedLabel = "") {
   const label = humanLabel(preparedLabel);
   if (label) return label;
@@ -549,6 +575,7 @@ function itemUsesLabel(uses = {}, preparedLabel = "") {
   return recovery ? `${value} / ${recoveryLabel(recovery)}` : `${value} / ${max}`;
 }
 
+// Reduce common D&D5e short and long rest spellings to stable display labels.
 function recoveryLabel(value) {
   const key = stringValue(value).toLowerCase();
   if (["lr", "long", "longrest", "long-rest"].includes(key)) return "LR";
@@ -556,6 +583,8 @@ function recoveryLabel(value) {
   return humanLabel(value);
 }
 
+// Recover damage formulas from either the prepared context or activity source,
+// including custom formulas and dice parts used by older system records.
 function rawActivityDamage(context, activity) {
   return collectionValues(context.damage?.parts ?? activity.damage?.parts).map((part) => {
     const customFormula = part?.custom?.enabled ? stringValue(part.custom.formula) : "";
@@ -575,6 +604,7 @@ function rawActivityDamage(context, activity) {
   }).filter(Boolean);
 }
 
+// Expose embedded Item effects as small plain records for the detail view.
 function itemEffects(item) {
   return collectionValues(item.effects).map((effect) => ({
     id: String(effect.id ?? ""),
@@ -585,6 +615,8 @@ function itemEffects(item) {
   }));
 }
 
+// Remove executable or embedded content from item descriptions before they
+// cross the Foundry boundary as display HTML.
 function safeItemHtml(value) {
   let html = String(value ?? "");
   let previous;
@@ -599,6 +631,7 @@ function safeItemHtml(value) {
     .trim();
 }
 
+// Return the Actor's folder ancestry while stopping malformed parent cycles.
 function actorFolderPath(actor) {
   const path = [];
   const seen = new Set();
@@ -613,6 +646,8 @@ function actorFolderPath(actor) {
   return path.reverse();
 }
 
+// Select biography fields by Actor type and preserve each field's visibility
+// metadata for the presentation layer.
 function biographyRecord(details = {}, actorType = "character") {
   const isNpc = actorType === "npc";
   const characteristics = [
@@ -640,6 +675,7 @@ function biographyRecord(details = {}, actorType = "character") {
   };
 }
 
+// Publish only nonnegative integer currency amounts for the supported coins.
 function currencyRecord(currency = {}) {
   return Object.freeze(Object.fromEntries(CURRENCY_DENOMINATIONS.map((denomination) => {
     const value = Number(currency?.[denomination]);
@@ -647,6 +683,7 @@ function currencyRecord(currency = {}) {
   })));
 }
 
+// Normalize the D&D5e encumbrance totals and thresholds consumed by the sheet.
 function encumbranceRecord(encumbrance = {}) {
   const thresholds = encumbrance?.thresholds ?? {};
   const stops = encumbrance?.stops ?? {};
@@ -678,6 +715,8 @@ export function biographyPlainText(value) {
   ).replace(/\r\n?/gu, "\n").replace(/[ \t]+\n/gu, "\n").replace(/\n{3,}/gu, "\n\n").trim();
 }
 
+// Decode the small entity set commonly returned by Foundry's text-only
+// description conversion without introducing a DOM dependency.
 function decodeBasicEntities(value) {
   return String(value)
     .replace(/&nbsp;/giu, " ")
@@ -688,6 +727,8 @@ function decodeBasicEntities(value) {
     .replace(/&amp;/giu, "&");
 }
 
+// Derive the NPC identity, creature type, challenge rating, and defenses from
+// the system record and current D&D5e configuration.
 function npcIdentityRecord(system = {}) {
   const details = system.details ?? {};
   const type = details.type ?? {};
@@ -735,6 +776,8 @@ function npcHabitatLabel(habitat = {}) {
   return labels.sort((a, b) => a.localeCompare(b, globalThis.game?.i18n?.lang || undefined)).join(", ");
 }
 
+// Normalize NPC legendary/lair resource counters across modern rule data and
+// the legacy resource fields still found in existing worlds.
 function npcResourceRecord(system = {}) {
   const resources = system.resources ?? {};
   const max = Math.max(0, number(resources.legact?.max));
@@ -748,6 +791,8 @@ function npcResourceRecord(system = {}) {
     lair: hasLair ? { initiative: numericOrNull(lair.initiative) } : null };
 }
 
+// Classify an NPC feature by its first activity, treating traits and passive
+// activities as passive features.
 function npcFeatureGroup(item) {
   const first = collectionValues(item.system?.activities)[0];
   const type = stringValue(first?.activation?.type);
@@ -756,6 +801,7 @@ function npcFeatureGroup(item) {
   return config ? type : "passive";
 }
 
+// Resolve the display label for the feature group selected by npcFeatureGroup.
 function npcFeatureGroupLabel(item) {
   const group = npcFeatureGroup(item);
   if (group === "passive") return localized("DND5E.Features") || "Features";
@@ -763,16 +809,19 @@ function npcFeatureGroupLabel(item) {
   return localized(config?.header ?? config?.label) || titleCase(group);
 }
 
+// Render fractional challenge ratings using the familiar D&D shorthand.
 function formatChallengeRating(value) {
   if (value === null) return "";
   return ({ 0.125: "1/8", 0.25: "1/4", 0.5: "1/2" })[value] ?? String(value);
 }
 
+// Treat an optional scalar or array uniformly when reading legacy fields.
 function arrayValue(value) {
   if (value === null || value === undefined) return [];
   return Array.isArray(value) ? value : [value];
 }
 
+// Read Foundry Collections, arrays, and collection-like values into a safe array.
 function collectionValues(value) {
   if (!value) return [];
   if (Array.isArray(value.contents)) return value.contents;
@@ -783,6 +832,8 @@ function collectionValues(value) {
   }
 }
 
+// Describe how a spell is prepared and whether its preparation can be changed
+// through the current Actor and source-item relationship.
 function spellPreparationRecord(actor, item, user, sourceItem) {
   const system = item.system ?? {};
   const methodKey = stringValue(system.method);
@@ -800,6 +851,8 @@ function spellPreparationRecord(actor, item, user, sourceItem) {
   return { preparationState, canPrepare, preparationEligible, linked, cached, rechargeExcluded, owned };
 }
 
+// Extend the general Item record with spell level, school, components, and
+// preparation data from D&D5e's current spellcasting configuration.
 function spellViewRecord(actor, item, user) {
   const record = itemViewRecord(actor, item, user);
   const system = item.system ?? {};
@@ -829,12 +882,15 @@ function spellViewRecord(actor, item, user) {
   };
 }
 
+// Convert D&D5e's boolean or numeric preparation value to its supported state.
 function spellPreparationState(value) {
   if (typeof value === "boolean") return Number(value);
   const state = Number(value);
   return Number.isInteger(state) && state >= 0 && state <= 2 ? state : 0;
 }
 
+// Resolve a spell's preparation-state label, including the always-prepared
+// state used by spellcasting methods that do not track prepared slots.
 function spellPreparationStatus(value, method) {
   const states = globalThis.CONFIG?.DND5E?.spellPreparationStates ?? {};
   const normalized = spellPreparationState(value);
@@ -844,6 +900,7 @@ function spellPreparationStatus(value, method) {
   return localized(state?.label) || (normalized === 1 ? "Prepared" : "Unprepared");
 }
 
+// Fail closed when Foundry's ownership check is missing or throws.
 function canOwn(document, user) {
   try {
     return document?.testUserPermission?.(user, "OWNER") ?? Boolean(document?.isOwner);
@@ -852,6 +909,8 @@ function canOwn(document, user) {
   }
 }
 
+// Ask Foundry for an Item UUID relative to its owning Actor, returning no
+// identifier when that native lookup is unavailable or invalid.
 function relativeItemUuid(item, actor) {
   if (typeof item?.getRelativeUUID !== "function") return "";
   try {
@@ -861,6 +920,8 @@ function relativeItemUuid(item, actor) {
   }
 }
 
+// Check exact Item membership for both iterable and unusual Foundry collection
+// implementations, treating conversion failures as non-membership.
 function itemsContain(collection, item) {
   try {
     return Array.from(collection ?? []).includes(item);
@@ -869,6 +930,8 @@ function itemsContain(collection, item) {
   }
 }
 
+// Prefer D&D5e's prepared casting-time label, then format the underlying
+// activation record when a prepared label is absent.
 function spellCastingTime(item) {
   const prepared = stringValue(item.labels?.activation) || stringValue(item.labels?.activations?.[0]?.simple);
   if (prepared) return prepared;
@@ -881,6 +944,8 @@ function spellCastingTime(item) {
   return definition?.scalar && value ? `${value} ${label}` : label;
 }
 
+// Project capacity only for container-like Items, keeping count and weight
+// limits distinct for the inventory presentation.
 function containerCapacityRecord(item) {
   if (!["backpack", "container"].includes(item.type)) return null;
   const capacity = item.system?.capacity ?? {};
@@ -897,6 +962,7 @@ function containerCapacityRecord(item) {
   return { value: 0, max: null, units: "" };
 }
 
+/** Resolve the current source Item for an owned item or valid synthetic proxy. */
 export function resolveItemSourceItem(actor, item) {
   if (item.type === "subclass") {
     const classIdentifier = stringValue(item.system?.classIdentifier);
@@ -934,6 +1000,8 @@ export function resolveItemSourceItem(actor, item) {
   return item.system?.linkedActivity?.item ?? null;
 }
 
+// Publish visible, active effects that still have valid origins and identified
+// sources; concealed or suppressed effects remain out of the character view.
 function effectRecords(actor) {
   return applicableEffects(actor)
     .filter((effect) => !effect.isConcealed)
@@ -973,6 +1041,8 @@ function effectRecords(actor) {
     });
 }
 
+// Prefer D&D5e's computed applicable effects and fall back to the embedded
+// collection when that API is unavailable or fails.
 function applicableEffects(actor) {
   let source;
   try { source = actor.allApplicableEffects ? actor.allApplicableEffects() : actor.effects ?? []; }
@@ -998,6 +1068,8 @@ function spellcastingRecord(actor, attributes) {
   return { attackBonus, saveDC, defaultClassId: String(primary?.item?.id ?? matching?.id ?? classes[0]?.id ?? ""), classes };
 }
 
+// Pair configured D&D5e conditions with current effects, preserving whether
+// each condition can be toggled by the current user.
 function conditionRecords(actor) {
   const definitions = globalThis.CONFIG?.DND5E?.conditionTypes ?? {};
   const effects = applicableEffects(actor).filter((effect) => !effect.disabled && !effect.isSuppressed);
@@ -1023,6 +1095,8 @@ function conditionRecords(actor) {
   });
 }
 
+// Resolve an effect's originating Item or Actor into a safe source summary and
+// retain only statuses that represent configured conditions.
 function effectSourceRecord(actor, effect, statuses = []) {
   const conditionId = statuses.find((status) => {
     const definition = globalThis.CONFIG?.DND5E?.conditionTypes?.[status];
@@ -1049,6 +1123,8 @@ function effectSourceRecord(actor, effect, statuses = []) {
   return Object.freeze({ name: "", type: "" });
 }
 
+// Resolve an effect origin against its parent first, then the explicit UUID,
+// without substituting a different Actor when the origin is stale.
 function effectOriginDocument(actor, effect) {
   if (effect.parent?.documentName === "Item") return effect.parent;
   const origin = stringValue(effect.origin);
@@ -1073,6 +1149,7 @@ function effectOriginDocument(actor, effect) {
   return null;
 }
 
+// Map native Item types into the small set of source labels shown with effects.
 function effectItemType(item) {
   const type = stringValue(item?.type).toLowerCase();
   if (type === "spell") return "Spell";
@@ -1081,11 +1158,15 @@ function effectItemType(item) {
   return localized(globalThis.CONFIG?.DND5E?.itemTypes?.[type]?.label) || titleCase(type) || "Item";
 }
 
+// Select an effect description from supported D&D5e shapes and reduce it to
+// plain text for the compact effect record.
 function effectDescription(effect) {
   const value = effect?.description ?? effect?.system?.description?.value ?? effect?.flags?.dnd5e?.description ?? "";
   return plainEffectText(value, 280);
 }
 
+// Strip active or embedded markup, decode basic entities, and bound effect text
+// before exposing it as a plain presentation record.
 function plainEffectText(value, maximum = 280) {
   const html = typeof value === "string" ? value : typeof value?.value === "string" ? value.value : "";
   if (!html) return "";
@@ -1103,6 +1184,8 @@ function plainEffectText(value, maximum = 280) {
   return text.length <= maximum ? text : `${text.slice(0, maximum - 1).trimEnd()}…`;
 }
 
+// Prefer Foundry's prepared duration text while suppressing expired and raw
+// timestamp-like values that are not useful to a player.
 function effectDurationLabel(effect) {
   const prepared = humanLabel(effect?.duration?.label);
   const rawRemaining = effect?.duration?.remaining;
@@ -1118,6 +1201,7 @@ function effectDurationLabel(effect) {
   return `${Math.ceil(remaining)} sec`;
 }
 
+// Convert configured ability entries into stable keys and numeric display data.
 function abilityRecords(source = {}) {
   return Object.entries(source).filter(([key]) => validKey(key)).map(([key, ability]) => ({
     key,
@@ -1141,6 +1225,7 @@ function abilityCheckModifier(ability) {
   return number(ability?.mod) + number(ability?.checkBonus) + proficiency;
 }
 
+// Project skill totals, passive values, and ability associations for the sheet.
 function skillRecords(source = {}) {
   return Object.entries(source).filter(([key]) => validKey(key)).map(([key, skill]) => ({
     key,
@@ -1152,6 +1237,8 @@ function skillRecords(source = {}) {
   })).sort((first, second) => first.label.localeCompare(second.label));
 }
 
+// Combine configured tool proficiencies with matching owned Items to provide
+// useful labels and their current proficiency totals.
 function toolProficiencyRecords(system, items) {
   const records = [];
   const tools = system.tools ?? {};
@@ -1176,6 +1263,8 @@ function toolProficiencyRecords(system, items) {
   return records.sort((first, second) => first.label.localeCompare(second.label));
 }
 
+// Gather senses, damage/condition traits, and movement-related traits into the
+// grouped records consumed by the actor view.
 function traitRecords(system, items) {
   const senses = senseRecords(system.attributes?.senses);
   const resistance = simpleTraitRecords(system.traits?.dr, "damageTypes");
@@ -1199,6 +1288,7 @@ function traitRecords(system, items) {
   ].filter((trait) => trait.entries.length);
 }
 
+// Publish only positive configured sense ranges, using the system's units.
 function senseRecords(source = {}) {
   const ranges = source?.ranges ?? source ?? {};
   const units = stringValue(source?.units) || "ft";
@@ -1212,12 +1302,15 @@ function senseRecords(source = {}) {
   return entries;
 }
 
+// Resolve configured trait identifiers and custom text into deduplicated rows.
 function simpleTraitRecords(source, configKey, items = []) {
   const entries = collectionValues(source?.value).map((key) => ({ label: configuredTraitLabel(key, configKey, items), value: "" }));
   appendCustomRecords(entries, source?.custom, (label) => ({ label, value: "" }));
   return uniqueTraitRecords(entries);
 }
 
+// Format numeric or textual damage modifiers and resolve their damage-type
+// labels using the same configuration and owned-item fallbacks as traits.
 function damageModificationRecords(source, items = []) {
   const entries = Object.entries(source?.amount ?? {})
     .filter(([key, value]) => validKey(key) && value !== null && value !== undefined && String(value).trim())
@@ -1225,6 +1318,7 @@ function damageModificationRecords(source, items = []) {
   return uniqueTraitRecords(entries);
 }
 
+// Combine prepared language labels and custom language text into unique rows.
 function languageRecords(source = {}) {
   const prepared = source?.labels;
   const entries = [
@@ -1240,11 +1334,13 @@ function languageRecords(source = {}) {
   return uniqueTraitRecords(entries);
 }
 
+// Split Foundry's semicolon-delimited custom trait text into caller-shaped rows.
 function appendCustomRecords(records, custom, makeRecord) {
   const values = String(custom ?? "").split(/\s*;\s*/u).map((value) => value.trim()).filter(Boolean);
   values.forEach((value, index) => records.push(makeRecord(value, index)));
 }
 
+// Preserve the first occurrence of each label/value pair in a trait list.
 function uniqueTraitRecords(records) {
   const seen = new Set();
   return records.filter((record) => {
@@ -1255,11 +1351,14 @@ function uniqueTraitRecords(records) {
   });
 }
 
+// Resolve a trait name from a matching Item first, then active system config,
+// proficiency labels, or a readable fallback.
 function configuredTraitLabel(key, configKey, items = []) {
   const item = items.find((candidate) => [candidate.identifier, candidate.system?.identifier, candidate.system?.type?.baseItem, candidate.system?.type?.value].some((value) => String(value ?? "") === String(key)));
   return item?.name || configLabel(globalThis.CONFIG?.DND5E?.[configKey], key) || PROFICIENCY_LABELS[key] || titleCase(key);
 }
 
+// Find the best configured or owned-Item label for a tool identifier.
 function toolLabel(key, items) {
   const config = globalThis.CONFIG?.DND5E ?? {};
   const definition = config.tools?.[key] ?? config.vehicleTypes?.[key];
@@ -1271,6 +1370,8 @@ function toolLabel(key, items) {
     || titleCase(key);
 }
 
+// Resolve a configured label by direct key or identifier while respecting
+// Foundry localization wrappers.
 function configLabel(config, key) {
   const direct = config?.[key];
   const directLabel = localized(direct?.label ?? direct);
@@ -1283,6 +1384,8 @@ function configLabel(config, key) {
   return "";
 }
 
+// Project spell slots, pact slots, item uses, and hit dice as separate resource
+// records with stable identifiers and current bounds.
 function resourceRecords(system, items, hitDice) {
   const resources = [];
   for (const [key, slot] of Object.entries(system.spells ?? {})) {
@@ -1320,6 +1423,8 @@ function resourceRecords(system, items, hitDice) {
   return resources;
 }
 
+// Derive per-class hit-die rows from class Items, falling back to aggregate
+// Actor data when no class-level values are available.
 function hitDiceRecord(system, classes) {
   const aggregate = system.attributes?.hd;
   const max = Math.max(0, number(aggregate?.max));
@@ -1354,6 +1459,7 @@ function hitDiceRecord(system, classes) {
   });
 }
 
+// Publish configured positive movement modes with their native units and labels.
 function movementRecord(movement = {}) {
   const configured = globalThis.CONFIG?.DND5E?.movementTypes ?? { walk: { label: localizeFoundry("VEMOBILE.Character.ActorView.Walk", "Walk") }, burrow: { label: localizeFoundry("VEMOBILE.Character.ActorView.Burrow", "Burrow") }, climb: { label: localizeFoundry("VEMOBILE.Character.ActorView.Climb", "Climb") }, fly: { label: localizeFoundry("VEMOBILE.Character.ActorView.Fly", "Fly") }, swim: { label: localizeFoundry("VEMOBILE.Character.ActorView.Swim", "Swim") } };
   const modes = Object.entries(configured).flatMap(([key, config]) => {
@@ -1366,14 +1472,17 @@ function movementRecord(movement = {}) {
   return { value: preferred?.value ?? 0, units: String(movement.units ?? "ft"), mode: preferred?.key ?? "walk", modes };
 }
 
+// Return the first matching class/background-style source name for the Actor.
 function originName(items, types) {
   return items.find((item) => types.includes(item.type))?.name ?? "";
 }
 
+// Choose the leading supported class theme, or the neutral presentation theme.
 function classTheme(classes) {
   return classThemes(classes)[0] ?? "neutral";
 }
 
+// Return every distinct supported class theme in Actor item order.
 function classThemes(classes) {
   const supported = new Set(["artificer", "barbarian", "bard", "cleric", "druid", "fighter", "monk", "paladin", "psion", "ranger", "rogue", "sorcerer", "warlock", "wizard"]);
   const recognized = [...new Set(classes
@@ -1382,6 +1491,8 @@ function classThemes(classes) {
   return recognized.length ? recognized : ["neutral"];
 }
 
+// Mark NPCs with a non-GM owner as player-facing; otherwise keep the neutral
+// NPC presentation treatment.
 function npcTheme(actor, users) {
   const playerOwned = Array.from(users ?? []).some((candidate) => {
     if (!candidate || candidate.isGM) return false;
@@ -1390,24 +1501,30 @@ function npcTheme(actor, users) {
   return playerOwned ? "neutral" : "bestiary";
 }
 
+// Convert finite numeric values while keeping missing or invalid data at the
+// caller's requested fallback.
 function number(value, fallback = 0) {
   if (value === null || value === undefined || value === "") return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+// Return finite numeric data when present, preserving absence as null.
 function numericOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+// Read a trimmed string or stable document ID without coercing arbitrary objects.
 function stringValue(value) {
   if (typeof value === "string") return value.trim();
   if (value && typeof value === "object" && typeof value.id === "string") return value.id.trim();
   return "";
 }
 
+// Resolve a configured label through Foundry's current i18n service and retain
+// the original text if localization is unavailable.
 function localized(value) {
   const text = stringValue(value);
   if (!text) return "";
@@ -1418,26 +1535,31 @@ function localized(value) {
   }
 }
 
+// Reject document references and opaque IDs that would be misleading as labels.
 function humanLabel(value) {
   const text = localized(value).trim();
   if (!text || /^(?:@?UUID\b|Compendium\.|Actor\.|Item\.|Scene\.)/iu.test(text) || /^[A-Za-z0-9_-]{12,}$/u.test(text)) return "";
   return text;
 }
 
+// Turn system keys into readable fallback labels when no configured label exists.
 function titleCase(value) {
   return String(value ?? "")
     .replace(/[-_]+/gu, " ")
     .replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
 }
 
+// Round a numeric display value to one decimal place.
 function roundTenth(value) {
   return Math.round(number(value) * 10) / 10;
 }
 
+// Keep a numeric counter within its supported minimum and maximum.
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
+// Accept only bounded configuration keys before they are used in projected data.
 function validKey(value) {
   return /^[a-z0-9_-]{1,32}$/u.test(value);
 }

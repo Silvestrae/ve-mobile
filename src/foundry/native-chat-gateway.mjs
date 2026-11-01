@@ -9,6 +9,8 @@ import { mountChatComposerDock } from "./chat-composer-dock.mjs";
 import { bindChatDiceInteraction } from "./chat-dice-interaction.mjs";
 import { createChatReadTracker } from "./chat-read-tracker.mjs";
 
+/** Move Foundry's live ChatLog into VE's host and restore every moved node,
+ * native toggle and owned listener when that presentation scope ends. */
 export function createFoundryNativeChatGateway({
   readUi = () => globalThis.ui,
   readDocument = () => globalThis.document,
@@ -19,6 +21,7 @@ export function createFoundryNativeChatGateway({
   const readTracker = createChatReadTracker({ readGame, readDocument, getStorage });
   return Object.freeze({
     watchUnread: (scope, listener) => readTracker.watch(scope, listener),
+    // Mount Foundry's native chat controls into the owned host and restore their original placement on teardown.
     mount(host, scope) {
       const foundryUi = readUi();
       const documentRef = readDocument();
@@ -44,13 +47,17 @@ export function createFoundryNativeChatGateway({
       const wasActive = element.classList.contains("active");
       const originalToggleDescriptor = Object.getOwnPropertyDescriptor(chat, "_toggleNotifications");
       const originalToggle = chat._toggleNotifications;
+      // Restore the Polyglot surface after the temporary mobile admission ends.
       let restorePolyglot = () => {};
       let dockScope = null;
       let dockContent = null;
       let restored = false;
 
+      // Add mobile-aware wrappers around native chat controls without replacing the original controls.
       const embedNativeControls = () => (dockContent ?? chatForm).append(controls, input);
+      // Create the control that switches between native chat modes on a mobile viewport.
       const mobileToggle = () => embedNativeControls();
+      // Undo the native chat patches and restore original values only while this scope still owns them.
       const restore = () => {
         if (restored) return;
         restored = true;
@@ -153,6 +160,7 @@ export function mountChatVisualViewport({ host, input, document, scope }) {
   let rootObserver = null;
   let observedRoot = null;
   let splitViewportBaseline = null;
+  // Restore the captured chat pane layout and scroll position after the dock changes.
   const restorePane = () => {
     if (!panePrevious) return;
     host.classList.remove("ve-chat-visual-pane");
@@ -160,6 +168,7 @@ export function mountChatVisualViewport({ host, input, document, scope }) {
     else host.style.removeProperty("--ve-chat-pane-height");
     panePrevious = null;
   };
+  // Restore the captured native chat pane layout and scroll state.
   const restore = () => {
     if (!root) return;
     root.classList.remove("ve-chat-visual-viewport");
@@ -170,6 +179,7 @@ export function mountChatVisualViewport({ host, input, document, scope }) {
     root = null;
     previous = null;
   };
+  // Reconcile native chat visibility, layer, and composer state with the current mobile presentation.
   const reconcile = () => {
     if (disposed || scope.disposed || host.isConnected === false) return;
     const currentRoot = host.closest?.(".ve-mobile-app");
@@ -218,6 +228,7 @@ export function mountChatVisualViewport({ host, input, document, scope }) {
     }
     root.classList.add("ve-chat-visual-viewport");
   };
+  // Apply the current chat mode to the native chat document.
   const update = () => {
     reconcile();
     if (frame !== null || typeof browser.requestAnimationFrame !== "function") return;
@@ -241,8 +252,10 @@ export function mountChatVisualViewport({ host, input, document, scope }) {
   queueMicrotask(update);
 }
 
+/** Read visible viewport bounds with layout-viewport fallbacks for keyboard pan. */
 export function readChatVisualViewport(browser, document) {
   const viewport = browser?.visualViewport;
+  // Accept a finite numeric chat setting and reject invalid values.
   const finite = (value) => Number.isFinite(value) ? value : null;
   const scrollY = finite(browser?.scrollY) ?? 0;
   const scrollX = finite(browser?.scrollX) ?? 0;
@@ -263,6 +276,7 @@ export function mountPolyglotChatSelector({ chat, chatForm, controls, input, doc
   let createdForMobile = false;
   let mobileRow = null;
   let disposed = false;
+  // Build a selector for the current chat mode only when Foundry does not provide one.
   const createMissingSelector = () => {
     if (!document?.createElement || !chatForm || !input) return null;
     const container = document.createElement("div");
@@ -285,6 +299,7 @@ export function mountPolyglotChatSelector({ chat, chatForm, controls, input, doc
     createdForMobile = true;
     return container;
   };
+  // Update the native chat selector and mode after settings or application changes.
   const reconcile = () => {
     if (disposed) return false;
     const next = chatForm?.querySelector?.(".polyglot-lang-select")
@@ -315,6 +330,7 @@ export function mountPolyglotChatSelector({ chat, chatForm, controls, input, doc
     } else input.insertAdjacentElement?.("beforebegin", selector);
     return true;
   };
+  // Refresh the native chat language controls from current Foundry language data.
   const refreshLanguages = () => {
     if (disposed || !reconcile() || !game?.ready) return;
     try {
@@ -357,10 +373,12 @@ export function mountPolyglotChatSelector({ chat, chatForm, controls, input, doc
   };
 }
 
+/** Capture a DOM node's insertion point before temporarily moving it. */
 export function placementOf(element) {
   return Object.freeze({ parent: element?.parentElement ?? null, nextSibling: element?.nextSibling ?? null });
 }
 
+/** Restore the node before its former sibling, or append if that sibling moved. */
 export function restorePlacement(element, placement) {
   const { parent, nextSibling } = placement ?? {};
   if (!element || !parent) return;
@@ -368,6 +386,7 @@ export function restorePlacement(element, placement) {
   else parent.append(element);
 }
 
+/** Resolve the native light/dark class used by Foundry's Chat surface. */
 export function readFoundryTheme(documentRef) {
   const interfaceElement = documentRef?.getElementById?.("interface");
   const body = documentRef?.body;
@@ -381,16 +400,20 @@ const EDITOR_PROMPT_ACTIONS = new Set(["font-color", "font-size-custom", "image"
  * reopen its keyboard underneath the form they are about to display. */
 export function bindManualChatFocus(host, input, scope, { now = defaultNow, allowance = 750 } = {}) {
   let directInputTapAt = Number.NEGATIVE_INFINITY;
+  // Check whether the target is a chat editor where typing intent should be recorded.
   const typingTarget = (target) => {
     const editor = input.querySelector?.('[contenteditable]:not([contenteditable="false"])') ?? input;
     return target === editor || Boolean(editor.contains?.(target))
       || Boolean(input.contains?.(target) && target?.closest?.('textarea, [contenteditable]:not([contenteditable="false"])'));
   };
+  // Resolve the currently focused native chat input.
   const focusedInput = () => {
     const active = input.ownerDocument?.activeElement;
     return active && typingTarget(active) ? active : null;
   };
+  // Find the formatting menu currently owned by this chat editor.
   const ownedMenu = target => target?.closest?.("#prosemirror-dropdown.ve-chat-editor-menu");
+  // Record an explicit user interaction that may open a native editor or menu.
   const noteIntent = (event) => {
     const directInputTap = typingTarget(event.target);
     const formattingTap = Boolean(ownedMenu(event.target)
@@ -424,6 +447,7 @@ export function bindChatEditorInteraction({ input, document, scope }) {
   let menuScope = null;
   let touch = false;
   let beforeClick = null;
+  // Release the temporary native chat interaction claim and restore focus state.
   const release = () => {
     menuScope?.dispose();
     menuScope = null;
@@ -467,6 +491,7 @@ export function bindChatEditorInteraction({ input, document, scope }) {
     });
     current.classList.add("ve-chat-editor-menu");
     current.classList.toggle("ve-chat-editor-touch-menu", touch);
+    // Apply new chat-mode values to the currently mounted native controls.
     const update = () => {
       if (owner.disposed || menu !== current || current.isConnected === false || !touch) return;
       const viewport = browser.visualViewport;
@@ -521,6 +546,7 @@ export function bindChatEditorInteraction({ input, document, scope }) {
   });
 }
 
+// Read a finite current time from the injected clock or browser fallback.
 function defaultNow() {
   return globalThis.performance?.now?.() ?? Date.now();
 }

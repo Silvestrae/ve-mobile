@@ -17,6 +17,7 @@ export function enableMobileJournalReader(scope, {
     const original = prototype.render;
     // Own restoration before changing a Foundry prototype.
     scope.own(() => { if (prototype.render === patched) prototype.render = original; });
+    // Restore the owned native Journal reader patch when its owning application scope ends.
     function patched(...args) {
       const options = args[0] && typeof args[0] === "object" ? args[0] : args[1] ?? {};
       const target = journalReadTarget(this, options, getGame());
@@ -31,6 +32,8 @@ export function enableMobileJournalReader(scope, {
   }
 }
 
+/** Resolve a readable world Journal/page that can safely use VE's reader;
+ * editing, special workflows, hidden pages and non-text media stay native. */
 export function journalReadTarget(application, options = {}, game = globalThis.game) {
   const document = application?.document ?? application?.object;
   const entry = document?.documentName === "JournalEntryPage" ? document.parent : document;

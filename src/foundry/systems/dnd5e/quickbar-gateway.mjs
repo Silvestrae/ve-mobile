@@ -10,7 +10,8 @@ export function createFoundryQuickbarGateway(options = {}) {
 }
 
 const dnd5eQuickbarAdapter = Object.freeze({
-  resolveDescriptor(actor, descriptor, game, config) {
+    // Resolve a D&D5e quickbar descriptor against the current Actor and native action configuration.
+    resolveDescriptor(actor, descriptor, game, config) {
     if (descriptor.kind === "item") {
       const item = getItem(actor, descriptor.itemId);
       const activity = descriptor.activityId ? getActivity(item, descriptor.activityId) : null;
@@ -36,7 +37,8 @@ const dnd5eQuickbarAdapter = Object.freeze({
       payload: Object.freeze({ skill: descriptor.skill })
     });
   },
-  assertDescriptorAvailable(actor, descriptor, _game, { QuickbarError: ErrorType }) {
+    // Reject descriptors whose D&D5e action is no longer available for this Actor.
+    assertDescriptorAvailable(actor, descriptor, _game, { QuickbarError: ErrorType }) {
     if (descriptor.kind === "item") {
       const item = getItem(actor, descriptor.itemId);
       const activity = descriptor.activityId ? getActivity(item, descriptor.activityId) : null;
@@ -51,18 +53,22 @@ const dnd5eQuickbarAdapter = Object.freeze({
   }
 });
 
+// Resolve an owned D&D5e Item by its current embedded ID.
 function getItem(actor, itemId) {
   return actor?.items?.get?.(itemId) ?? collectionValues(actor?.items).find((item) => String(item?.id ?? "") === itemId) ?? null;
 }
 
+// Resolve an Item activity from the current activity collection.
 function getActivity(item, activityId) {
   return item?.system?.activities?.get?.(activityId) ?? collectionValues(item?.system?.activities).find((activity) => String(activity?.id ?? "") === activityId) ?? null;
 }
 
+// Check whether an activity remains available for the requested quickbar action.
 function usableActivity(activity) {
   return Boolean(activity?.canUse && typeof activity.use === "function");
 }
 
+// Read Foundry collections and arrays into a safe list.
 function collectionValues(collection) {
   if (!collection) return [];
   if (Array.isArray(collection.contents)) return collection.contents;

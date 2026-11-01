@@ -2,6 +2,7 @@ import { COLOR_SCHEME_CHOICES } from "../kernel/character-theme.mjs";
 import { CUSTOM_THEME_DEFAULTS, normalizeCustomThemeColors, normalizeThemeColor } from "../kernel/custom-theme.mjs";
 import { localizeFoundry } from "./localization.mjs";
 
+/** IDs and preference storage keys shared by Foundry-bound preference adapters. */
 export const MODULE_ID = "ve-mobile";
 export const BOOTSTRAP_PREFERENCES_KEY = "ve-mobile:bootstrap-preferences:v1";
 export const LOAD_TIMING_KEYS = Object.freeze({ FULL: "lastSuccessfulFullLoadMs", RESYNC: "lastSuccessfulResyncMs" });
@@ -105,6 +106,9 @@ const BOOTSTRAP_DEFAULTS = Object.freeze({
   keepScreenAwake: false
 });
 
+/** Register VE's client preferences and connect changes to the owning runtime
+ * slices. Bootstrap preferences mirror only the early-load choices needed
+ * before Foundry's settings registry is ready. */
 export function registerPreferences({
   onApplicationChange,
   onPresentationChange,
@@ -114,6 +118,7 @@ export function registerPreferences({
   openMobileAssetOptimizer,
   openControlsGuide
 } = {}) {
+  // Notify the preference listeners that the effective setting value changed.
   const changed = (key, notify) => (value) => {
     syncBootstrapPreferences();
     notify?.(Object.freeze({ key, value }));
@@ -658,6 +663,7 @@ export function registerPreferences({
   }
 }
 
+// Resolve the menu control type for the Controls Guide setting.
 function controlsGuideMenuType(openControlsGuide) {
   const Base = globalThis.foundry?.applications?.api?.ApplicationV2 ?? globalThis.FormApplication ?? class {};
   return class VEControlsGuideMenu extends Base {
@@ -665,6 +671,7 @@ function controlsGuideMenuType(openControlsGuide) {
   };
 }
 
+// Resolve the menu control type supported by the Mobile Asset Optimizer setting.
 function mobileAssetOptimizerMenuType(openMobileAssetOptimizer) {
   const Base = globalThis.foundry?.applications?.api?.ApplicationV2 ?? globalThis.FormApplication ?? class {};
   return class VEMobileAssetOptimizerMenu extends Base {
@@ -675,6 +682,8 @@ function mobileAssetOptimizerMenuType(openMobileAssetOptimizer) {
   };
 }
 
+/** Read the two presentation preferences needed before the full settings
+ * gateway is composed during early page startup. */
 export function readPreferences() {
   const cached = readBootstrapPreferences();
   return {
@@ -688,31 +697,39 @@ export function readLocale(gameRef = globalThis.game) {
   return String(gameRef?.i18n?.lang ?? "en");
 }
 
+// Read and normalize the configured joystick repeat delay.
 export function readMovementRepeatDelayMs() {
   const seconds = Number(game.settings.get(MODULE_ID, KEYS.MOVEMENT_REPEAT_DELAY));
   return Math.round(Math.min(1, Math.max(0, Number.isFinite(seconds) ? seconds : 0.5)) * 1000);
 }
 
+// Read whether successful token movement should recenter the camera.
 export function readRecenterAfterMove() {
   return Boolean(game.settings.get(MODULE_ID, KEYS.RECENTER_AFTER_MOVE));
 }
 
+// Read the current screen wake-lock preference.
 export function readKeepScreenAwake() {
   return Boolean(readSetting(KEYS.KEEP_SCREEN_AWAKE, readBootstrapPreferences().keepScreenAwake));
 }
 
+// Read whether the module should protect VE styling from competing theme changes.
 export function readProtectVeStyling() {
   return readSetting(KEYS.PROTECT_VE_STYLING, true) !== false;
 }
 
+// Read and normalize the selected diagnostic logging level.
 export function readLoggingLevel() {
   return normalizedLoggingLevel(readSetting(KEYS.LOGGING_LEVEL, "warn"));
 }
 
+// Read whether diagnostics may be saved to the configured journal.
 export function readSaveDiagnosticsToJournal() {
   return readSetting(KEYS.SAVE_DIAGNOSTICS_TO_JOURNAL, true) !== false;
 }
 
+/** Read bounded early-load values from browser storage, falling back to
+ * immutable defaults when storage is malformed or unavailable. */
 export function readBootstrapPreferences({ getStorage = () => globalThis.localStorage } = {}) {
   try {
     const parsed = JSON.parse(getStorage()?.getItem?.(BOOTSTRAP_PREFERENCES_KEY) ?? "null");
@@ -726,9 +743,12 @@ export function readBootstrapPreferences({ getStorage = () => globalThis.localSt
   }
 }
 
+/** Mirror early-load preferences into browser storage, with registered Foundry
+ * client settings taking precedence whenever their values are available. */
 export function syncBootstrapPreferences(getGame = () => globalThis.game, { getStorage = () => globalThis.localStorage } = {}) {
   const cached = readBootstrapPreferences({ getStorage });
   const game = getGame();
+  // Read the requested public preference through its current Foundry setting definition.
   const read = (key, fallback) => {
     try {
       const value = game?.settings?.get?.(MODULE_ID, key);
@@ -757,9 +777,12 @@ export function createFoundryPreferencesGateway({
   getWindow = () => globalThis.window,
   setMobileNoCanvas = null
 } = {}) {
+  // Resolve a preference label through Foundry localization with a fallback.
   const localize = (key, data) => localizeValue(getGame(), key, data);
+  // Read one setting using its registered default when no user value is stored.
   const setting = (key) => getGame()?.settings?.get?.(MODULE_ID, key);
   let customColors = null, customInputs = [];
+  // Read the selected custom theme and normalize its supported color values.
   const readCustomTheme = () => {
     const inputs = [setting(KEYS.CUSTOM_THEME_PRIMARY), setting(KEYS.CUSTOM_THEME_SECONDARY), setting(KEYS.CUSTOM_THEME_THIRD_ENABLED) === true, setting(KEYS.CUSTOM_THEME_THIRD)];
     if (!customColors || inputs.some((value, index) => value !== customInputs[index])) {
@@ -796,6 +819,7 @@ export function createFoundryPreferencesGateway({
     combatCarousel: () => setting(KEYS.COMBAT_CAROUSEL) !== false,
     keepScreenAwake: () => Boolean(setting(KEYS.KEEP_SCREEN_AWAKE)),
     protectVeStyling: () => setting(KEYS.PROTECT_VE_STYLING) !== false,
+    // Read the user's sort and filter choices for the character collection panes.
     characterCollections: () => Object.freeze({
         inventorySort: normalizedChoice(KEYS.CHARACTER_INVENTORY_SORT, setting(KEYS.CHARACTER_INVENTORY_SORT), DEFAULTS.characterInventorySort),
         spellSort: normalizedChoice(KEYS.CHARACTER_SPELL_SORT, setting(KEYS.CHARACTER_SPELL_SORT), DEFAULTS.characterSpellSort),
@@ -810,11 +834,14 @@ export function createFoundryPreferencesGateway({
     characterFavouritesStale: favourites => favourites().stale,
     tidy5eDetected: favourites => favourites().tidyDetected,
   };
+  // Choose the first valid preference source among the supported setting candidates.
   const pick = keys => {
     let favouriteRecord;
+    // Read the selected D&D5e favourites source from its configured preference.
     const favourites = () => favouriteRecord ??= resolveCharacterFavouritesSource(setting(KEYS.CHARACTER_FAVOURITES_SOURCE), getGame());
     return Object.freeze(Object.fromEntries((keys ?? Object.keys(readers)).map(key => [key, readers[key](favourites)])));
   };
+  // Resolve the current presentation mode setting used by the preference gateway.
   const presentation = () => pick();
   let restoring = false;
   return Object.freeze({
@@ -833,6 +860,7 @@ export function createFoundryPreferencesGateway({
     actionMenu: () => pick(["quickbarEnabled", "quickbarSource"]),
     actionNavigation: () => pick(["actionSceneReturn"]),
     actionSummaries: () => pick(["showActionSummaries", "compactActionSummaries"]),
+    // Assemble the settings form and preference summary from current registered values.
     snapshot() {
       const fields = preferenceFields(setting, localize, getNavigator, getGame, getWindow);
       return Object.freeze({
@@ -848,6 +876,8 @@ export function createFoundryPreferencesGateway({
     },
 
     async set({ namespace = MODULE_ID, key, value }) {
+      // Accept only registered, configurable fields and normalize against the
+      // live schema; world settings still require Foundry's settings authority.
       const game = getGame();
       if (!game?.settings?.set) throw new Error(localizeFoundry("VEMOBILE.Settings.Errors.FoundrySettingsUnavailable", "Foundry settings are unavailable."));
       const registered = findRegisteredSetting(game, namespace, key);
@@ -868,6 +898,7 @@ export function createFoundryPreferencesGateway({
       });
     },
 
+    // Normalize and persist one supported character-collection sort or filter choice.
     async setCharacterCollectionPreference({ key, value }) {
       const settingKey = CHARACTER_COLLECTION_SETTING_KEYS[key];
       if (!settingKey) throw new Error(localizeFoundry("VEMOBILE.Settings.Errors.CollectionPreferenceUnsupported", "That character collection preference is not supported."));
@@ -879,6 +910,8 @@ export function createFoundryPreferencesGateway({
     },
 
     async restoreDefaults() {
+      // Restore finite known defaults in a stable order, clearing owned overlay
+      // state first and presentation mode last because Auto may exit mobile UI.
       if (restoring) throw new Error(localizeFoundry("VEMOBILE.Settings.Errors.DefaultsRestoring", "Defaults are already being restored."));
       restoring = true;
       try {
@@ -923,6 +956,7 @@ export function createFoundryPreferencesGateway({
       }
     },
 
+    // End the current Foundry session through its native logout action.
     async logout() {
       const game = getGame();
       if (typeof game?.logOut !== "function") throw new Error(localizeFoundry("VEMOBILE.Settings.Errors.LogoutUnavailable", "Foundry logout is unavailable."));
@@ -965,6 +999,7 @@ export function performanceModeField(game = globalThis.game, localize = (key) =>
   });
 }
 
+// Build and register the Foundry preference definitions with their bounds, choices, defaults, and visibility rules.
 function preferenceFields(setting, localize, getNavigator, getGame, getWindow) {
   return Object.freeze([
     choiceField(KEYS.MODE, "Mode", normalizedModePreference(setting(KEYS.MODE)), localize),
@@ -1029,6 +1064,7 @@ function preferenceFields(setting, localize, getNavigator, getGame, getWindow) {
   ].map(field => Object.freeze({ ...field, defaultValue: field.namespace === MODULE_ID ? DEFAULTS[field.key] : (findRegisteredSetting(getGame(), field.namespace, field.key)?.default ?? false) })));
 }
 
+// Choose a native settings control type from the registered value shape.
 function settingControlType(registered, choices, range) {
   if (choices.length) return "choice";
   const name = registered.type?.constructor?.name ?? registered.type?.name ?? "";
@@ -1039,6 +1075,7 @@ function settingControlType(registered, choices, range) {
   return null;
 }
 
+// Build the allowed choices for a select-style setting.
 function settingChoices(registered, game = globalThis.game) {
   let raw = registered.choices ?? registered.type?.choices;
   try {
@@ -1053,6 +1090,7 @@ function settingChoices(registered, game = globalThis.game) {
   })));
 }
 
+// Normalize the min, max, and step metadata for a numeric setting.
 function settingRange(registered) {
   const source = registered.range ?? registered.type;
   const min = Number(source?.min);
@@ -1062,12 +1100,14 @@ function settingRange(registered) {
   return Object.freeze({ min, max, step: Number.isFinite(step) && step > 0 ? step : 1 });
 }
 
+// Resolve a setting definition from the current Foundry registry.
 function findRegisteredSetting(game, namespace, key) {
   return game?.settings?.settings?.get?.(`${namespace}.${key}`)
     ?? registryValues(game?.settings?.settings).find((entry) => entry?.namespace === namespace && entry?.key === key)
     ?? null;
 }
 
+// Recheck current user and setting scope before accepting a setting mutation.
 function assertSettingAuthority(game, registered, namespace, key) {
   if (!registered) {
     if (namespace === MODULE_ID) return;
@@ -1080,6 +1120,7 @@ function assertSettingAuthority(game, registered, namespace, key) {
   if (registered.namespace !== namespace || registered.key !== key) throw new Error(localizeFoundry("VEMOBILE.Settings.Errors.FoundrySettingMissing", "That Foundry setting does not exist."));
 }
 
+// Validate a submitted setting value against the registered type, choices, and bounds.
 function normalizeRegisteredSetting(registered, value) {
   const choices = settingChoices(registered);
   if (choices.length) {
@@ -1103,11 +1144,13 @@ function normalizeRegisteredSetting(registered, value) {
   throw new Error(localizeFoundry("VEMOBILE.Settings.Errors.MobileTypeUnsupported", "That setting type is not supported on mobile."));
 }
 
+// Identify settings whose registered type uses numeric bounds.
 function isNumberSetting(registered) {
   const name = registered.type?.constructor?.name ?? registered.type?.name ?? "";
   return registered.type === Number || name === "NumberField";
 }
 
+// Read setting definitions from the supported registry collection shapes.
 function registryValues(registry) {
   try {
     return typeof registry?.values === "function" ? [...registry.values()] : [];
@@ -1116,11 +1159,13 @@ function registryValues(registry) {
   }
 }
 
+// Copy a setting value only when it consists of supported serializable data.
 function serializableValue(value) {
   if (["string", "number", "boolean"].includes(typeof value) || value === null) return value;
   return String(value ?? "");
 }
 
+// Build localized labels and hints for registered mobile settings.
 function settingsLabels(localize) {
   const keys = [
     "SettingsSubtitle", "MobileSettingsTitle", "DeviceLabel", "DeviceResolving", "PhoneModeEnabled", "TabletModeEnabled",
@@ -1132,12 +1177,14 @@ function settingsLabels(localize) {
   return Object.freeze(Object.fromEntries(keys.map((key) => [key[0].toLowerCase() + key.slice(1), localize(`VEMOBILE.Settings.Copy.${key}`)])));
 }
 
+// Resolve a setting label that may be a literal or localization key.
 function localizeValue(game, value, data) {
   const text = String(value ?? "");
   if (data && typeof game?.i18n?.format === "function") return game.i18n.format(text, data);
   return game?.i18n?.localize?.(text) ?? text;
 }
 
+// Create a validated select field definition with its available choices.
 function choiceField(key, group, value, localize) {
   return Object.freeze({
     namespace: MODULE_ID,
@@ -1153,6 +1200,7 @@ function choiceField(key, group, value, localize) {
   });
 }
 
+// Create a boolean setting definition with its default and display labels.
 function booleanField(key, group, value, localize) {
   return Object.freeze({
     namespace: MODULE_ID,
@@ -1165,12 +1213,14 @@ function booleanField(key, group, value, localize) {
   });
 }
 
+// Create a color setting definition with a normalized fallback value.
 function colorField(key, group, value, localize) {
   return Object.freeze({ namespace: MODULE_ID, key, type: "color",
     name: localize(`VEMOBILE.Settings.${group}.Name`), hint: localize(`VEMOBILE.Settings.${group}.Hint`),
     value: normalizeThemeColor(value) ?? DEFAULTS[key] });
 }
 
+// Normalize an untyped preference value according to its setting key and supported policy.
 function normalizeSetting(key, value) {
   if ([KEYS.CUSTOM_THEME_PRIMARY, KEYS.CUSTOM_THEME_SECONDARY, KEYS.CUSTOM_THEME_THIRD].includes(key)) {
     const color = normalizeThemeColor(value);
@@ -1197,10 +1247,12 @@ function normalizeSetting(key, value) {
   throw new Error(localizeFoundry("VEMOBILE.Settings.Errors.VeSettingMissing", "That VE Mobile setting does not exist."));
 }
 
+// Check whether the Tidy5e module is active before using its favourites integration.
 export function isTidy5eActive(game = globalThis.game) {
   return Boolean(game?.modules?.get?.("tidy5e-sheet")?.active);
 }
 
+// Choose the active source for D&D5e character favourites based on current module and setting state.
 export function resolveCharacterFavouritesSource(value, game = globalThis.game) {
   const configured = normalizedChoice(KEYS.CHARACTER_FAVOURITES_SOURCE, value, DEFAULTS.characterFavouritesSource);
   const tidyDetected = isTidy5eActive(game);
@@ -1209,6 +1261,7 @@ export function resolveCharacterFavouritesSource(value, game = globalThis.game) 
   return Object.freeze({ configured, effective, enabled: effective !== "off", tidyDetected, stale });
 }
 
+// Keep only supported boolean entries in a persisted preference record.
 function sanitizeBooleanRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value)
@@ -1216,11 +1269,13 @@ function sanitizeBooleanRecord(value) {
     .slice(0, 128));
 }
 
+// Normalize a bounded list of nonempty string identifiers.
 function sanitizeStringArray(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((entry) => String(entry ?? "").trim()).filter(Boolean))].slice(0, 128);
 }
 
+// Clamp saved module overlay scales to the supported range.
 function sanitizeScaleRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value)
@@ -1230,6 +1285,7 @@ function sanitizeScaleRecord(value) {
     .slice(0, 128));
 }
 
+// Validate overlay visibility, ordering, and scale data before exposing it to the gateway.
 function sanitizeOverlayCatalog(value) {
   const source = Array.isArray(value) ? value : value?.entries;
   if (!Array.isArray(source)) return { scanned: false, entries: [] };
@@ -1243,11 +1299,13 @@ function sanitizeOverlayCatalog(value) {
   return { scanned: value?.scanned === true, entries };
 }
 
+// Normalize the saved presentation preference to its supported mode values.
 function normalizedModePreference(value) {
   const mode = value === "off" ? "desktop" : String(value ?? "");
   return CHOICES[KEYS.MODE].includes(mode) ? mode : BOOTSTRAP_DEFAULTS.mode;
 }
 
+// Create a canvas setting definition with supported options and reload behavior.
 function canvasField(getGame, localize) {
   const game = getGame();
   const registered = findRegisteredSetting(game, "core", "noCanvas");
@@ -1272,16 +1330,19 @@ function canvasField(getGame, localize) {
   });
 }
 
+// Normalize a saved diagnostics level to the supported severity set.
 function normalizedLoggingLevel(value) {
   const level = String(value ?? "");
   return CHOICES[KEYS.LOGGING_LEVEL].includes(level) ? level : "warn";
 }
 
+// Keep a saved choice only when it is among the current allowed values.
 function normalizedChoice(key, value, fallback) {
   const choice = String(value ?? "");
   return CHOICES[key]?.includes(choice) ? choice : fallback;
 }
 
+// Normalize a graphics memory profile to the supported profile levels.
 export function normalizedMemoryProfile(value, legacyLowMemory = false) {
   const profile = String(value ?? "");
   if (CHOICES[KEYS.MEMORY_PROTECTION_PROFILE].includes(profile) && profile !== "normal") return profile;
@@ -1291,23 +1352,27 @@ export function normalizedMemoryProfile(value, legacyLowMemory = false) {
   return "normal";
 }
 
+// Normalize a theme color scheme to the supported values.
 function normalizedColorScheme(value) {
   const scheme = String(value ?? "class");
   return CHOICES[KEYS.COLOR_SCHEME].includes(scheme) ? scheme : "class";
 }
 
+// Clamp a saved interaction delay to its supported timing range.
 function normalizedDelay(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 0.5;
   return Math.round(Math.min(1, Math.max(0, number)) * 10) / 10;
 }
 
+// Clamp a saved opacity value to the supported display range.
 function normalizedOpacity(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 1;
   return Math.round(Math.min(1, Math.max(0, number)) * 20) / 20;
 }
 
+// Read a namespace/key pair through Foundry and use the supplied fallback when absent.
 function readSetting(key, fallback) {
   try {
     const value = game?.settings?.get?.(MODULE_ID, key);

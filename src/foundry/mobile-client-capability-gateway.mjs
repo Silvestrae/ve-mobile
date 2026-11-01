@@ -1,10 +1,12 @@
 import { localizeFoundry } from "./localization.mjs";
 import { profileLevel } from "./low-memory-canvas-gateway.mjs";
 
+/** Exchange bounded device capability snapshots with desktop GMs for Scene preflight. */
 export const MOBILE_CAPABILITY_SOCKET = "module.ve-mobile";
 export const MOBILE_CAPABILITY_SCHEMA_VERSION = 1;
 export const MOBILE_CAPABILITY_STALE_MS = 5 * 60 * 1000;
 
+// Create the mobile-client capability gateway, owning persisted browser identity, scene-control policy, and temporary presentation changes.
 export function createMobileClientCapabilityGateway({
   getGame = () => globalThis.game,
   getDocument = () => globalThis.document,
@@ -30,16 +32,20 @@ export function createMobileClientCapabilityGateway({
   let lastPublishedKey = "";
   let activePrompt = null;
   let stopped = false;
+  // Check whether Phone or Tablet presentation currently owns mobile client controls.
   const mobilePresentation = () => ["phone", "tablet"].includes(String(getPresentationMode()));
   const pendingActivations = new Map();
   const wrappedEntries = new WeakSet();
 
   const api = {
     start(scope) {
+      // The one socket handler is scope-owned. Incoming requests can trigger a
+      // fresh local publish, while received records remain normalized snapshots.
       stopped = false;
       const game = getGame();
       const socket = game?.socket;
       if (!socket?.on || !socket?.off) return false;
+      // Validate an incoming capability response against the active request and client identity.
       const receive = (message) => {
         if (message?.type === "capability-request") {
           if (mobilePresentation()) void api.publish("request");
@@ -56,6 +62,7 @@ export function createMobileClientCapabilityGateway({
         activePrompt?.dismiss?.("cancel");
         activePrompt = null;
       });
+      // Request browser capabilities and publish the result only if the same client session still owns it.
       const requestCapabilities = () => {
         if (isDesktopGm(game, getPresentationMode())) {
           socket.emit(MOBILE_CAPABILITY_SOCKET, { type: "capability-request", schemaVersion: MOBILE_CAPABILITY_SCHEMA_VERSION });
@@ -71,6 +78,7 @@ export function createMobileClientCapabilityGateway({
       }
       requestCapabilities();
       let viewportQueued = false;
+      // Publish the current bounded viewport size and orientation for capability-aware controls.
       const publishViewport = () => {
         if (viewportQueued) return;
         viewportQueued = true;
@@ -81,6 +89,7 @@ export function createMobileClientCapabilityGateway({
       };
       scope?.listen?.(getWindow(), "resize", publishViewport, { passive: true });
       scope?.listen?.(getWindow()?.visualViewport, "resize", publishViewport, { passive: true });
+      // Schedule expiration of a temporary capability grant and clear its owner when it ends.
       const scheduleExpiry = () => {
         if (scope?.disposed) return;
         pruneCapabilityRecords(records, game, now());
@@ -92,6 +101,8 @@ export function createMobileClientCapabilityGateway({
     },
 
     async publish(reason = "update") {
+      // Device labels and renderer state are read locally; publish only while
+      // this client is physically mobile and in Phone/Tablet presentation.
       const game = getGame();
       const physicalDeviceClass = String(getPhysicalDeviceClass());
       if (!mobilePresentation() || !["phone", "tablet"].includes(physicalDeviceClass) || !game?.user?.id || !game?.socket?.emit) return null;
@@ -148,15 +159,19 @@ export function createMobileClientCapabilityGateway({
       return Object.freeze([...records.values()].map((record) => Object.freeze({ ...record })));
     },
 
+    // Check available clients for this Scene and let the user continue, optimize assets, or cancel.
     preflightActivation(scene, activate, isEligible = () => true) {
       const game = getGame();
       const sceneId = String(scene?.id ?? "");
       const worldId = game?.world?.id;
       const userId = game?.user?.id;
+      // Cancel a pending capability request and discard its captured generation.
       const cancel = (reason) => Object.freeze({ action: "cancel", reason });
       if (typeof activate !== "function") return Promise.resolve(cancel("missing-activation"));
       if (!isDesktopGm(game, getPresentationMode())) return Promise.resolve(cancel("not-desktop-gm"));
       const validate = () => {
+        // A prompt can remain open while world, user, scene authority or mode
+        // changes; activation is allowed only after these checks still pass.
         const current = getGame();
         if (stopped || current !== game || current?.world?.id !== worldId || current?.user?.id !== userId) return "session-changed";
         if (!isDesktopGm(current, getPresentationMode())) return "authority-changed";
@@ -167,11 +182,13 @@ export function createMobileClientCapabilityGateway({
         if (!isEligible()) return "action-unavailable";
         return null;
       };
+      // Restore the capability workflow after visibility or page lifecycle interruption.
       const resume = () => {
         const reason = validate();
         return reason ? cancel(reason) : activate();
       };
       if (pendingActivations.has(sceneId)) return pendingActivations.get(sceneId);
+      // Perform an asynchronous capability operation with owner, generation, and target checks after each boundary.
       const run = async () => {
         const reason = validate();
         if (reason) return cancel(reason);
@@ -222,17 +239,20 @@ export function createMobileClientCapabilityGateway({
     }
   };
 
+  // Wrap Scene activation choices to expose supported mobile navigation actions.
   function wrapSceneActivationEntries(entries) {
     if (!Array.isArray(entries)) return;
     for (const entry of entries) {
       const action = typeof entry?.onClick === "function" ? "onClick" : "callback";
       if ((entry?.label ?? entry?.name) !== "SCENE.Activate" || typeof entry[action] !== "function" || wrappedEntries.has(entry)) continue;
       const nativeActivate = entry[action];
+      // Handle a Scene activation entry through captured mobile policy before forwarding to Foundry.
       const wrapper = function (...args) {
         const element = args[action === "onClick" ? 1 : 0];
         const sceneId = String(element?.dataset?.sceneId ?? element?.dataset?.entryId ?? "");
         const scene = getGame()?.scenes?.get?.(sceneId);
         if (!scene) return Promise.resolve(Object.freeze({ action: "cancel", reason: "scene-missing" }));
+        // Check whether the Scene activation entry remains valid for the current mobile user and Scene.
         const isEligible = () => {
           if (String(element?.dataset?.sceneId ?? element?.dataset?.entryId ?? "") !== sceneId) return false;
           try {
@@ -254,6 +274,8 @@ export function createMobileClientCapabilityGateway({
 }
 
 export function normalizeCapabilityRecord(value) {
+  // Bound strings, counts and timestamps before accepting socket data into the
+  // GM's in-memory risk summary.
   if (!value || Number(value.schemaVersion) !== MOBILE_CAPABILITY_SCHEMA_VERSION) return null;
   const userId = bounded(value.userId, 128);
   const physicalDeviceClass = ["phone", "tablet"].includes(value.physicalDeviceClass) ? value.physicalDeviceClass : "";
@@ -287,6 +309,8 @@ export function normalizeCapabilityRecord(value) {
 }
 
 export function receiveCapabilityMessage(message, game, records, timestamp = Date.now()) {
+  // Only accept a record for an active connected user, and let the socket's
+  // authenticated sender identity—not the payload—establish who sent it.
   if (!message || !records?.set) return false;
   if (message.type === "capability-remove") {
     records.delete(String(message.userId ?? ""));
@@ -304,6 +328,7 @@ export function receiveCapabilityMessage(message, game, records, timestamp = Dat
 }
 
 export function pruneCapabilityRecords(records, game, timestamp = Date.now()) {
+  // Drop departed users and stale heartbeats so old device state cannot prompt.
   for (const [userId, record] of records ?? []) {
     const user = game?.users?.get?.(userId);
     if (!user || user.active === false || Number(timestamp) - Number(record.reportedAt) > MOBILE_CAPABILITY_STALE_MS) records.delete(userId);
@@ -312,6 +337,8 @@ export function pruneCapabilityRecords(records, game, timestamp = Date.now()) {
 }
 
 export function atRiskClientRecords(records, recommendation, { game, now = Date.now() } = {}) {
+  // Compare each current mobile client's effective profile to the Scene's
+  // recommended minimum, returning only active users who fall below it.
   const targetLevel = profileLevel(recommendation?.recommendedMinimumProfile ?? "normal");
   if (targetLevel === 0) return Object.freeze([]);
   const result = [];
@@ -333,6 +360,8 @@ export function atRiskClientRecords(records, recommendation, { game, now = Date.
 }
 
 export function createGmMobileRiskPrompt({ document, scene, risk, recommendation, clients, game, theme = "system" }) {
+  // This is a GM-facing choice only; the activation caller rechecks Scene,
+  // user, authority and eligibility after the prompt resolves.
   if (!document?.createElement || !document?.body) return Object.freeze({ sceneId: String(scene?.id ?? ""), promise: Promise.resolve("cancel"), dismiss() {} });
   const root = document.createElement("div");
   root.className = "ve-gm-mobile-risk";
@@ -371,6 +400,7 @@ export function createGmMobileRiskPrompt({ document, scene, risk, recommendation
   assetsHeading.textContent = localizeFoundry("VEMOBILE.Interface.MobileClientCapabilityGateway.LargestSceneImages", "Largest scene images");
   const actions = document.createElement("div");
   actions.className = "ve-gm-mobile-risk-actions";
+  // Create an accessible button for the capability prompt.
   const button = (label, choice, primary = false) => {
     const control = document.createElement("button");
     control.type = "button";
@@ -389,6 +419,7 @@ export function createGmMobileRiskPrompt({ document, scene, risk, recommendation
   let resolve;
   let settled = false;
   const promise = new Promise((done) => { resolve = done; });
+  // Close the capability prompt and release its temporary UI ownership.
   const dismiss = (choice = "cancel") => {
     if (settled) return;
     settled = true;
@@ -404,15 +435,23 @@ export function createGmMobileRiskPrompt({ document, scene, risk, recommendation
   return Object.freeze({ sceneId: String(scene?.id ?? ""), element: root, promise, dismiss });
 }
 
+// Check whether the current client is a GM using Desktop presentation.
 function isDesktopGm(game, physicalDeviceClass) { return Boolean(game?.user?.isGM) && String(physicalDeviceClass) === "desktop"; }
+// Normalize a returned browser capability profile to supported values.
 function normalizedProfile(value) { return ["normal", "balanced", "strong", "maximum"].includes(String(value)) ? String(value) : "normal"; }
+// Clamp a numeric capability measurement to its allowed range.
 function bounded(value, maximum) { return String(value ?? "").replace(/[\u0000-\u001F\u007F]/gu, "").trim().slice(0, maximum); }
+// Preserve absent capability measurements as null and reject nonfinite values.
 function finiteNullable(value) {
   if (value === null || value === undefined || value === "" || typeof value === "boolean") return null;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
 }
+// Accept a finite numeric range or fall back to the supported default.
 function finiteRange(value, minimum, maximum, fallback) { const number = Number(value); return Number.isFinite(number) ? Math.min(maximum, Math.max(minimum, number)) : fallback; }
-function browserFamily(navigatorRef) { const ua = String(navigatorRef?.userAgent ?? ""); if (/Edg\//iu.test(ua)) return "Edge"; if (/Firefox\//iu.test(ua)) return "Firefox"; if (/CriOS|Chrome\//iu.test(ua)) return "Chrome"; if (/Safari\//iu.test(ua)) return "Safari"; return "Other"; }
+// Normalize the browser user agent into a coarse supported browser family.
+function browserFamily(navigatorRef) { const userAgent = String(navigatorRef?.userAgent ?? ""); if (/Edg\//iu.test(userAgent)) return "Edge"; if (/Firefox\//iu.test(userAgent)) return "Firefox"; if (/CriOS|Chrome\//iu.test(userAgent)) return "Chrome"; if (/Safari\//iu.test(userAgent)) return "Safari"; return "Other"; }
+// Read a safe human-readable title for the capability dialog.
 function title(value) { const profile = normalizedProfile(value); return localizeFoundry(`VEMOBILE.MemoryProfile.${profile}.Label`, { normal: "Normal", balanced: "Balanced", strong: "Strong", maximum: "Maximum" }[profile]); }
+// Extract a bounded filename from a browser-provided path or URL.
 function basename(value) { return String(value ?? localizeFoundry("VEMOBILE.Preflight.UnknownAsset", "Unknown asset")).split(/[\\/]/u).pop() || localizeFoundry("VEMOBILE.Preflight.UnknownAsset", "Unknown asset"); }

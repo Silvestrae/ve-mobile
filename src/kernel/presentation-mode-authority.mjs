@@ -8,6 +8,7 @@ export function isMobilePerformanceAuthorityActive(policyOrReader) {
 export function createMobilePerformanceAuthority(readPolicy, ready = () => true) {
   let active = ready() && isMobilePerformanceAuthorityActive(readPolicy);
   let generation = 0;
+  // Detect authority transitions and invalidate previously captured write tokens.
   const refresh = () => {
     const next = ready() && isMobilePerformanceAuthorityActive(readPolicy);
     if (next !== active) {

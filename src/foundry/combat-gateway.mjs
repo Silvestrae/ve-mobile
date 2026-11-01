@@ -2,6 +2,7 @@ import { selectSystemIntegration } from "./system-integration.mjs";
 import { localizeFoundry } from "./localization.mjs";
 import { cameraTargetForToken, tokenCenter, tokenPortraitRecord, toggleTokenTarget } from "./token-movement-gateway.mjs";
 
+/** Combat-specific error codes surfaced by the mobile combat command boundary. */
 export class CombatError extends Error {
   constructor(code, message, options = {}) {
     super(message, options);
@@ -26,6 +27,8 @@ export function createFoundryCombatGateway({
   let observedCombat = null;
   let combatInstanceRevision = 0;
   const observeCombat = (combat) => {
+    // Object replacement invalidates actions captured against an older combat,
+    // even when Foundry reuses the same document ID.
     if (combat !== observedCombat) {
       observedCombat = combat;
       combatInstanceRevision += 1;
@@ -36,6 +39,7 @@ export function createFoundryCombatGateway({
   let focusGeneration = 0;
   let focusAnimating = false;
 
+  // Cancel the delayed combatant-focus request and clear its captured owner state.
   const cancelPendingFocus = () => {
     focusGeneration += 1;
     if (!focusAnimating) return false;
@@ -45,6 +49,8 @@ export function createFoundryCombatGateway({
   };
 
   const snapshot = () => {
+    // Player-facing combat records are derived for the currently open Scene;
+    // the current turn can still be reported when tokens belong to other Scenes.
     const game = getGame();
     const combat = game?.combat ?? null;
     if (!combat) return null;
@@ -75,6 +81,8 @@ export function createFoundryCombatGateway({
   };
 
   const controlsSnapshot = () => {
+    // GM controls describe native methods the current user can invoke now; the
+    // action endpoint repeats these authority checks when the button is pressed.
     const game = getGame();
     const combat = game?.combat ?? null;
     const instanceRevision = combat ? observeCombat(combat) : null;
@@ -107,6 +115,8 @@ export function createFoundryCombatGateway({
   };
 
   const runGmAction = async (action, expected = {}) => {
+    // Serialize turn/progression changes and validate the captured combat state
+    // before invoking the native action.
     if (progressionActionBusy) throw new CombatError("COMMAND_BUSY", localizeFoundry("VEMOBILE.Interface.CombatGateway.ACombatProgressionActionIsAlreadyInProgress", "A combat progression action is already in progress."));
     progressionActionBusy = true;
     try {
@@ -129,6 +139,7 @@ export function createFoundryCombatGateway({
 
     cancelPendingFocus,
 
+    // Advance the active turn only after rechecking the captured combat and user's turn authority.
     async endTurn(expected = {}) {
       const game = getGame();
       assertSession(game, expected, getConnectionGeneration);
@@ -156,6 +167,7 @@ export function createFoundryCombatGateway({
       }
     },
 
+    // Start the currently eligible combat through the GM-authorized native action path.
     startCombat(expected = {}) {
       return runGmAction(async (combat) => {
         if (combat.started || !Array.from(combat.combatants ?? []).length || !canGmMutateCombat(combat, getGame()?.user, "update", { round: 0 })) throw staleCombatAction();
@@ -164,6 +176,7 @@ export function createFoundryCombatGateway({
       }, expected);
     },
 
+    // Ask Foundry to roll initiative for all eligible combatants in the current combat.
     rollAllInitiative(expected = {}) {
       return runGmAction(async (combat, game) => {
         if (combat.started || !canGmMutateCombat(combat, game.user, "update", { round: 0 })) throw staleCombatAction();
@@ -173,6 +186,7 @@ export function createFoundryCombatGateway({
       }, expected);
     },
 
+    // Roll initiative for NPC combatants that still need it in the current combat.
     rollNPCInitiative(expected = {}) {
       return runGmAction(async (combat, game) => {
         if (combat.started || !canGmMutateCombat(combat, game.user, "update", { round: 0 })) throw staleCombatAction();
@@ -182,6 +196,7 @@ export function createFoundryCombatGateway({
       }, expected);
     },
 
+    // End the current combat while preventing overlapping progression commands.
     async endCombat(expected = {}) {
       if (progressionActionBusy) throw new CombatError("COMMAND_BUSY", localizeFoundry("VEMOBILE.Interface.CombatGateway.ACombatProgressionActionIsAlreadyInProgress", "A combat progression action is already in progress."));
       progressionActionBusy = true;
@@ -195,7 +210,7 @@ export function createFoundryCombatGateway({
         await DialogV2.confirm({
           window: { title: getGame()?.i18n?.localize?.("COMBAT.EndTitle") ?? "" },
           content: `<p>${getGame()?.i18n?.localize?.("COMBAT.EndConfirmation") ?? ""}</p>`,
-          yes: { callback: async () => {
+          yes: { /* Re-resolve authority when the confirmation dialog later invokes this action. */ callback: async () => {
             const current = resolveGmCombat(expected, getGame, getConnectionGeneration, isMobileActive, getLifecycleToken, observeCombat).combat;
             assertExpectedCombatState(current, expected, combatTurnState(current), observeCombat);
             if (!current.started || !canGmMutateCombat(current, getGame()?.user, "delete") || typeof current.delete !== "function") throw staleCombatAction();
@@ -213,6 +228,7 @@ export function createFoundryCombatGateway({
       }
     },
 
+    // Move the current combat to its previous turn through the shared GM action guard.
     previousTurn(expected = {}) {
       return runGmAction(async (combat) => {
         if (!combat.started || !hasAppropriateTurn(combat) || !canGmMutateCombat(combat, getGame()?.user, "update", { round: 0, turn: 0 })) throw unavailableTurnAction();
@@ -221,6 +237,7 @@ export function createFoundryCombatGateway({
       }, expected);
     },
 
+    // Move the current combat to its next turn through the shared GM action guard.
     nextTurn(expected = {}) {
       return runGmAction(async (combat) => {
         if (!combat.started || !hasAppropriateTurn(combat) || !canGmMutateCombat(combat, getGame()?.user, "update", { round: 0, turn: 0 })) throw unavailableTurnAction();
@@ -229,6 +246,7 @@ export function createFoundryCombatGateway({
       }, expected);
     },
 
+    // Roll initiative for the requested combatants after resolving their current combat records.
     async rollInitiative(request, expected = {}) {
       const game = getGame();
       assertSession(game, expected, getConnectionGeneration);
@@ -265,6 +283,7 @@ export function createFoundryCombatGateway({
       }
     },
 
+    // Focus the current canvas view on a combatant's resolved token when it remains available.
     async focusCombatant(request, expected = {}) {
       const game = getGame();
       const { canvas, combatant, token } = resolveCombatant(request, expected, game, getCanvas(), getConnectionGeneration);
@@ -274,6 +293,7 @@ export function createFoundryCombatGateway({
       return (await centerCombatantCamera(canvas, token, request.viewport)).result;
     },
 
+    // Center the canvas on a combatant's token without changing its controlled state.
     async centerCombatant(request, expected = {}) {
       const game = getGame();
       const centered = resolveCombatant(request, expected, game, getCanvas(), getConnectionGeneration);
@@ -311,6 +331,7 @@ export function createFoundryCombatGateway({
       return Object.freeze({ ok: true, tokenId: String(current.token.id ?? ""), pinged: true });
     },
 
+    // Toggle targeting for the resolved combatant token under the captured session authority.
     async targetCombatant(request, expected = {}) {
       const { combatant, token } = resolveCombatant(request, expected, getGame(), getCanvas(), getConnectionGeneration);
       const result = await toggleTokenTarget(token.object, token, getGame().user);
@@ -320,6 +341,7 @@ export function createFoundryCombatGateway({
   });
 }
 
+// Re-resolve the combatant and camera owner before moving the viewport to its token.
 async function centerCombatantCamera(canvas, token, viewport, context = {}) {
   const center = cameraTargetForToken(canvas, token, viewportBounds(viewport));
   if (!center) throw new CombatError("TARGET_MISSING", localizeFoundry("VEMOBILE.Interface.CombatGateway.TheCombatantTokenPositionIsUnavailable", "The combatant token position is unavailable."));
@@ -343,12 +365,14 @@ async function centerCombatantCamera(canvas, token, viewport, context = {}) {
   return Object.freeze({ completed, result: Object.freeze({ ok: true, tokenId: String(token.id ?? "") }) });
 }
 
+// Return stable IDs for currently controlled tokens in the active Scene.
 function controlledTokenIds(canvas) {
   return Object.freeze(Array.from(canvas?.tokens?.controlled ?? [])
     .map((token) => String(token?.document?.id ?? token?.id ?? ""))
     .filter(Boolean));
 }
 
+// Ping the current combatant token through Foundry’s native canvas action.
 async function pingCombatantToken(canvas, token, user) {
   if (!user?.hasPermission?.("PING_CANVAS")) throw new CombatError("FORBIDDEN", localizeFoundry("VEMOBILE.Interface.CombatGateway.YouCannotPingTheCanvas", "You cannot ping the canvas."));
   if (typeof canvas?.ping !== "function") throw new CombatError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.CombatGateway.FoundryCannotPingThisCanvas", "Foundry cannot ping this canvas."));
@@ -359,6 +383,7 @@ async function pingCombatantToken(canvas, token, user) {
   return true;
 }
 
+// Project a live Combatant into the serializable combat row, including current ownership and action availability.
 function combatantRecord(combatant, currentId, game, currentSceneId, linkedSceneId) {
   const token = combatant.token;
   const sceneId = combatantSceneId(combatant, linkedSceneId);
@@ -387,10 +412,12 @@ function combatantRecord(combatant, currentId, game, currentSceneId, linkedScene
   });
 }
 
+// Check whether the current user and Combat state allow the native initiative action.
 function canRollInitiative(combatant) {
   return Boolean(combatant?.isOwner && combatant.initiative === null);
 }
 
+// Derive the current turn and eligible combatants from the live Combat document.
 function combatTurnState(combat) {
   const turns = Array.from(combat?.turns ?? []);
   return Object.freeze({
@@ -400,6 +427,7 @@ function combatTurnState(combat) {
   });
 }
 
+// Reject a combat command when its captured turn or Combat state has changed.
 function assertExpectedCombatState(combat, expected, state = combatTurnState(combat), observeCombat = () => -1) {
   requireCombatExpectation(expected);
   if (expected.combatInstanceRevision !== undefined
@@ -410,6 +438,7 @@ function assertExpectedCombatState(combat, expected, state = combatTurnState(com
   return state;
 }
 
+// Resolve the active Combat and require its current world identity before a GM mutation.
 function resolveGmCombat(expected, getGame, getConnectionGeneration, isMobileActive, getLifecycleToken, observeCombat) {
   const game = getGame();
   requireCombatExpectation(expected);
@@ -426,12 +455,14 @@ function resolveGmCombat(expected, getGame, getConnectionGeneration, isMobileAct
   return { game, combat };
 }
 
+// Check whether the requested combatant is allowed to act in the current turn.
 function hasAppropriateTurn(combat) {
   const turns = Array.from(combat?.turns ?? []);
   return turns.length > 0 && Number.isInteger(combat.turn) && combat.turn >= 0 && combat.turn < turns.length
     && Boolean(combat.combatant ?? turns[combat.turn]);
 }
 
+// Require current GM authority and a live editable Combat for privileged actions.
 function canGmMutateCombat(combat, user, action, data) {
   if (!user?.isGM) return false;
   try {
@@ -443,10 +474,12 @@ function canGmMutateCombat(combat, user, action, data) {
   }
 }
 
+// Create the stale-action error used when combat changed after a control was rendered.
 function staleCombatAction() {
   return new CombatError("STALE_COMBAT", localizeFoundry("VEMOBILE.Interface.CombatGateway.TheActiveCombatOrTurnHasChanged", "The active combat or turn has changed."));
 }
 
+// Validate the captured Combat and turn identifiers before an action executes.
 function requireCombatExpectation(expected) {
   const required = ["worldId", "userId", "connectionGeneration", "lifecycleToken", "combatId", "combatInstanceRevision", "round", "turn", "currentCombatantId"];
   if (required.some((key) => !Object.hasOwn(expected, key) || expected[key] === undefined || expected[key] === null && !["turn"].includes(key))) {
@@ -454,10 +487,12 @@ function requireCombatExpectation(expected) {
   }
 }
 
+// Create a capability error when the requested Combat action is not supported.
 function unavailableCombatAction() {
   return new CombatError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.CombatGateway.ThisNativeCombatActionIsUnavailable", "This native combat action is unavailable."));
 }
 
+// Create an error when the requested action is outside the current turn.
 function unavailableTurnAction() {
   return new CombatError("NO_TURN", localizeFoundry("VEMOBILE.Interface.CombatGateway.ThereIsNoAppropriateCombatTurn", "There is no appropriate combat turn."));
 }
@@ -487,6 +522,7 @@ export function canAdvanceCombatTurn(combat, user) {
   }
 }
 
+// Check the current user’s ownership of the Combatant’s exact Actor.
 function combatantOwned(combatant, user) {
   if (!combatant || !user) return false;
   if (user.isGM) return true;
@@ -500,6 +536,7 @@ function combatantOwned(combatant, user) {
   }
 }
 
+// Resolve a Combatant from the active Combat by stable ID and verify it is still present.
 function resolveCombatant(request, expected, game, canvas, getConnectionGeneration) {
   assertSession(game, expected, getConnectionGeneration);
   const combatId = identifier(request.combatId, "combatId");
@@ -520,6 +557,7 @@ function resolveCombatant(request, expected, game, canvas, getConnectionGenerati
   return { canvas, combatant, token };
 }
 
+// Reject combat requests from a different world, user, or connection generation.
 function assertSession(game, expected, getConnectionGeneration = () => 0) {
   if (!game?.user || !game?.world) throw new CombatError("SESSION_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.CombatGateway.TheFoundrySessionIsNotReady", "The Foundry session is not ready."));
   if (expected.worldId && expected.worldId !== game.world.id) throw new CombatError("STALE_SESSION", localizeFoundry("VEMOBILE.Interface.CombatGateway.TheActiveFoundryWorldHasChanged", "The active Foundry world has changed."));
@@ -527,12 +565,14 @@ function assertSession(game, expected, getConnectionGeneration = () => 0) {
   if (expected.connectionGeneration !== undefined && expected.connectionGeneration !== getConnectionGeneration()) throw new CombatError("STALE_SESSION", localizeFoundry("VEMOBILE.Interface.CombatGateway.TheConnectionChangedWhileThisActionWasRunning", "The connection changed while this action was running."));
 }
 
+// Normalize a nonempty stable combat identifier.
 function identifier(value, field) {
   const id = String(value ?? "").trim();
   if (!id || id.length > 128) throw new CombatError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.CharacterSource.IsRequired", "{field} is required.", { field: (field) }));
   return id;
 }
 
+// Normalize the viewport rectangle used for combatant camera positioning.
 function viewportBounds(value) {
   if (value === null || value === undefined) return null;
   const viewport = {
@@ -557,6 +597,7 @@ function combatSceneId(combat) {
   return String((typeof scene === "string" ? scene : scene?.id) ?? combat?.sceneId ?? "");
 }
 
+// Resolve the Scene ID associated with a Combatant’s Token or active Combat.
 function combatantSceneId(combatant, fallback = "") {
   const scene = combatant?.scene;
   return [

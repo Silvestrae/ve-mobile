@@ -6,13 +6,16 @@ import { biographyEditorData } from "./character-edits.mjs";
 /** PF2e biography fields are explicit; never copy NPC private notes into a public record. */
 export function createPf2eBiographyGateway({ getGame = () => globalThis.game, getConnectionGeneration = () => 0,
   getEditor = () => globalThis.CONFIG?.ux?.TextEditor } = {}) {
+  // Raise the localized capability error when biography reading is unavailable.
   const unavailable = () => { throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.PF2E.NativeEditorRequired", "Use the native PF2e sheet for this operation.")); };
   return Object.freeze({
+    // Read the selected PF2e Actor's biography fields into a plain presentation record.
     async read({ actorSourceUuid }, expected = {}) {
       const game = getGame();
       assertSession(game, expected, getConnectionGeneration);
       const source = validSourceUuid(actorSourceUuid);
       const actor = resolveActorSource(source, { game });
+      // Check whether the current user may read the Actor biography.
       const readable = () => actor && resolveActorSource(source, { game }) === actor && actor.testUserPermission?.(game.user, "OBSERVER");
       if (!readable()) unavailable();
       const owner = canOwn(actor, game.user);
@@ -41,21 +44,22 @@ export function createPf2eBiographyGateway({ getGame = () => globalThis.game, ge
   });
 }
 
+// Select and normalize PF2e biography content from supported Actor data shapes.
 function biographyContent(actor, owner) {
   const details = actor.system?.details ?? {};
   if (actor.type === "npc") return [details.blurb, details.publicNotes].filter(value => typeof value === "string").join("\n");
-  const bio = details.biography ?? {};
+  const biography = details.biography ?? {};
   const specs = [
     ["appearance", ["appearance"], { height: details.height?.value, weight: details.weight?.value }],
-    ["backstory", ["backstory"], { birthPlace: bio.birthPlace }],
-    ["personality", [], Object.fromEntries(["attitude", "beliefs", "edicts", "anathema", "likes", "dislikes", "catchphrases"].map(key => [key, bio[key]]))],
+    ["backstory", ["backstory"], { birthPlace: biography.birthPlace }],
+    ["personality", [], Object.fromEntries(["attitude", "beliefs", "edicts", "anathema", "likes", "dislikes", "catchphrases"].map(key => [key, biography[key]]))],
     ["campaign", ["campaignNotes", "allies", "enemies", "organizations"], {}]
   ];
   // Match the native character template's independently visible biography sections.
-  return specs.filter(([id]) => owner || (bio.visibility?.[id] ?? (id === "appearance")) === true).map(([id, richKeys, plain]) => ({
+  return specs.filter(([id]) => owner || (biography.visibility?.[id] ?? (id === "appearance")) === true).map(([id, richKeys, plain]) => ({
     id,
     fields: [
-      ...richKeys.filter(key => typeof bio[key] === "string" && bio[key].trim()).map(key => ({ key, rich: bio[key] })),
+      ...richKeys.filter(key => typeof biography[key] === "string" && biography[key].trim()).map(key => ({ key, rich: biography[key] })),
       ...Object.entries(plain).map(([key, value]) => ({ key, text: Array.isArray(value) ? value.filter(entry => typeof entry === "string").join("; ") : typeof value === "string" ? value : "" })).filter(field => field.text.trim())
     ]
   }));

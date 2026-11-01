@@ -1,3 +1,4 @@
+// Wire plain application state to injected Foundry gateways and the persistent app-frame.mjs renderer.
 import { localizedText } from "../ui/localized-text.mjs";
 import { createTaskScope } from "./task-scope.mjs";
 import { createAppFrame } from "../ui/app-frame.mjs";
@@ -10,18 +11,22 @@ import { ACTOR_COMMANDS } from "./command-names.mjs";
 import { createActionSceneReturn } from "./action-scene-return.mjs";
 import { createModeTransitionCoordinator, presentationLabel } from "./mode-transition.mjs";
 
+// Recognise an exact selected/listed actor source instead of treating a matching world Actor ID as sufficient.
 export function actorTokenSourceKnown(snapshot, sourceUuid) {
   return Boolean(sourceUuid && (snapshot?.selectedActor?.sourceUuid === sourceUuid
     || snapshot?.actors?.some((actor) => String(actor.sourceUuid ?? (actor.id ? `Actor.${actor.id}` : "")) === sourceUuid)));
 }
 
+// Admit native tile taps only when the current mobile Scene is fully ready and no placement owns input.
 export function nativeSceneTileTapAllowed({ active, state, presentation }) {
   return Boolean(active && !state?.reconnect && !state?.modeTransition
     && !state?.templatePlacement && !state?.nativeTokenPlacement && !state?.actorTokenPlacement
     && sceneInteractionIsReady(presentation));
 }
 
+// Own one activation transaction, its command boundary, presentation and deterministic shutdown.
 export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, pwaInstall = null, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
+  // Adapt the preference gateway's localizer for shared UI helpers.
   const localize = (key, fallback, data) => localizedText((id, _fallback, values) => preferencesGateway?.localize?.(id, values), key, fallback, data);
   let runtimeScope = null;
   let activationCommitted = false;
@@ -43,23 +48,27 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
   const activeActionExecutions = new Map();
   const activeSummaryExecutions = new Set();
   let actionExecutionSequence = 0;
+  // Retain a bounded set of dismissed native actions so late message updates do not reopen them.
   const rememberDismissedSession = (id) => {
     if (!id) return;
     dismissedActionSessions.add(id);
     if (dismissedActionSessions.size > 64) dismissedActionSessions.delete(dismissedActionSessions.values().next().value);
   };
 
+  // Capture world/user/connection identity for gateways to revalidate at execution time.
   const expectedSession = () => ({
     worldId: store.state.snapshot?.world?.id,
     userId: store.state.snapshot?.user?.id,
     connectionGeneration: connectionGeneration?.current ?? 0
   });
+  // Reject an action result if reconnect recovery replaced its originating connection while it awaited work.
   const guardConnection = async (action) => {
     const generation = connectionGeneration?.current ?? 0;
     const result = await action({ ...expectedSession(), connectionGeneration: generation });
     if (connectionGeneration && !connectionGeneration.matches(generation)) throw new Error(localizedText(localize, "VEMOBILE.Interface.CombatGateway.TheConnectionChangedWhileThisActionWasRunning", "The connection changed while this action was running."));
     return result;
   };
+  // Require the active bar source and an interactive mobile lifecycle before forwarding its command.
   const guardActionBar = (source, action) => guardConnection((expected) => {
     const state = store.state;
     const preferences = preferencesGateway.actionMenu?.() ?? preferencesGateway.snapshot();
@@ -70,6 +79,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     }
     return action(expected);
   });
+  // Capture the current owner so retained Combat controls cannot act after that lifecycle ends.
   const guardCombatControl = (request, action) => {
     const lifecycleToken = runtimeScope;
     return guardConnection((expected) => {
@@ -82,16 +92,19 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     });
   };
 
+  // Invalidate any placement still waiting and clear the kernel's visible placement state.
   const cancelActorTokenPlacement = () => {
     tokenPlacementGeneration += 1;
     actorTokenPlacementGateway?.cancel();
     if (store.state.actorTokenPlacement) store.dispatch({ type: "actor-token-placement-changed", placement: null });
   };
+  // Reject retained character controls after navigation, selection or mobile authority changes.
   const requireCharacterView = (sourceUuid = store.state.selectedActorSourceUuid) => {
     if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active
       || store.state.route !== "characters" || store.state.reconnect || store.state.modeTransition
       || sourceUuid !== store.state.selectedActorSourceUuid) throw new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.ThisActorViewIsNoLongerActive", "This Actor view is no longer active."));
   };
+  // Combine current Scene readiness and source visibility with the gateway's authoritative placement eligibility.
   const actorTokenEligible = (sourceUuid) => {
     const state = store.state;
     const sceneId = String(state.snapshot?.scene?.id ?? "");
@@ -103,6 +116,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       && actorTokenPlacementGateway?.eligibility(sourceUuid, sceneId));
   };
 
+  // Invalidate deferred action navigation before publishing a fresh explicit user navigation event.
   const dispatchNavigation = (event) => {
     store.dispatch({ type: "action-navigation-invalidated" });
     return store.dispatch(event);
@@ -119,6 +133,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     },
     toggleSceneChooser: () => dispatchNavigation({ type: "toggle-scene-chooser" }),
     readSceneNavigation: () => sceneGateway.navigationSnapshot(),
+    // Close the picker only after the gateway successfully changes the native Scene.
     viewScene: async (sceneId, { keepSceneChooserOpen = false } = {}) => {
       void sceneGateway.closeSceneContextMenu?.();
       const keepOpen = shouldKeepSceneChooserOpen(store.state, keepSceneChooserOpen);
@@ -126,6 +141,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       if (!keepOpen && result?.viewed) store.dispatch({ type: "close-scene-chooser" });
       return result;
     },
+    // Carry the exact runtime owner through a level change that may await a Canvas draw.
     viewSceneLevel: async (payload, { keepSceneChooserOpen = false } = {}) => {
       const owner = runtimeScope;
       if (!activationCommitted || !owner || owner.disposed || !readPolicy()?.active || store.state.reconnect || store.state.modeTransition) {
@@ -154,6 +170,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       commandGateway.notifyError?.(error);
     },
     traceScenePickerEvent: (entry) => diagnostics?.record?.("debug", `Scene picker ${JSON.stringify(entry)}`),
+    // Publish the exact selected source, then try to control its native Scene token.
     selectActor: (sourceUuid) => {
       const snapshot = session.selectCharacterSource(sourceUuid, expectedSession());
       session.adopt?.(snapshot);
@@ -167,6 +184,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
         return Object.freeze({ ok: false, action: "none", reason: error?.message ?? "Token selection failed." });
       }).finally(releaseCharacterSource);
     },
+    // Keep a bounded origin trail so a member/reference sheet can return to its parent view.
     openReferencedActor: ({ originSourceUuid, targetSourceUuid }) => {
       requireCharacterView(originSourceUuid);
       const state = store.state;
@@ -176,6 +194,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       const snapshot = session.selectReferencedCharacterSource({ originSourceUuid, targetSourceUuid }, expectedSession());
       store.dispatch({ type: "session-loaded", snapshot, characterNavigation: history });
     },
+    // Re-resolve the prior source and discard an origin that has since disappeared or lost access.
     returnToActorOrigin: () => {
       requireCharacterView();
       const history = store.state.characterNavigation ?? [];
@@ -195,6 +214,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       return guardConnection(expected => actorEditorGateway.open(request, expected, runtimeScope));
     },
     selectCharacterTab: (tab) => dispatchNavigation({ type: "select-character-tab", tab }),
+    // Copy bounded display fields into VE state; the native action owns the actual roll.
     showRollResult: (payload) => {
       if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active || store.state.route !== "characters") return;
       const label = String(payload?.label ?? "").trim().slice(0, 100);
@@ -223,6 +243,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       }) });
       return id;
     },
+    // Update only the still-open result rather than reviving a dismissed or replaced roll.
     updateRollResult: (id, payload) => {
       if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active || store.state.rollResult?.id !== id
         || (store.state.route !== "characters" && !(store.state.route === "scene" && store.state.rollResult.sceneReturn))
@@ -251,6 +272,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       }) });
     },
     dismissRollResult: (id) => store.dispatch({ type: "dismiss-roll-result", id }),
+    // Admit native action messages only for the action/view that still owns their presentation.
     openActionSession: (session, origin = "character") => {
       if (!activationCommitted || !readPolicy()?.active) return;
       if (dismissedActionSessions.has(session?.rootMessageId)) return;
@@ -272,6 +294,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     closeHitPointEditor: () => store.dispatch({ type: "close-hit-point-editor" }),
     openRestEditor: () => store.dispatch({ type: "open-rest-editor" }),
     closeRestEditor: () => store.dispatch({ type: "close-rest-editor" }),
+    // Open slot controls only while their originating character view is still current.
     openSpellSlotEditor: (resourceId) => store.dispatch({
       type: "open-spell-slot-editor",
       resourceId,
@@ -283,6 +306,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     closeExperienceEditor: () => store.dispatch({ type: "close-experience-editor" }),
     openCharacterPortrait: (image) => store.dispatch({ type: "open-character-portrait", image }),
     closeCharacterPortrait: () => store.dispatch({ type: "close-character-portrait" }),
+    // Sequence reads so an earlier slow request cannot replace the user's newer journal selection.
     openJournal: async (journalId, target = {}) => {
       const request = ++journalRequestSequence;
       const generation = connectionGeneration?.current ?? 0;
@@ -321,6 +345,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     setQuickbarCollapsed: (collapsed) => { actionBarPreferences?.setCollapsed(collapsed); store.dispatch({ type: "set-quickbar-collapsed", collapsed }); },
     readActionBarPreferences: (source, actorSourceUuid) => actionBarPreferences?.read(source, actorSourceUuid) ?? {},
     setActionBarPage: (source, actorSourceUuid, page) => actionBarPreferences?.setPage(source, actorSourceUuid, page),
+    // Recheck the current GM/mobile interaction before forwarding the native pause action.
     toggleGamePause: () => guardConnection((expected) => {
       if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active
         || store.state.reconnect || store.state.modeTransition || store.state.templatePlacement
@@ -350,6 +375,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     placeNativeToken: () => nativeTokenPlacement?.place() ?? false,
     cancelNativeTokenPlacement: () => nativeTokenPlacement?.cancel() ?? false,
     canPlaceActorToken: (sourceUuid) => actorTokenEligible(sourceUuid),
+    // Carry exact source and Scene identity into the authoritative token-drop boundary.
     dropActorToken: (sourceUuid, point, expectedSelectedSource = store.state.snapshot?.selectedActor?.sourceUuid) => {
       const state = store.state;
       if (!actorTokenEligible(sourceUuid) || state.formFactor !== "tablet" || !state.splitScreen
@@ -361,11 +387,13 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
         && store.state.formFactor === "tablet" && store.state.splitScreen
         && store.state.snapshot?.selectedActor?.sourceUuid === expectedSelectedSource));
     },
+    // Prepare one exact-source preview and recheck its placement generation after every wait.
     beginActorTokenPlacement: async (sourceUuid, expectedSelectedSource = store.state.snapshot?.selectedActor?.sourceUuid) => {
       if (!actorTokenEligible(sourceUuid) || store.state.actorTokenPlacement || store.state.templatePlacement || store.state.nativeTokenPlacement
         || store.state.snapshot?.selectedActor?.sourceUuid !== expectedSelectedSource) return false;
       const id = ++tokenPlacementGeneration;
       const sceneId = String(store.state.snapshot.scene.id);
+      // Keep this async result tied to the exact character selection that initiated it.
       const selectionCurrent = () => store.state.snapshot?.selectedActor?.sourceUuid === expectedSelectedSource;
       store.dispatch({ type: "navigate", route: "scene" });
       try {
@@ -396,6 +424,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       }
     },
     actorTokenPreviewAt: (point) => actorTokenPlacementGateway?.previewAt(point) ?? null,
+    // Guard duplicate confirmation taps while the gateway creates the native token.
     placeActorToken: async () => {
       const placement = store.state.actorTokenPlacement;
       if (!placement || placingActorToken) return false;
@@ -426,12 +455,14 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       userId: store.state.snapshot?.user?.id
     }),
     tapSceneToken: (payload) => guardConnection((expected) => movementGateway.tap(payload, expected, { deferSelection: true })),
+    // Let only an exposed, ready map forward a tap to the native tile interaction.
     nativeSceneTileTap: (payload) => nativeSceneTileTapAllowed({
       active: activationCommitted && readPolicy().active,
       state: store.state,
       presentation: frame?.readSceneInteractionState?.()
     })
       ? sceneGateway.nativeTileTap({ ...payload, ...expectedSession() }) : false,
+    // Register map input under the current presenter owner instead of a page-global listener.
     bindSceneTokenTouch: (surface, owner, onResult, onError) => movementGateway.bindTouch(surface, owner, onResult, onError, {
       worldId: store.state.snapshot?.world?.id,
       userId: store.state.snapshot?.user?.id,
@@ -478,11 +509,13 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       const preferences = preferencesGateway.scene?.() ?? preferencesGateway.snapshot();
       return Object.freeze({ ...preferences, joystickResolvedSide: resolveJoystickSide(preferences.joystickSide, store.state) });
     },
+    // Give renders the narrow preference slice rather than triggering full Settings diagnostics.
     readPresentationPreferences: () => {
       const preferences = preferencesGateway.presentation?.() ?? preferencesGateway.snapshot();
       return Object.freeze({ ...preferences, resolvedMode: store.state.formFactor,
         joystickResolvedSide: resolveJoystickSide(preferences.joystickSide, store.state), graphicsPolicy: readGraphicsPolicy() });
     },
+    // Prepare menu options lazily; the gateway still revalidates authority when an option executes.
     readCharacterItemMenu: (request) => {
       if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active
         || store.state.reconnect || store.state.modeTransition
@@ -495,6 +528,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     controlsInvitationSeen: () => controlsGuideGateway?.seen?.() ?? true,
     markControlsInvitationPresented: () => controlsGuideGateway?.markPresented?.(),
     openControlsGuide: anchor => frame?.openControlsGuide?.(anchor),
+    // Describe this layout's capabilities for the guide without constructing broad diagnostics.
     readControlsContext: () => {
       const state = store.state;
       return Object.freeze({ presentation: state.formFactor, canvasAvailable: state.canvasAvailable !== false,
@@ -505,8 +539,10 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     },
     readPwaInstall: () => pwaInstall?.snapshot() ?? null,
     watchPwaInstall: (owner, listener) => pwaInstall?.watch(owner, listener),
+    // Bind a rename's async manifest load to the Settings view that initiated it.
     setPwaName: (name, { isCurrent: viewIsCurrent = () => true } = {}) => {
       const owner = runtimeScope;
+      // Check that the captured owner/selection still belongs to the active mobile view before publishing async work.
       const isCurrent = () => activationCommitted && owner && runtimeScope === owner && !owner.disposed && readPolicy().active && viewIsCurrent();
       if (!isCurrent()) return Promise.resolve(false);
       return pwaInstall?.setName(name, { isCurrent }) ?? Promise.resolve(false);
@@ -516,6 +552,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       return pwaInstall?.install() ?? Promise.resolve(false);
     },
     readActionSummaryPreferences: () => preferencesGateway.actionSummaries?.() ?? { showActionSummaries: true },
+    // Perform the intentionally broad diagnostic read only for the actual Settings consumer.
     readSettings: () => {
       performanceObserver?.increment?.("settings.read.broad");
       const preferences = preferencesGateway.snapshot();
@@ -534,7 +571,9 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
         nativeSettings: settingsCompatibilityGateway?.snapshot?.() ?? Object.freeze({})
       });
     },
+    // Publish narrow layout changes through a subscription owned by the calling surface.
     watchLayoutState: (owner, onUpdate) => {
+      // Send a fresh narrow layout record to this subscription's listener.
       const publish = () => {
         const preferences = preferencesGateway.layout?.() ?? preferencesGateway.snapshot();
         onUpdate(Object.freeze({ mode: preferences.mode,
@@ -571,6 +610,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     readGraphicsRecovery: () => graphicsRecoveryGateway?.snapshot?.() ?? null,
     acknowledgeGraphicsRecovery: () => graphicsRecoveryGateway?.acknowledge?.(),
     prepareGraphicsRecovery: () => graphicsRecoveryGateway?.prepareLowMemory?.(),
+    // Run restoration through the same connection guard as other settings writes.
     restoreSettingsDefaults: () => restoreVeSettingsDefaults({
       lowMemoryGateway,
       preferencesGateway,
@@ -581,6 +621,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     saveDiagnosticsNow: () => diagnosticsJournalGateway?.flush?.({ explicit: true }) ?? Promise.resolve(false),
     openArmorClass: (actorSourceUuid) => guardConnection(expected => armorClassGateway.open({ actorSourceUuid, ...expected })),
     copyDiagnostics: (report) => diagnostics?.copy?.(report) ?? Promise.resolve(Object.freeze({ ok: false, text: String(report ?? localizedText(localize, "VEMOBILE.Interface.AppKernel.VEMobileDiagnosticsAreUnavailable", "VE Mobile diagnostics are unavailable.")) })),
+    // Apply supported preferences through their gateway, then reconcile the affected presentation.
     updateSetting: async (payload) => {
       store.dispatch({ type: "action-navigation-invalidated" });
       if ((payload?.namespace ?? "ve-mobile") === "ve-mobile" && payload?.key === "mode" && readPolicy().active) {
@@ -601,8 +642,10 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     logout: () => preferencesGateway.logout(),
     requestScreenWakeLock: () => wakeLockController.requestFromUserGesture(),
     sendChat: (content) => guardConnection(() => session.sendChat(content, store.state.selectedActorSourceUuid)),
+    // Keep enriched item reads tied to the current character/item view across async work.
     readCharacterItemDetails: async ({ actorSourceUuid, itemId }) => {
       const sourceUuid = String(actorSourceUuid ?? "");
+      // Stop this operation if its captured lifecycle or selected target no longer owns the work.
       const assertCurrent = () => {
         if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active
           || store.state.reconnect || store.state.modeTransition || store.state.route !== "characters"
@@ -615,6 +658,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       assertCurrent();
       return result;
     },
+    // Read current biography content through the selected system boundary.
     readCharacterBiography: async (actorSourceUuid) => {
       const sourceUuid = String(actorSourceUuid ?? "");
       if (store.state.route !== "characters" || store.state.characterTab !== "biography"
@@ -624,12 +668,14 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
         || store.state.selectedActorSourceUuid !== sourceUuid) throw new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.TheSelectedBiographyIsNoLongerActive", "The selected biography is no longer active."));
       return result;
     },
+    // Revalidate the current character view before asking the system to roll an inline expression.
     rollCharacterBiographyInline: (payload) => {
       const sourceUuid = String(payload?.actorSourceUuid ?? "");
       if (store.state.route !== "characters" || store.state.characterTab !== "biography"
         || store.state.selectedActorSourceUuid !== sourceUuid) return Promise.reject(new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.TheSelectedBiographyIsNoLongerActive", "The selected biography is no longer active.")));
       return guardConnection((expected) => biographyGateway.roll(payload, expected));
     },
+    // Coordinate one native action and its result/session observers without bypassing the command gateway's authority checks.
     execute: (name, payload, observer) => {
       if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active
         || store.state.reconnect || store.state.modeTransition) return Promise.reject(new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.ThisActorActionIsNoLongerActive", "This Actor action is no longer active.")));
@@ -683,6 +729,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       activeSummaryExecutions.add(summaryExecution);
       return guardConnection((expected) => commandGateway.execute(name, payload, expected, {
         ...observer,
+        // Publish only a native session still owned by the initiating execution and not dismissed by the user.
         onActionSession: (session) => {
           if (summaryExecution.dismissed || owner !== runtimeScope || owner.disposed) return;
           summaryExecution.roots.add(session.rootMessageId);
@@ -704,6 +751,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     disable
   });
 
+  // Adopt the gateway's current snapshot, or publish a session error if the read fails.
   const loadSnapshot = () => {
     try {
       const snapshot = session.read();
@@ -716,6 +764,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     }
   };
 
+  // Acquire a runtime scope, compose its resources, and commit activation only after every startup step succeeds.
   const start = () => {
     if (runtimeScope || starting || stopping) return;
     starting = true;
@@ -742,6 +791,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
         activeSummaryExecutions.clear();
         actionExecutionSequence += 1;
       });
+      // Stop this operation if its captured lifecycle or selected target no longer owns the work.
       const assertCurrent = () => { if (owner.disposed || runtimeScope !== owner) throw cancelled; };
       sceneGateway.watchSceneNavigation?.(runtimeScope, (change) => {
         if (change?.viewChanged) store.dispatch({ type: "action-navigation-invalidated" });
@@ -753,9 +803,11 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       assertCurrent();
       resynchronizer = createAuthoritativeResynchronizer({
         generation: connectionGeneration,
+        // Refresh authoritative documents/Canvas before reading the new permission-filtered mobile session.
         fetchSnapshot: async (context) => {
           const result = await authoritativeGateway.resync({
             ...context,
+            // Publish reconnect progress only while this captured recovery generation still owns the operation.
             onProgress: ({ checkpoint, detail, timings }) => {
               if (!context.isCurrent()) return;
               loadTimingGateway?.note?.({ checkpoint });
@@ -768,6 +820,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
             const canvasResult = await canvasRecoveryGateway.reconcile({
               before,
               isCurrent: context.isCurrent,
+              // Publish reconnect progress only while this captured recovery generation still owns the operation.
               onProgress: ({ checkpoint, detail }) => {
                 if (!context.isCurrent()) return;
                 loadTimingGateway?.note?.({ checkpoint });
@@ -783,6 +836,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
           store.dispatch({ type: "reconnect-progress", generation: context.generation, checkpoint: "mobile-session", detail: localizedText(localize, "VEMOBILE.Interface.AppKernel.RestoringYourSession", "Restoring your session…"), timings: result.timings });
           return session.read();
         },
+        // Adopt recovered session data, restore permitted reader context, then yield for controls to mount.
         applySnapshot: async (snapshot, generation, context) => {
           if (!context.isCurrent()) return;
           const journalId = store.state.journal?.id ?? "";
@@ -804,6 +858,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
           store.dispatch({ type: "reconnect-progress", generation, checkpoint: "interactions", detail: localizedText(localize, "VEMOBILE.Interface.AppKernel.RestoringControls", "Restoring controls…") });
           await nextRenderedFrame();
         },
+        // Report a failed transition without allowing its old generation to replace a newer presentation.
         onError: (error) => diagnostics?.record?.("error", "Authoritative reconnect resynchronisation failed", error)
       });
       const ownedResynchronizer = resynchronizer;
@@ -863,7 +918,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       const initialSnapshot = session.watch(runtimeScope, (snapshot) => store.dispatch({ type: "session-loaded", snapshot }), (error) => {
         diagnostics?.record?.("error", "The Foundry session stopped updating", error);
         store.dispatch({ type: "session-error", error });
-      }, { onJournalChange: (journalId) => {
+      }, { /* Refresh only the journal still open on the reader route, retaining its selected page. */ onJournalChange: (journalId) => {
         const state = store.state;
         if (state.journal?.id !== journalId || state.route !== "journals") return;
         void commands.openJournal(journalId, { pageId: state.journalPageId }).catch((error) => {
@@ -883,6 +938,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
         },
         settle: ({ isCurrent }) => frame?.settleModeTransition?.({ isCurrent }),
         restore: (preserved, bounds, { isCurrent }) => frame?.restoreModeTransitionState?.(preserved, bounds, { isCurrent }),
+        // Capture transition progress in state before the frame changes its layout.
         onStart: ({ generation, policy, preserved }) => {
           templatePlacement?.stop();
           nativeTokenPlacement?.stop();
@@ -893,17 +949,20 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
           store.dispatch({ type: "mode-transition-started", generation, target: presentationLabel(policy, localize) });
           diagnostics?.record?.("debug", `MODE TRANSITION ${JSON.stringify({ event: "started", generation, from: preserved?.formFactor ?? "unknown", to: policy.formFactor, requested: policy.preference ?? policy.runtimeMode ?? policy.formFactor, viewportBefore: preserved?.visualViewport ?? preserved?.viewportBounds ?? null, sceneBoundsBefore: preserved?.sceneBounds ?? null, route: preserved?.route ?? store.state.route, splitScreen: Boolean(preserved?.splitScreen) })}`);
         },
+        // Publish reconnect progress only while this captured recovery generation still owns the operation.
         onProgress: ({ generation, phase, detail }) => store.dispatch({ type: "mode-transition-progress", generation, phase, detail }),
         onCheckpoint: ({ generation, checkpoint, state, elapsedMs, details }) => {
           const level = state === "stalled" || state === "failed" ? "warn" : "debug";
           diagnostics?.record?.(level, `MODE TRANSITION ${JSON.stringify({ event: state, generation, checkpoint, elapsedMs, ...details })}`);
         },
+        // Clear only this completed transition's blocker and report its completed timings.
         onFinish: ({ generation, policy, timings }) => {
           store.dispatch({ type: "mode-transition-finished", generation });
           const after = frame?.modeTransitionDiagnosticSnapshot?.() ?? null;
           const slowest = Object.entries(timings ?? {}).filter(([name]) => name !== "total").sort((left, right) => right[1] - left[1])[0] ?? [];
           diagnostics?.record?.("info", `MODE TRANSITION ${JSON.stringify({ event: "completed", generation, to: policy.formFactor, orientation: policy.orientation, timings, slowestCheckpoint: slowest[0] ?? "unknown", totalMs: timings?.total ?? 0, viewportAfter: after?.visualViewport ?? after?.viewportBounds ?? null, sceneBoundsAfter: after?.sceneBounds ?? null, route: after?.route ?? store.state.route, splitScreen: Boolean(after?.splitScreen), rootCount: after?.rootCount ?? null, interactionListeners: after?.interactionListeners ?? null })}`);
         },
+        // Report a failed transition without allowing its old generation to replace a newer presentation.
         onError: (error, { generation, checkpoint }) => {
           frame?.cancelModeTransitionRestore?.();
           store.dispatch({ type: "mode-transition-failed", generation });
@@ -912,6 +971,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       });
       const ownedModeTransition = modeTransition;
       runtimeScope.own(() => ownedModeTransition.dispose());
+      // Reconcile layout changes while preserving an active editor across keyboard-only resizes.
       const invalidateView = ({ force = false } = {}) => {
         const policy = readPolicy();
         if (!force && shouldPreserveEditableSurfaceOnViewportResize({
@@ -939,6 +999,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     }
   };
 
+  // Invalidate async owners first, then give each resource its cleanup even when another cleanup fails.
   const stop = () => {
     if (stopping) return;
     stopping = true;
@@ -988,6 +1049,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     combatControlLifecycleToken() {
       return runtimeScope;
     },
+    // Start/stop mobile according to current policy, or request a coordinated layout change for an existing owner.
     reconcile() {
       // The bootstrap surface owns startup. Session readers may only run once
       // Foundry has completed its first Canvas draw (or no-canvas startup).
@@ -1010,6 +1072,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     refresh() {
       if (activationCommitted) loadSnapshot();
     },
+    // Cancel placements and stale interactions before presenting transport recovery for the new generation.
     beginReconnect(generation) {
       if (!activationCommitted) return false;
       const activeGeneration = Math.max(0, Number(generation) || 0);
@@ -1025,6 +1088,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       diagnostics?.record?.("debug", `Reconnect generation ${activeGeneration} is waiting for transport recovery`);
       return true;
     },
+    // Drive one authoritative recovery and reload only if it cannot restore trustworthy current state.
     async resync(generation) {
       if (!activationCommitted || !resynchronizer) return Object.freeze({ applied: false });
       const activeGeneration = Math.max(0, Number(generation) || 0);
@@ -1069,6 +1133,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     open(route) {
       store.dispatch({ type: "navigate", route });
     },
+    // Open a permitted journal target before moving into the reader, provided mobile still owns the result.
     async openJournalTarget(journalId, target = {}) {
       if (!activationCommitted || readPolicy().runtimeMode === "desktop") throw new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.TheMobileJournalReaderIsInactive", "The mobile Journal reader is inactive."));
       const journal = await commands.openJournal(journalId, target);
@@ -1084,6 +1149,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
   });
 }
 
+// Retain an explicitly requested picker only in landscape Tablet Split Scene presentation.
 export function shouldKeepSceneChooserOpen(state, requested = false) {
   return Boolean(requested
     && state?.sceneChooserOpen
@@ -1093,6 +1159,7 @@ export function shouldKeepSceneChooserOpen(state, requested = false) {
     && state?.orientation === "landscape");
 }
 
+// Yield until the renderer has an opportunity to mount the next interaction surface.
 function nextRenderedFrame() {
   return new Promise((resolve) => {
     if (typeof globalThis.requestAnimationFrame === "function") globalThis.requestAnimationFrame(() => resolve());
@@ -1100,6 +1167,7 @@ function nextRenderedFrame() {
   });
 }
 
+// Restore an active memory policy before preference defaults so its recovery baseline is not lost.
 export async function restoreVeSettingsDefaults({ lowMemoryGateway, preferencesGateway, guardConnection = (action) => action(), invalidate = () => {} }) {
   let memoryResult = null;
   if (lowMemoryGateway?.snapshot?.().active) memoryResult = await guardConnection(() => lowMemoryGateway.disable());
@@ -1117,6 +1185,7 @@ export function shouldPreserveEditableSurfaceOnViewportResize({ activeElement, c
     && nextPolicy?.orientation === currentOrientation);
 }
 
+// Honour an explicit side; on tablets place an automatic joystick opposite the navigation.
 export function resolveJoystickSide(preference, state = {}) {
   if (preference === "left" || preference === "right") return preference;
   if (state.formFactor !== "tablet") return "left";

@@ -2,6 +2,7 @@ import { ACTOR_COMMANDS } from "../../../kernel/command-names.mjs";
 import { actorSourceUuid, speakerMatchesActor } from "../../character-source.mjs";
 import { readDnd5eMessageItem, readDnd5eMessageRoll, readDnd5eMessageOriginId } from "./dnd5e-message-reference.mjs";
 
+/** D&D5e chat visibility and item/activity source checks for action messages. */
 export const dnd5eActionMessages = Object.freeze({
   originatingMessageId: readDnd5eMessageOriginId,
   referencesItem: messageReferencesItem,
@@ -9,11 +10,14 @@ export const dnd5eActionMessages = Object.freeze({
   watchItemUsage: watchTemplateUsage
 });
 
+// Observe D&D5e template usage messages and notify the matching action session.
 function watchTemplateUsage(hooks, actor, item, onReady) {
   const usages = new Map();
+  // Check whether a message references the expected D&D5e item or activity.
   const matches = (activity) => activity?.item?.id === item.id
     && actorSourceUuid(activity.actor ?? activity.item.actor) === actorSourceUuid(actor);
   const registrations = [];
+  // Record each hook registration so this observer's dispose() can remove it.
   const register = (name, listener) => {
     const id = hooks?.on?.(name, listener);
     if (id !== undefined && id !== null) registrations.push([name, id]);
@@ -33,10 +37,12 @@ function watchTemplateUsage(hooks, actor, item, onReady) {
   });
 }
 
+// Read the stable author ID from a chat message or source record.
 function messageAuthorId(message) {
   return String(message?.author?.id ?? message?.user?.id ?? message?._source?.author ?? message?._source?.user ?? "");
 }
 
+// Check message flags and references for the exact originating Item.
 function messageReferencesItem(message, itemId) {
   const reference = readDnd5eMessageItem(message);
   const id = String(reference?.id ?? "");

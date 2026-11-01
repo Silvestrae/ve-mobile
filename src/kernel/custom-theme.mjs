@@ -1,10 +1,12 @@
 /** Pure colour records. Only six-digit hex colours cross the CSS boundary. */
 export const CUSTOM_THEME_DEFAULTS = Object.freeze({ primary: "#ff4fa3", secondary: "#ffd6e7", third: "#ff8fc4" });
 
+// Accept only a six-digit hex colour before a user value reaches CSS.
 export function normalizeThemeColor(value) {
   return typeof value === "string" && /^#[0-9a-f]{6}$/iu.test(value.trim()) ? value.trim().toLowerCase() : null;
 }
 
+// Fill required colours from defaults while keeping an omitted third accent optional.
 export function normalizeCustomThemeColors(value) {
   return Object.freeze({
     primary: normalizeThemeColor(value?.primary) ?? CUSTOM_THEME_DEFAULTS.primary,
@@ -13,7 +15,9 @@ export function normalizeCustomThemeColors(value) {
   });
 }
 
+// Compare relative luminance so palette generation can choose readable foreground colours.
 export function colorContrast(first, second) {
+  // Convert sRGB channels to linear light before weighting their contribution to perceived brightness.
   const luminance = color => channels(color).map(value => value / 255)
     .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
     .reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
@@ -21,6 +25,7 @@ export function colorContrast(first, second) {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
+// Turn the selected accents into light/dark surfaces and foregrounds with useful contrast.
 export function deriveCustomThemePalette(colors, appearance = "dark") {
   const { primary, secondary, third } = normalizeCustomThemeColors(colors);
   const dark = appearance !== "light";
@@ -47,6 +52,7 @@ export function deriveCustomThemePalette(colors, appearance = "dark") {
 export function createCustomThemePaletteResolver() {
   let previousKey = null, previousPalette = null;
   return Object.freeze({
+    // Derive a new palette only when its normalized colours or light/dark appearance changed.
     resolve(colors, appearance) {
       const value = normalizeCustomThemeColors(colors);
       const key = `${appearance === "light" ? "light" : "dark"}:${value.primary}:${value.secondary}:${value.third}`;
@@ -60,16 +66,20 @@ export function createCustomThemePaletteResolver() {
   });
 }
 
+// Read the red, green and blue bytes from an already-normalised hex colour.
 function channels(color) {
   return [1, 3, 5].map(index => Number.parseInt(color.slice(index, index + 2), 16));
 }
 
+// Blend two RGB colours by the requested fraction; readable() uses this to approach a safe foreground.
 function mix(first, second, amount) {
   const a = channels(first), b = channels(second);
   return `#${a.map((value, index) => Math.round(value + (b[index] - value) * amount).toString(16).padStart(2, "0")).join("")}`;
 }
 
+// Nudge a colour toward black or white until it clears the contrast target on every supplied surface.
 function readable(color, surfaces, minimum = 4.5) {
+  // Test the weakest contrast across all surfaces, since one good background is not enough.
   const contrast = candidate => Math.min(...surfaces.map(surface => colorContrast(candidate, surface)));
   if (contrast(color) >= minimum) return color;
   const endpoint = contrast("#000000") >= contrast("#ffffff") ? "#000000" : "#ffffff";

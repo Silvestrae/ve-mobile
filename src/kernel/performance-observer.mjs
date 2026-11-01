@@ -1,3 +1,4 @@
+// Supply the same harmless cleanup function when performance collection is disabled.
 const EMPTY_RELEASE = () => {};
 
 /**
@@ -11,8 +12,10 @@ export function createPerformanceObserver({
   const counters = new Map();
   const timings = new Map();
   const activeResources = new Map();
+  // Honour either a fixed opt-in or a current preference reader on each measurement.
   const active = () => typeof enabled === "function" ? Boolean(enabled()) : Boolean(enabled);
 
+  // Update a named counter only when the observer is enabled.
   const increment = (name, amount = 1) => {
     if (!active()) return 0;
     const next = (counters.get(name) ?? 0) + Number(amount || 0);
@@ -20,6 +23,7 @@ export function createPerformanceObserver({
     return next;
   };
 
+  // Count a live resource and return a one-use release function to its owning scope.
   const track = (name) => {
     if (!active()) return EMPTY_RELEASE;
     increment(`${name}.created`);
@@ -36,6 +40,7 @@ export function createPerformanceObserver({
     };
   };
 
+  // Begin one timing sample and return a finish function that records it at most once.
   const start = (name) => {
     if (!active()) return EMPTY_RELEASE;
     const startedAt = now();
@@ -59,11 +64,13 @@ export function createPerformanceObserver({
     increment,
     track,
     start,
+    // Clear historical samples while retaining current live-resource counts.
     reset() {
       counters.clear();
       timings.clear();
       for (const [name, count] of activeResources) counters.set(`${name}.active`, count);
     },
+    // Copy sorted plain measurements so diagnostic consumers cannot mutate the live counters.
     snapshot() {
       return Object.freeze({
         enabled: active(),

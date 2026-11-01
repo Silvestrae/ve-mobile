@@ -28,6 +28,8 @@ const GROUPS = Object.freeze([
 
 /** Remove only unedited/omitted VE controls; other modules retain native submission. */
 export function filterVeSettingsSubmission(values, fields, { readCurrent, canWrite, localize = localizeFoundry }) {
+  // Hidden settings may still be submitted by Foundry's form. Strip unchanged
+  // hidden values, but reject edits unless the caller confirms current authority.
   const result = { ...values };
   for (const id of Object.keys(result)) {
     if (!id.startsWith("ve-mobile.")) continue;
@@ -42,7 +44,9 @@ export function filterVeSettingsSubmission(values, fields, { readCurrent, canWri
   }
   return result;
 }
+// Read the current value from a native settings control.
 const controlValue = control => control.type === "checkbox" ? Boolean(control.checked) : control.value;
+// Compare captured and current setting values without relying on object identity.
 const sameValue = (a, b) => typeof a === "boolean" || typeof b === "boolean" ? a === b : String(a) === String(b);
 
 /**
@@ -62,8 +66,10 @@ export function createFoundryDesktopSettingsVisibilityGateway({
   const roots = new Map();
   const rowState = new Map();
 
+  // Check whether Desktop mode currently owns the Foundry settings surface.
   const desktopPresentation = () => !isMobilePerformanceAuthorityActive(readPolicy);
 
+  // Resolve a settings label with Foundry localization and a readable fallback.
   const localize = key => {
     try { return getGame()?.i18n?.localize?.(`VEMOBILE.Controls.Settings.${key}`) ?? key; }
     catch { return key; }
@@ -71,6 +77,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
   const grouped = new Map();
   const submissions = new Map();
 
+  // Restore the original grouping only while the current user preference still matches the value this gateway set.
   const restoreGrouping = root => {
     const groups = grouped.get(root);
     if (!groups) return;
@@ -83,6 +90,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     }
     grouped.delete(root);
   };
+  // Keep original settings row groups intact when a temporary visibility filter hides rows.
   const groupRows = (root, category) => {
     if (grouped.has(root)) return;
     const groups = [];
@@ -112,6 +120,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
       }
     }
   };
+  // Identify a summary row whose visibility depends on the setting controls it describes.
   const summaryDependency = category => {
     const parent = category.querySelector('[name="ve-mobile.showActionSummaries"]');
     const child = category.querySelector('[name="ve-mobile.compactActionSummaries"]');
@@ -124,6 +133,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     }
     if (entry?.dependency) child.disabled = entry.dependency.disabled || !parent.checked;
   };
+  // Wrap settings submission so hidden mobile rows retain their original value and are not accidentally submitted.
   const protectSubmission = (app, category) => {
     if (!category || submissions.has(category)) return;
     const game = getGame();
@@ -137,6 +147,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     const entry = { fields, formOptions, original, dependency: null, change: null, wrapper: null };
     submissions.set(category, entry);
     if (typeof original !== "function") return;
+    // Handle submission for the original Foundry form while preserving the gateway’s temporary row state.
     const wrapper = async function(event, form, data) {
       const currentGame = getGame();
       if (identity.world !== currentGame?.world?.id || identity.user !== currentGame?.user?.id) throw new Error(localizeFoundry("VEMOBILE.Graphics.DesktopSettingsSessionChanged", "The settings session changed."));
@@ -144,11 +155,12 @@ export function createFoundryDesktopSettingsVisibilityGateway({
       const filtered = filterVeSettingsSubmission(values, fields, {
         localize: (key, fallback) => localizeFoundry(key, fallback),
         readCurrent: id => currentGame.settings.get(MODULE_ID, id.slice(MODULE_ID.length + 1)),
+        // Recheck setting configuration, world authority, and Force Client Settings before preserving a row.
         canWrite: id => {
           const setting = currentGame.settings.settings.get(id);
-          const FCS = getForceClientSettings();
+          const forceClientSettings = getForceClientSettings();
           return Boolean(setting?.config && (setting.scope !== "world" || currentGame.user?.can?.("SETTINGS_MODIFY"))
-            && !(FCS?.isRestricted?.(id)) && !(FCS?.isForced?.(id) && !currentGame.user?.isGM));
+            && !(forceClientSettings?.isRestricted?.(id)) && !(forceClientSettings?.isForced?.(id) && !currentGame.user?.isGM));
         }
       });
       for (const id of Object.keys(values)) if (id.startsWith("ve-mobile.") && !Object.hasOwn(filtered, id)) delete values[id];
@@ -157,6 +169,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     formOptions.handler = wrapper;
     entry.wrapper = wrapper;
   };
+  // Restore the form submit path when this settings admission ends.
   const restoreSubmission = category => {
     const entry = submissions.get(category);
     if (!entry) return;
@@ -168,6 +181,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     submissions.delete(category);
   };
 
+  // Capture a row’s current state before hiding it, then record ownership for later restoration.
   const captureAndSetHidden = (row, hidden, root) => {
     if (!rowState.has(row)) {
       rowState.set(row, {
@@ -181,6 +195,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     applyOriginalVisibility(row, previous, hidden);
   };
 
+  // Restore a settings row only if the gateway still owns its temporary visibility change.
   const restoreRow = (row) => {
     const previous = rowState.get(row);
     if (!previous) return;
@@ -194,6 +209,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     rowState.delete(row);
   };
 
+  // Reapply the captured row visibility and grouping state after the mobile surface closes.
   const applyOriginalVisibility = (row, previous, hide) => {
     row.hidden = hide || previous.hidden;
     row.classList?.toggle?.("ve-mobile-desktop-hidden-setting", hide);
@@ -203,6 +219,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     else row.setAttribute?.("aria-hidden", previous.ariaHidden);
   };
 
+  // Identify the settings category owned by the specified module.
   const moduleCategory = (root) => {
     const element = unwrapElement(root);
     if (!element) return null;
@@ -211,6 +228,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     return element.querySelector?.(`[data-application-part="main"] section[data-category="${MODULE_ID}"]`) ?? null;
   };
 
+  // Find the native settings row associated with a registered setting key.
   const settingRow = (category, key) => {
     const settingId = `${MODULE_ID}.${key}`;
     const escaped = cssEscape(settingId);
@@ -220,6 +238,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     return control.closest?.(".form-group") ?? null;
   };
 
+  // Reconcile the current settings dialog rows and grouping against Desktop visibility policy.
   const refreshRoot = (root) => {
     const category = moduleCategory(root);
     if (!category) return;
@@ -239,12 +258,14 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     summaryDependency(category);
   };
 
+  // Release one settings-root patch and restore the captured native form state.
   const restoreRoot = (root) => {
     for (const [row, state] of rowState) if (state.root === root) restoreRow(row);
     restoreGrouping(root);
     restoreSubmission(moduleCategory(root));
   };
 
+  // Handle a newly rendered settings application and attach scoped visibility controls.
   const onRenderSettings = (app, html) => {
     const root = unwrapElement(html) ?? unwrapElement(app?.element);
     if (!root) return;
@@ -261,6 +282,7 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     roots.get(identity).observer = observer;
   };
 
+  // Restore settings visibility state when the native settings application closes.
   const onCloseSettings = (app) => {
     const entry = roots.get(app);
     if (!entry) return;
@@ -269,10 +291,12 @@ export function createFoundryDesktopSettingsVisibilityGateway({
     roots.delete(app);
   };
 
+  // Refresh all currently open settings roots after relevant Foundry changes.
   const refresh = () => {
     for (const { root } of roots.values()) refreshRoot(root);
   };
 
+  // Install settings visibility hooks and own their cleanup for the presentation lifetime.
   const enable = (scope) => {
     if (enabled) return;
     enabled = true;
@@ -305,16 +329,19 @@ export function createFoundryDesktopSettingsVisibilityGateway({
 
 export { DESKTOP_HIDDEN_SETTING_KEYS };
 
+// Normalize a jQuery-wrapped or native settings element to its DOM node.
 function unwrapElement(value) {
   if (value?.nodeType === 1) return value;
   if (value?.[0]?.nodeType === 1) return value[0];
   return null;
 }
 
+// Escape a key for safe lookup inside a CSS selector.
 function cssEscape(value) {
   return globalThis.CSS?.escape?.(value) ?? value.replaceAll('"', '\\"');
 }
 
+// Read the configured Force Client Settings policy used to classify writable rows.
 function defaultForceClientSettings() {
   try { if (typeof ForceClientSettings !== "undefined") return ForceClientSettings; } catch {}
   return globalThis.ForceClientSettings ?? null;

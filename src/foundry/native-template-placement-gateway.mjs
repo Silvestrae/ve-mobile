@@ -20,6 +20,7 @@ export function createFoundryTemplatePlacementGateway({
   let current = null;
   let sequence = 0;
 
+  // Install template-placement callbacks for the current Scene, owning every listener and preview so cancellation or teardown restores Foundry state.
   const enable = (scope, onRequest) => {
     if (enabled) return true;
     const AbilityTemplate = getAbilityTemplateClass();
@@ -31,6 +32,7 @@ export function createFoundryTemplatePlacementGateway({
     const interactionStates = new WeakMap();
     enabled = true;
 
+    // Resolve the native template adapter for the requested document, rechecking Scene and permission state before setup.
     const requestAdapter = (adapter) => {
       current = adapter;
       adapter.settle.then(() => {
@@ -50,6 +52,7 @@ export function createFoundryTemplatePlacementGateway({
       });
     };
 
+    // Create and draw the native preview for the pending template placement.
     function drawPreview(...args) {
       interactionStates.set(this, captureTemplateInteractionState(getCanvas(), getGame()));
       try {
@@ -60,6 +63,7 @@ export function createFoundryTemplatePlacementGateway({
       }
     }
 
+    // Register the preview's pointer listeners under the placement scope and provide its native cleanup path.
     function activatePreviewListeners(initialLayer) {
       const type = String(this?.document?.t ?? "");
       const interactionState = interactionStates.get(this);
@@ -130,6 +134,7 @@ export function createFoundryTemplatePlacementGateway({
  */
 function bindRegionTemplatePlacement({ scope, getCanvas, getGame, isEnabled, nextId, onRequest, isRegionTemplate, confirmEvent, rotationStepForRegion }) {
   let patch = null;
+  // Restore preview-owned canvas state only while the same placement still owns it.
   const restore = () => {
     if (!patch) return;
     if (patch.layer.placeRegion === patch.wrapper) {
@@ -138,6 +143,7 @@ function bindRegionTemplatePlacement({ scope, getCanvas, getGame, isEnabled, nex
     }
     patch = null;
   };
+  // Attach the native preview and input handlers to the active canvas, undoing partial attachment if setup fails.
   const attach = () => {
     const canvas = getCanvas();
     const layer = canvas?.regions;
@@ -146,6 +152,7 @@ function bindRegionTemplatePlacement({ scope, getCanvas, getGame, isEnabled, nex
     const original = layer.placeRegion;
     if (typeof original !== "function") return;
     const hadOwn = Object.hasOwn(layer, "placeRegion");
+    // Run native Region placement through its adapter and confirm only while its captured Scene and owner remain current.
     function placeRegion(data, options = {}) {
       const measured = isRegionTemplate(data);
       if (!isEnabled() || this !== layer || getCanvas() !== canvas || !measured
@@ -156,7 +163,7 @@ function bindRegionTemplatePlacement({ scope, getCanvas, getGame, isEnabled, nex
       const previous = layer._placementContext;
       const confirmation = { rejected: false, error: null };
       const preConfirm = options.preConfirm;
-      const nativeResult = original.call(this, data, { ...options, preConfirm(args) {
+      const nativeResult = original.call(this, data, { ...options, /* Capture the result before Foundry completes its native confirmation. */ preConfirm(args) {
         try {
           const allowed = preConfirm?.(args);
           confirmation.rejected = allowed === false;
@@ -189,6 +196,7 @@ function bindRegionTemplatePlacement({ scope, getCanvas, getGame, isEnabled, nex
   scope?.own?.(restore);
 }
 
+// Adapt Foundry's Region preview tool to the gateway's common move, aim, rotate, commit, and cleanup interface.
 function createRegionPreviewAdapter({ id, canvas, layer, context, nativeResult, move, confirm,
   confirmation, getCanvas, getGame, interactionState, labels, confirmEvent, rotationStepForRegion }) {
   const shape = context.shape;
@@ -199,26 +207,32 @@ function createRegionPreviewAdapter({ id, canvas, layer, context, nativeResult, 
   const world = getGame()?.world?.id;
   const user = getGame()?.user?.id;
   let operation = "active";
+  // Check that this preview instance is still the placement owner.
   const ownsPreview = () => getCanvas() === canvas && canvas.scene === scene && layer._placementContext === context;
+  // Confirm the Region preview and its canvas are still usable before acting on them.
   const previewAlive = () => operation === "active" && ownsPreview() && !context.preview?.destroyed
     && getGame()?.world?.id === world && getGame()?.user?.id === user;
+  // Extract the client point from a native pointer event when its coordinates are finite.
   const eventAt = (point = { x: 0, y: 0 }) => ({
     x: point.x, y: point.y, clientX: point.x, clientY: point.y, button: 0, shiftKey: false,
     getLocalPosition: () => canvas.canvasCoordinatesFromClient(point),
     preventDefault() {}, stopPropagation() {}
   });
+  // Move the preview origin through the native adapter's supported method.
   const moveOrigin = (point) => {
     if (!previewAlive() || ![point?.x, point?.y].every(Number.isFinite)) return false;
     move(eventAt(point));
     context.preview?.applyRenderFlags?.();
     return true;
   };
+  // Calculate the direction from the preview origin to a pointer point.
   const directionAt = (point) => {
     const origin = shape.origin;
     const worldPoint = canvas.canvasCoordinatesFromClient(point);
     return [origin?.x, origin?.y, worldPoint?.x, worldPoint?.y].every(Number.isFinite)
       ? normalizeDegrees(Math.atan2(worldPoint.y - origin.y, worldPoint.x - origin.x) * 180 / Math.PI) : null;
   };
+  // Apply a relative rotation to the active preview through the adapter.
   const rotateBy = (degrees) => {
     if (!previewAlive() || !rotatable || !Number.isFinite(degrees) || degrees === 0) return false;
     const step = Math.max(1, Number(rotationStepForRegion(shape, canvas)) || 1);
@@ -237,6 +251,7 @@ function createRegionPreviewAdapter({ id, canvas, layer, context, nativeResult, 
     context.onChange?.(args);
     return true;
   };
+  // Aim the active preview toward the latest pointer point.
   const aimAt = (point, offset = 0) => {
     const direction = directionAt(point);
     if (direction === null) return false;
@@ -244,6 +259,7 @@ function createRegionPreviewAdapter({ id, canvas, layer, context, nativeResult, 
     const requested = step > 1 ? Math.round((direction + offset) / step) * step : direction + offset;
     return rotateBy(normalizeSignedDegrees(requested - shape.rotation));
   };
+  // Capture the preview values needed to restore its prior placement state.
   const snapshot = () => {
     // Native rays account for grid shape and snapping. The fallback is only
     // the UI handle of a shape without a directional ray, never placement data.
@@ -261,12 +277,14 @@ function createRegionPreviewAdapter({ id, canvas, layer, context, nativeResult, 
     originalControlledTokenIdentity: interactionState.originalControlledTokenIdentity,
     establishInitialOrigin: moveOrigin, moveOrigin, aimAt, rotateBy, snapshot,
     beginAim(point) { const angle = directionAt(point); return angle === null ? 0 : normalizeSignedDegrees(shape.rotation - angle); },
+    // Bind mobile aim and confirmation gestures to this pending native template placement.
     bindGestures(surface, scope, onOverlay) {
       return bindTemplatePointerGestures({ surface, scope, onOverlay, rotatable,
         adapter: { moveOrigin, aimAt, rotateBy, beginAim(point) {
           const angle = directionAt(point); return angle === null ? 0 : normalizeSignedDegrees(shape.rotation - angle);
         }, snapshot, previewAlive } });
     },
+    // Commit the current template placement through Foundry's confirmation path and release its controls.
     async commit() {
       if (!previewAlive()) return false;
       operation = "committing";
@@ -280,6 +298,7 @@ function createRegionPreviewAdapter({ id, canvas, layer, context, nativeResult, 
       }
       return settle;
     },
+    // Cancel this pending placement and restore the native template interaction state.
     async cancel() {
       if (operation === "active" && ownsPreview()) {
         operation = "cancelling";
@@ -290,6 +309,8 @@ function createRegionPreviewAdapter({ id, canvas, layer, context, nativeResult, 
   });
 }
 
+/** Adapt Foundry's live measured-template preview to VE's origin/direction
+ * gestures while leaving final creation to the native crosshair workflow. */
 export function createNativePreviewAdapter({
   id,
   template,
@@ -305,17 +326,20 @@ export function createNativePreviewAdapter({
   let operation = "active";
   const settle = Promise.resolve(nativeResult);
 
+  // Check that the captured canvas remains the active ready canvas.
   const liveCanvas = () => getCanvas() ?? canvas;
+  // Translate an input event into the native pointer representation expected by the preview.
   const nativeEvent = () => ({
     interactionData: {},
     preventDefault() {},
     stopPropagation() {}
   });
+  // Recheck template and canvas liveness before using the pending preview.
   const previewAlive = () => operation === "active"
     && !template?._destroyed
     && Boolean(template?.parent)
     && Boolean(liveCanvas()?.scene);
-
+  // Update the preview's origin from the current pointer position while keeping the aim vector intact.
   const moveOrigin = (clientPoint) => {
     if (!previewAlive()) return false;
     const world = liveCanvas().canvasCoordinatesFromClient?.(clientPoint);
@@ -326,7 +350,7 @@ export function createNativePreviewAdapter({
     refreshNativeTemplateGeometry(template);
     return true;
   };
-
+  // Read the current aim direction and reject invalid points or unsupported shapes.
   const directionAt = (clientPoint) => {
     if (!rotatable || !previewAlive()) return false;
     const world = liveCanvas().canvasCoordinatesFromClient?.(clientPoint);
@@ -335,7 +359,7 @@ export function createNativePreviewAdapter({
     if (![world?.x, world?.y, x, y].every(Number.isFinite)) return false;
     return normalizeDegrees(Math.atan2(world.y - y, world.x - x) * 180 / Math.PI);
   };
-
+  // Set the preview direction from its origin to the current pointer position.
   const aimAt = (clientPoint, offsetDegrees = 0) => {
     const degrees = directionAt(clientPoint);
     if (!Number.isFinite(degrees)) return false;
@@ -346,6 +370,7 @@ export function createNativePreviewAdapter({
     return true;
   };
 
+  // Start direction selection for the current preview when its adapter supports aiming.
   const beginAim = (clientPoint) => {
     const pointerDirection = directionAt(clientPoint);
     const currentDirection = Number(template.document?.direction);
@@ -353,7 +378,7 @@ export function createNativePreviewAdapter({
       ? normalizeSignedDegrees(currentDirection - pointerDirection)
       : 0;
   };
-
+  // Rotate the native preview by the requested signed degree delta.
   const rotateBy = (degrees) => {
     if (!rotatable || !previewAlive()) return false;
     const currentDirection = Number(template.document?.direction);
@@ -363,6 +388,7 @@ export function createNativePreviewAdapter({
     return true;
   };
 
+  // Commit or cancel the pending placement, then release its preview and input ownership.
   const finish = async (kind) => {
     if (operation !== "active") return settle;
     operation = kind;
@@ -379,6 +405,7 @@ export function createNativePreviewAdapter({
     return settle;
   };
 
+  // Publish current template geometry and labels as the overlay snapshot.
   const snapshot = () => templateOverlaySnapshot(liveCanvas(), template, { id, type, supported, rotatable, labels });
 
   return Object.freeze({
@@ -397,6 +424,7 @@ export function createNativePreviewAdapter({
     rotateBy,
     snapshot,
     previewAlive,
+    // Bind gestures for the second native template adapter while keeping its listener scope explicit.
     bindGestures(surface, scope, onOverlay) {
       return bindTemplatePointerGestures({
         surface,
@@ -406,9 +434,11 @@ export function createNativePreviewAdapter({
         onOverlay
       });
     },
+    // Notify the owner when the native template disappears so its matching preview can be disposed.
     watchRemoval(scope, listener) {
       const container = template?.parent;
       if (typeof container?.on !== "function" || typeof container?.off !== "function") return false;
+      // Handle preview removal by ending the placement session and releasing remaining resources.
       const removed = (child) => {
         if (child === template && operation === "active") listener();
       };
@@ -427,6 +457,8 @@ export function refreshNativeTemplateGeometry(template) {
   template?.applyRenderFlags?.();
 }
 
+/** Own Scene-stage pointer listeners for one template gesture session and
+ * release them, interaction locks and preview handles on cancellation. */
 export function bindTemplatePointerGestures({
   surface,
   scope,
@@ -441,7 +473,9 @@ export function bindTemplatePointerGestures({
   let pendingPoint = null;
   let frame = null;
 
+  // Publish the current placement outcome through the injected callback.
   const emit = () => onOverlay(adapter.snapshot());
+  // Apply the most recent queued pointer position after the preview becomes ready.
   const applyPending = () => {
     frame = null;
     if (!active || !pendingPoint) return;
@@ -452,10 +486,12 @@ export function bindTemplatePointerGestures({
       : adapter.moveOrigin({ x: point.x + active.grabOffset.x, y: point.y + active.grabOffset.y });
     if (changed) emit();
   };
+  // Keep only the newest pointer position while preview setup is pending.
   const queuePoint = (point) => {
     pendingPoint = point;
     if (frame === null) frame = requestFrame(applyPending);
   };
+  // Return the preview to its captured starting rotation and origin.
   const reset = ({ releaseCapture = true } = {}) => {
     if (frame !== null) cancelFrame(frame);
     frame = null;
@@ -470,6 +506,7 @@ export function bindTemplatePointerGestures({
     } catch {}
   };
 
+  // Capture primary-pointer intent and start native preview movement when the event hits the active surface.
   const pointerDown = (event) => {
     if (active || !adapter.previewAlive()) return;
     if (event.button !== undefined && event.button !== 0) return;
@@ -493,6 +530,7 @@ export function bindTemplatePointerGestures({
     try { captureTarget.setPointerCapture?.(event.pointerId); } catch {}
   };
 
+  // Move or aim the preview from the captured pointer while its owner remains active.
   const pointerMove = (event) => {
     if (!active || active.pointerId !== event.pointerId) return;
     event.preventDefault?.();
@@ -500,6 +538,7 @@ export function bindTemplatePointerGestures({
     queuePoint(clientPoint(event));
   };
 
+  // Finish the current pointer interaction and commit only when the native gesture was accepted.
   const pointerEnd = (event, lostCapture = false) => {
     if (!active || active.pointerId !== event.pointerId) return;
     event.preventDefault?.();
@@ -511,6 +550,7 @@ export function bindTemplatePointerGestures({
     reset({ releaseCapture: !lostCapture });
   };
 
+  // Cancel the active pointer gesture without leaving a preview or listener behind.
   const pointerCancel = (event, lostCapture = false) => {
     if (!active || active.pointerId !== event.pointerId) return;
     event.preventDefault?.();
@@ -518,6 +558,7 @@ export function bindTemplatePointerGestures({
     reset({ releaseCapture: !lostCapture });
   };
 
+  // Handle supported keyboard controls for rotating, confirming, or cancelling the placement.
   const keyDown = (event) => {
     const handle = event.target?.closest?.("[data-ve-template-handle='direction']");
     if (!handle || !rotatable || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
@@ -547,6 +588,7 @@ export function bindTemplatePointerGestures({
   });
 }
 
+/** Project the live template's origin and aimed endpoint into client pixels. */
 export function templateOverlaySnapshot(canvas, template, state = {}) {
   const origin = canvas?.clientCoordinatesFromCanvas?.({
     x: Number(template?.document?.x),
@@ -562,10 +604,12 @@ export function templateOverlaySnapshot(canvas, template, state = {}) {
   });
 }
 
+/** Return the native increment used by the active template placement adapter. */
 export function nativeRotationIncrement() {
   return DIRECT_ROTATION_INCREMENT;
 }
 
+/** Capture the exact single controlled token and user/Scene before placement. */
 export function captureTemplateInteractionState(canvas, game) {
   const sceneId = String(canvas?.scene?.id ?? "");
   const controlled = Array.from(canvas?.tokens?.controlled ?? []);
@@ -578,6 +622,7 @@ export function captureTemplateInteractionState(canvas, game) {
   });
 }
 
+/** Restore captured control only if the same user and Scene still own the view. */
 export function restoreTemplateInteractionState(canvas, game, state) {
   if (!state || String(canvas?.scene?.id ?? "") !== state.sceneId || String(game?.user?.id ?? "") !== state.userId) return false;
   return restoreControlledToken(canvas, game, state.originalControlledTokenIdentity);
@@ -603,12 +648,14 @@ export function restoreControlledToken(canvas, game, identity) {
   }
 }
 
+// Remove only listeners this adapter added to the preview and stage.
 function detachAddedListeners(stage, eventName, before) {
   const added = stageListeners(stage, eventName).filter((listener) => !before.includes(listener));
   for (const listener of added) stage?.off?.(eventName, listener);
   return added;
 }
 
+// Collect the native stage listener registrations that must be detached on cleanup.
 function stageListeners(stage, eventName) {
   try {
     return [...(stage?.listeners?.(eventName) ?? [])];
@@ -617,20 +664,24 @@ function stageListeners(stage, eventName) {
   }
 }
 
+// Accept a point only when both canvas coordinates are finite.
 function finitePoint(value) {
   return [value?.x, value?.y].every(Number.isFinite)
     ? Object.freeze({ x: Number(value.x), y: Number(value.y) })
     : null;
 }
 
+// Convert a pointer's client coordinates to the active canvas coordinate space.
 function clientPoint(event) {
   return { x: Number(event.clientX), y: Number(event.clientY) };
 }
 
+// Extract the stable token identifier from a supported token reference.
 function tokenId(token) {
   return String(token?.document?.id ?? token?.id ?? "");
 }
 
+// Resolve the exact Token and Actor identity represented by the placement request.
 function tokenIdentity(token, sceneId, userId) {
   const id = tokenId(token);
   if (!id || !sceneId || !userId) return null;
@@ -642,12 +693,14 @@ function tokenIdentity(token, sceneId, userId) {
   });
 }
 
+// Find the current canvas Token for the requested stable token ID.
 function resolveCanvasToken(canvas, id) {
   return canvas?.tokens?.get?.(id)
     ?? Array.from(canvas?.tokens?.placeables ?? []).find((token) => tokenId(token) === id)
     ?? null;
 }
 
+// Recheck the current user’s permission to control the exact token before placement.
 function canControlToken(token, user) {
   if (!token || token.destroyed || token.document?.hidden) return false;
   if (token.document?.isOwner === true || token.isOwner === true) return typeof token.control === "function";
@@ -658,6 +711,7 @@ function canControlToken(token, user) {
   }
 }
 
+// Build the localized labels used by native template placement controls.
 function templatePlacementLabels(game) {
   return Object.freeze({
     hint: localized(game, "VEMOBILE.Scene.Template.Hint", "Tap to place template"),
@@ -674,15 +728,18 @@ function templatePlacementLabels(game) {
   });
 }
 
+// Resolve a translation key with the supplied readable fallback.
 function localized(game, key, fallback) {
   const value = game?.i18n?.localize?.(key);
   return !value || value === key ? fallback : value;
 }
 
+// Normalize an angle to the supported positive degree range.
 function normalizeDegrees(value) {
   return ((value % 360) + 360) % 360;
 }
 
+// Normalize an angle delta to the signed shortest rotation range.
 function normalizeSignedDegrees(value) {
   const normalized = normalizeDegrees(value);
   return normalized > 180 ? normalized - 360 : normalized;

@@ -10,7 +10,8 @@ export function createFoundryHotbarGateway(options = {}) {
 }
 
 const dnd5eItemMacroAdapter = Object.freeze({
-  resolve(game, request) {
+    // Resolve an item or activity reference against the current D&D5e Actor and item collection.
+    resolve(game, request) {
     if (game?.system?.id !== "dnd5e") throw new HotbarError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Interface.HotbarGateway.ItemHotbarMacrosRequireDDE", "Item hotbar macros require D&D5e."));
     let source;
     try { source = validSourceUuid(request?.actorSourceUuid); }
@@ -26,7 +27,8 @@ const dnd5eItemMacroAdapter = Object.freeze({
     if (request?.activityId && (!activity?.canUse || typeof activity.use !== "function")) throw new HotbarError("TARGET_MISSING", localizeFoundry("VEMOBILE.Interface.HotbarGateway.ThatActivityIsNoLongerAvailable", "That activity is no longer available."));
     return { item, activity };
   },
-  toMacroData({ item, activity }) {
+    // Build the native D&D5e item-use Macro data for the resolved item or activity.
+    toMacroData({ item, activity }) {
     return {
       name: activity ? `${item.name}: ${activity.name}` : String(item.name),
       img: String(activity?.img ?? item.img ?? ""), type: "script", scope: "actor",
@@ -36,6 +38,7 @@ const dnd5eItemMacroAdapter = Object.freeze({
   }
 });
 
+// Validate and normalize a Macro ID before resolving it from the active hotbar.
 function macroId(value) {
   if (typeof value !== "string" || !value.trim() || value.length > 128) {
     throw new HotbarError("INVALID_INPUT", localizeFoundry("VEMOBILE.Interface.HotbarGateway.AValidMacroIDIsRequired", "A valid macro ID is required."));

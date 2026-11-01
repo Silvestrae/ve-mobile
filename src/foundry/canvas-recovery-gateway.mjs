@@ -11,6 +11,8 @@ export function createFoundryCanvasRecoveryGateway({
   timeoutMs = 30000
 } = {}) {
   const capture = () => {
+    // Save client-local camera, control and target identity before a redraw;
+    // UUIDs keep restoration tied to the same token documents.
     const game = getGame();
     const canvas = getCanvas();
     const scene = canvas?.scene;
@@ -30,6 +32,9 @@ export function createFoundryCanvasRecoveryGateway({
   return Object.freeze({
     capture,
     async reconcile({ before = capture(), isCurrent = () => true, onProgress = () => {} } = {}) {
+      // Prefer Foundry's authoritative active Scene after a missed socket event.
+      // Every awaited redraw is followed by a generation check before restoring
+      // captured client state, so an obsolete reconnect cannot take over Canvas.
       if (!isCurrent()) return Object.freeze({ applied: false, reason: "stale-generation" });
       if (readNoCanvas()) return Object.freeze({ applied: true, skipped: "no-canvas", durationMs: 0 });
 
@@ -53,6 +58,7 @@ export function createFoundryCanvasRecoveryGateway({
       // textures, and rebuilds every group. Scene#view skips same-Scene draws.
       const hooks = getHooks();
       let readySeen = false;
+      // Handle canvas readiness and retry recovery only for the current recovery owner.
       const onReady = (readyCanvas) => {
         if (readyCanvas === canvas && readyCanvas.scene === desired) readySeen = true;
       };
@@ -76,6 +82,7 @@ export function createFoundryCanvasRecoveryGateway({
   });
 }
 
+// Capture stable token and actor identity for the movement recovery request.
 function tokenIdentity(token) {
   const id = String(token?.id ?? token?.document?.id ?? "");
   const uuid = String(token?.document?.uuid ?? "");
@@ -83,8 +90,11 @@ function tokenIdentity(token) {
 }
 
 function restoreClientState({ before, game, canvas, desired, isCurrent }) {
+  // Restore only tokens that still resolve to the captured UUID in the selected
+  // Scene. Native control re-applies current permission checks during recovery.
   if (!isCurrent() || canvas.scene !== desired || !canvas.ready) return;
   const tokens = canvas.tokens;
+  // Resolve the recovery target against the current canvas and Scene.
   const resolve = ({ id, uuid }) => {
     const token = tokens?.get?.(id);
     return token?.document?.uuid === uuid && token.document.parent === desired ? token : null;
@@ -103,6 +113,7 @@ function restoreClientState({ before, game, canvas, desired, isCurrent }) {
   else if (game?.user?.targets?.clear) game.user.targets.clear();
 }
 
+// Create the reported error record for a failed canvas recovery.
 function recoveryError(checkpoint, message) {
   const error = new Error(message);
   error.reconnectCheckpoint = checkpoint;
@@ -110,6 +121,7 @@ function recoveryError(checkpoint, message) {
   return error;
 }
 
+// Bound an asynchronous recovery step so a missing native callback cannot hold the workflow indefinitely.
 function withTimeout(operation, timeoutMs, setTimer, clearTimer) {
   let handle;
   const deadline = new Promise((_, reject) => {

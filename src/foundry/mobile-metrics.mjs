@@ -17,6 +17,7 @@ export function createMobileMetrics({
   clearTimer = (id) => globalThis.clearTimeout(id)
 } = {}) {
   return Object.freeze({
+    // Collect metrics and publish updates only while the supplied diagnostics scope remains active.
     watch(scope, onUpdate) {
       let frameId = null;
       let latencyTimer = null;
@@ -25,11 +26,14 @@ export function createMobileMetrics({
       let frameCount = 0;
       let metrics = Object.freeze({ latency: null, fps: null });
 
+      // Publish the current mobile performance metrics snapshot.
       const publish = (next) => {
         metrics = Object.freeze({ ...metrics, ...next });
         onUpdate(metrics);
       };
+      // Check whether the browser document is visible and frame sampling should run.
       const visible = () => readDocument()?.visibilityState !== "hidden";
+      // Measure and record one event-loop latency sample without blocking rendering.
       const sampleLatency = () => {
         latencyTimer = null;
         if (!visible()) return;
@@ -37,6 +41,7 @@ export function createMobileMetrics({
         publish({ latency: Number.isFinite(oneWay) && oneWay >= 0 ? Math.round(oneWay) : null });
         latencyTimer = setTimer(sampleLatency, LATENCY_REFRESH_MS);
       };
+      // Collect per-frame timing and update performance metrics only for the active owner.
       const frame = (timestamp) => {
         if (!visible()) return;
         const current = Number.isFinite(timestamp) ? timestamp : now();
@@ -55,6 +60,7 @@ export function createMobileMetrics({
         }
         frameId = requestFrame(frame);
       };
+      // Start frame sampling under a scope that can stop it deterministically.
       const startFrames = () => {
         if (frameId !== null || !visible()) return;
         previousFrameAt = null;
@@ -62,6 +68,7 @@ export function createMobileMetrics({
         frameCount = 0;
         frameId = requestFrame(frame);
       };
+      // Stop frame sampling and release its animation-frame handle.
       const stopFrames = () => {
         if (frameId !== null) cancelFrame(frameId);
         frameId = null;
@@ -69,6 +76,7 @@ export function createMobileMetrics({
         sampleStartedAt = null;
         frameCount = 0;
       };
+      // Pause or resume sampling when page visibility changes.
       const visibilityChanged = () => {
         if (visible()) {
           if (latencyTimer === null) sampleLatency();

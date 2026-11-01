@@ -54,7 +54,7 @@ export function installVeChatWindowClass({
     #veActive = false;
     #veRendering = false;
     #veRenderingForward = false;
-    #veQueue = typeof Semaphore === "function" ? new Semaphore(1) : { add: (fn, ...args) => fn(...args) };
+    #veQueue = typeof Semaphore === "function" ? new Semaphore(1) : { add: (task, ...args) => task(...args) };
     #veForwardListener = null;
     #veLogElement = null;
     #veLimit = configuredBatchSize(config);
@@ -201,15 +201,19 @@ export function installVeChatWindowClass({
   return Object.freeze({ installed: true, owner: "VE", prune, ChatLogClass: VeMobileBoundedChatLog });
 }
 
+/** Coordinate native and VE chat pruning so only one bounded-window owner is
+ * active, and expose the rendered-row state for diagnostics. */
 export function createChatDomGateway({
   readGame = () => globalThis.game,
   readUi = () => globalThis.ui,
   readConfig = () => globalThis.CONFIG,
   readDocument = () => globalThis.document
 } = {}) {
+  // Return the configured bound for chat history or DOM processing.
   const limit = () => configuredBatchSize(readConfig());
   let veActive = false;
   return Object.freeze({
+    // Attach the current chat DOM integration while its owning mobile surface is active.
     activate(chat = readUi()?.chat) {
       if (inspectChatLogPrune(readGame(), readConfig()).active) { veActive = false; return false; }
       if (inspectMidiLegacyPruning(readGame(), readConfig()).active) { veActive = false; return false; }
@@ -221,6 +225,7 @@ export function createChatDomGateway({
       chat?.veMobileSetBoundedWindow?.(false, limit());
       veActive = false;
     },
+    // Read the current chat presentation state into a plain record for the renderer.
     snapshot() {
       const game = readGame();
       const document = readDocument();
@@ -243,6 +248,7 @@ export function createChatDomGateway({
   });
 }
 
+/** Detect the legacy Midi-QOL pruning implementation before installing VE's. */
 export function inspectMidiLegacyPruning(game = globalThis.game, config = globalThis.CONFIG) {
   const module = game?.modules?.get?.(MIDI_QOL_ID);
   if (!module?.active) return Object.freeze({ active: false, version: module?.version ?? null });
@@ -258,10 +264,12 @@ export function inspectMidiLegacyPruning(game = globalThis.game, config = global
   });
 }
 
+/** Read Foundry's native chat batch size with a positive fallback. */
 export function configuredBatchSize(config = globalThis.CONFIG) {
   return Math.max(1, Number(config?.ChatMessage?.batchSize) || DEFAULT_BATCH_SIZE);
 }
 
+// Read the current chat history pruning setting with its supported fallback.
 function readPruneSetting(game) {
   try {
     const registered = game?.settings?.settings?.get?.(`${CHATLOG_PRUNE_ID}.enabled`);
@@ -274,6 +282,7 @@ function readPruneSetting(game) {
   return null;
 }
 
+// Read an optional chat setting without requiring its registration.
 function readOptionalSetting(game, namespace, key) {
   try {
     const registered = game?.settings?.settings?.get?.(`${namespace}.${key}`);
@@ -286,6 +295,7 @@ function readOptionalSetting(game, namespace, key) {
   } catch { return null; }
 }
 
+// Collect stable IDs for chat messages currently mounted in the native log.
 function renderedMessageIds(log) {
   return new Set(Array.from(log?.children ?? []).map((element) => element?.dataset?.messageId).filter(Boolean));
 }

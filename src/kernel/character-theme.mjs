@@ -36,12 +36,14 @@ const THEME_ACCENTS = Object.freeze({
   psion: Object.freeze({ deep: "#5e51a9", bright: "#8e80dc" })
 });
 
+// Resolve the user's scheme override before falling back to the character's class theme.
 export function resolveCharacterTheme(classTheme = "neutral", colorScheme = "class") {
   const key = String(colorScheme ?? "class");
   if (key === "class") return String(classTheme || "neutral");
   return COLOR_SCHEME_THEME_KEYS[key] ?? "neutral";
 }
 
+// Build up to three plain accent pairs; app-frame.mjs turns these into the visible theme blend.
 export function resolveCharacterThemeProfile(classThemes = [], colorScheme = "class", customTheme = null) {
   const knownThemes = [...new Set(classThemes
     .map((theme) => String(theme ?? ""))

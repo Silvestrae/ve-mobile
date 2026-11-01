@@ -4,6 +4,7 @@ import { localizedText } from "./localized-text.mjs";
 
 /** Event-driven first-use invitation; no polling, route changes or focus stealing. */
 export function createControlsInvitation({ root, scope, commands, getState, isReady, isNativeOpen, openGuide }) {
+  // Resolve invitation copy through the kernel's supplied localization command.
   const text = (key, fallback) => localizedText(commands.localize, `VEMOBILE.Controls.${key}`, fallback);
   const view = node("button", { attrs: { type: "button" }, text: text("View", "View") });
   const later = node("button", { attrs: { type: "button" }, text: text("Later", "Later") });
@@ -16,10 +17,13 @@ export function createControlsInvitation({ root, scope, commands, getState, isRe
   let interacting = false;
   let pending = false;
   let observer = null;
+  // Dismiss the invitation surface without opening another interaction.
   const hide = () => { element.hidden = true; };
+  // Detect native dialogs, active typing and VE overlays that should take priority over the invitation.
   const blocked = () => Boolean(isNativeOpen?.()
     || root.ownerDocument.activeElement?.matches?.("input, textarea, select, [contenteditable='true']")
     || root.ownerDocument.querySelector(".ve-controls-guide:not([hidden]), .ve-mobile-bootstrap, .ve-portrait-token-ghost, .ve-portrait-action-menu:not([hidden]), .ve-character-item-menu, .ve-mobile-dialog:not([hidden]), .ve-settings-report-modal:not([hidden]), .ve-settings-reload:not([hidden]), .ve-asset-optimizer:not([hidden]), .ve-graphics-recovery:not([hidden]), .ve-action-bar-picker:not([hidden])"));
+  // Show the invitation only when safe, then retire the observers used to wait for that first opportunity.
   function reconcile() {
     if (scope.disposed) return;
     const safe = controlsInvitationReady({ ready: isReady(), state: getState(), blocked: blocked(), interacting });
@@ -30,12 +34,14 @@ export function createControlsInvitation({ root, scope, commands, getState, isRe
     commands.markControlsInvitationPresented?.();
     observer?.disconnect(); observer = null; waiting.dispose();
   }
+  // Coalesce related DOM/state notifications into one scoped reconciliation task.
   const schedule = () => {
     if (pending || scope.disposed) return;
     if (element.hidden && commands.controlsInvitationSeen?.()) return;
     pending = true;
     scope.timeout(() => { pending = false; reconcile(); }, 0);
   };
+  // Refresh retained button and accessibility copy together.
   const refreshLabels = () => {
     view.textContent = text("View", "View");
     later.textContent = text("Later", "Later");

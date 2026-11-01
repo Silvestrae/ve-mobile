@@ -5,11 +5,13 @@ import { icon, node } from "../../ui/dom.mjs";
 // Shared presentation only: the supplied command boundary owns system semantics.
 const characterRecordSourceUuid = actor => String(actor?.sourceUuid ?? (actor?.id ? `Actor.${actor.id}` : ""));
 
+// Edit experience through a bounded draft and the named Actor command.
 export function experienceEditor(actor, open, commands, scope) {
   if (!open || !actor.capabilities?.editExperience) return null;
   let pending = false;
   const current = Math.max(0, Math.trunc(Number(actor.header?.experience?.value) || 0));
   const locale = actor.header?.locale ?? commands.readLocale?.() ?? "en";
+  // Use the injected localizer consistently for editor labels and status copy.
   const localize = (key, fallback, data) => commands.localize?.(key, fallback, data) ?? fallback;
   const status = node("p", { className: "ve-hp-editor-status", attrs: { role: "status", "aria-live": "polite" } });
   const input = node("input", { className: "ve-hp-editor-amount", attrs: { type: "number", inputmode: "numeric", pattern: "[0-9]*", min: "0", max: "1000000000", step: "1", autocomplete: "off", required: true, placeholder: "0", "aria-label": localize("VEMOBILE.Character.ExperienceAmount", "Experience to add") } });
@@ -18,7 +20,7 @@ export function experienceEditor(actor, open, commands, scope) {
   const form = node("form", {
     className: "ve-hp-editor ve-xp-editor",
     attrs: { role: "dialog", "aria-modal": "true", "aria-labelledby": "ve-xp-editor-title" },
-    on: { submit: async (event) => {
+    on: { /* Validate a whole non-negative XP addition and leave failed native updates retryable in the current editor. */ submit: async (event) => {
       event.preventDefault();
       if (pending || !input.reportValidity()) return;
       const amount = Number(input.value);
@@ -57,6 +59,7 @@ export function experienceEditor(actor, open, commands, scope) {
   return node("div", { className: "ve-hp-editor-layer", attrs: { role: "presentation" }, children: [form] });
 }
 
+// Render a capability-gated HP editor with explicit heal, damage, and temp-HP choices.
 export function hitPointEditor(actor, requestedEditor, commands, scope) {
   if (!requestedEditor || !actor.capabilities?.editHitPoints) return null;
   const hp = {
@@ -112,7 +115,7 @@ export function hitPointEditor(actor, requestedEditor, commands, scope) {
   const form = node("form", {
     className: "ve-hp-editor",
     attrs: { role: "dialog", "aria-modal": "true", "aria-labelledby": "ve-hp-editor-title" },
-    on: { submit: async (event) => {
+    on: { /* Submit one explicit HP operation and restore editable controls only while this editor remains mounted. */ submit: async (event) => {
       event.preventDefault();
       if (pending || !amountInput.reportValidity()) return;
       const amount = Number(amountInput.value);
@@ -163,6 +166,7 @@ export function hitPointEditor(actor, requestedEditor, commands, scope) {
   setOperation(operation, true);
   return node("div", { className: "ve-hp-editor-layer", attrs: { role: "presentation" }, children: [form] });
 
+  // Change the HP operation and optionally reset its amount for the next edit.
   function setOperation(next, reset) {
     operation = next;
     for (const [key, button] of operationButtons) {
@@ -180,6 +184,7 @@ export function hitPointEditor(actor, requestedEditor, commands, scope) {
     modalStatus.classList.remove("is-error");
   }
 
+  // Normalize user input to a non-negative integer within the selected operation's bounds.
   function setAmount(value) {
     const minimum = Number(amountInput.min) || 0;
     const maximum = Number(amountInput.max) || 1_000_000;
@@ -187,16 +192,19 @@ export function hitPointEditor(actor, requestedEditor, commands, scope) {
     updateSubmitLabel();
   }
 
+  // Apply a signed quick step and keep the form amount inside current HP limits.
   function stepAmount(delta) {
     setAmount((Number(amountInput.value) || 0) + delta);
   }
 
+  // Match button text to the selected action and its current amount.
   function updateSubmitLabel() {
     const amount = Math.max(0, Math.trunc(Number(amountInput.value) || 0));
     submitLabel.textContent = operationSubmitLabel(operation, amount, commands.localize);
   }
 }
 
+// Describe the exact HP operation encoded by the submit action.
 function operationSubmitLabel(operation, amount, localize) {
   if (operation === "damage") return localizedText(localize, "VEMOBILE.Character.Presenter.ApplyDamage", "Apply {amount} Damage", { amount });
   if (operation === "heal") return localizedText(localize, "VEMOBILE.Character.Presenter.HealHitPoints", "Heal {amount} HP", { amount });
@@ -204,6 +212,7 @@ function operationSubmitLabel(operation, amount, localize) {
   return localizedText(localize, "VEMOBILE.Character.Presenter.SetHitPoints", "Set HP to {amount}", { amount });
 }
 
+// Report the completed HP operation using localized status text.
 function operationStatus(operation, amount, localize) {
   if (operation === "damage") return localizedText(localize, "VEMOBILE.Character.Presenter.ApplyingDamage", "Applying {amount} damage…", { amount });
   if (operation === "heal") return localizedText(localize, "VEMOBILE.Character.Presenter.ApplyingHealing", "Applying {amount} healing…", { amount });

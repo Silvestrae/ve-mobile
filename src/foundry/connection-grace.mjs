@@ -1,3 +1,4 @@
+/** Allow a short client-side reconnect window before the normal disconnect UI. */
 export const MOBILE_RECONNECT_GRACE_MS = 5 * 60 * 1000;
 
 /**
@@ -29,6 +30,7 @@ export function enableMobileConnectionGrace(scope, {
   let generation = 0;
   let hiddenGeneration = null;
 
+  // Capture the connection state and timing needed to identify a transient disconnect.
   const rememberDisconnect = (reason) => {
     if (disconnectedAt !== null) return;
     disconnectedAt = now();
@@ -40,6 +42,8 @@ export function enableMobileConnectionGrace(scope, {
     }
   };
 
+  // Return to normal disconnect handling after the grace window; otherwise notify
+  // the mobile owner and pass the captured generation to its reconnect callback.
   const handleReconnect = () => {
     const elapsedMs = disconnectedAt === null ? Number.POSITIVE_INFINITY : Math.max(0, now() - disconnectedAt);
     disconnectedAt = null;
@@ -61,6 +65,7 @@ export function enableMobileConnectionGrace(scope, {
   socket.on("disconnect", rememberDisconnect);
   manager.on("reconnect", handleReconnect);
   const document = getDocument();
+  // Recheck reconnect grace when the browser tab becomes visible again.
   const onVisibility = () => {
     if (document?.visibilityState === "hidden") hiddenGeneration = generation;
     else if (document?.visibilityState === "visible") {
@@ -84,12 +89,16 @@ export function enableMobileConnectionGrace(scope, {
   return true;
 }
 
+// Identify Foundry’s native reconnect/reload handler by its source markers so
+// this gateway can temporarily replace that exact listener.
 function isFoundryReconnectListener(listener) {
   if (typeof listener !== "function") return false;
   const source = Function.prototype.toString.call(listener);
   return source.includes("Server connection re-established.") && source.includes("debouncedReload");
 }
 
+// Extend Socket.IO's reconnection-attempt window for the grace period and return
+// a cleanup that restores the prior limit.
 function extendReconnectAttempts(manager, graceMs) {
   const configuredDelay = Number(manager.reconnectionDelay?.() ?? manager._reconnectionDelay ?? 500);
   const configuredDelayMax = Number(manager.reconnectionDelayMax?.() ?? manager._reconnectionDelayMax ?? configuredDelay);

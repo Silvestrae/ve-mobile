@@ -1,5 +1,6 @@
 /** Build safe CSS values for a plain token texture geometry record. */
 export function tokenPortraitStyle(portrait = {}) {
+  // Retain valid zero/negative geometry values while replacing missing or non-finite inputs.
   const finite = (value, fallback) => value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : fallback;
   const rawWidth = finite(portrait.width, 1);
   const rawHeight = finite(portrait.height, 1);
@@ -25,6 +26,7 @@ export function tokenPortraitStyle(portrait = {}) {
   ].join(";");
 }
 
+// Accept the known texture-fit modes and use the native fill fallback otherwise.
 export function tokenPortraitFit(portrait = {}) {
   return ["fill", "cover", "contain", "width", "height"].includes(portrait.fit) ? portrait.fit : "fill";
 }
@@ -60,6 +62,7 @@ export function circularPortraitDiameter(pixels, size) {
 
 /** Bounded image-only analysis; no canvas/Foundry state or long-lived image cache. */
 export function fitJoystickPortrait(image, portrait, scope) {
+  // Analyse a bounded 128px sample after load and enlarge only confidently recognised round artwork.
   const fit = () => {
     if (scope.disposed || !image.naturalWidth || !image.naturalHeight) return;
     try {

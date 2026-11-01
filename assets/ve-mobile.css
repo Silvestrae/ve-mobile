@@ -1,5 +1,6 @@
 @import url("./token-portraits.css");
 
+/* Shared colour, safe-area and layer tokens. app-frame.mjs publishes measured Scene geometry; keep overlays on this scale. */
 :root {
   --ve-red: #a60f2f;
   --ve-red-bright: #cf2347;
@@ -31,6 +32,7 @@
   --ve-layer-critical: 5400;
 }
 
+/* The controls guide and first-use invitation remain usable above the active route without replacing its presenter. */
 .ve-controls-guide[hidden], .ve-controls-invitation[hidden] { display: none !important; }
 .ve-controls-guide {
   position: fixed; inset: 0; z-index: var(--ve-layer-critical);
@@ -64,6 +66,36 @@
 }
 .ve-controls-invitation p { margin: 0 0 8px; overflow-wrap: anywhere; }
 .ve-controls-invitation > div { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* The startup mode choice uses visual-viewport coordinates supplied by ui/auto-mode-confirmation.mjs. */
+.ve-auto-mode-confirmation-backdrop {
+  position: fixed; inset: 0; z-index: var(--ve-layer-critical); display: grid; place-items: center;
+  box-sizing: border-box; padding: 12px; background: rgb(7 5 6 / 0.76);
+  color: #fff7e8; font: 400 16px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+.ve-auto-mode-confirmation-backdrop:has(> dialog:modal) { background: transparent; pointer-events: none; }
+.ve-auto-mode-confirmation {
+  position: fixed !important; inset: auto !important; left: calc(var(--ve-auto-dialog-left, 0px) + var(--ve-auto-dialog-width, 100vw) / 2) !important;
+  top: var(--ve-auto-dialog-top, 12px) !important; transform: translateX(-50%) !important;
+  box-sizing: border-box !important; width: min(330px, calc(var(--ve-auto-dialog-width, 100vw) - 24px)) !important;
+  max-width: calc(var(--ve-auto-dialog-width, 100vw) - 24px) !important; max-height: calc(var(--ve-auto-dialog-height, 100dvh) - 24px) !important;
+  margin: 0 !important; padding: 20px !important; overflow: auto !important; overscroll-behavior: contain;
+  border: 1px solid #514245 !important; border-radius: 16px !important; background: #211d1d !important; color: #fff7e8 !important;
+  box-shadow: 0 22px 58px rgb(0 0 0 / 0.55) !important; font: inherit !important; pointer-events: auto;
+}
+.ve-auto-mode-confirmation::backdrop { background: rgb(7 5 6 / 0.76); }
+.ve-auto-mode-confirmation > h2 { color: inherit; margin: 0 0 8px; font-size: 1.2rem; line-height: 1.3; overflow-wrap: anywhere; }
+.ve-auto-mode-confirmation > p { margin: 0 0 16px; overflow-wrap: anywhere; }
+.ve-auto-mode-confirmation-label { display: grid; gap: 7px; margin-block: 14px; font-weight: 600; }
+.ve-auto-mode-confirmation-select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 46px; padding: 8px 10px; border: 1px solid #685b5d; border-radius: 8px; background: #151313; color: #fff7e8; font: inherit; }
+.ve-auto-mode-confirmation-actions { display: flex; justify-content: end; margin-top: 18px; }
+.ve-auto-mode-confirmation-confirm { width: 100%; min-width: 0; min-height: 46px; padding: 9px 18px; border: 0; border-radius: 8px; background: #cf2347; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.ve-auto-mode-confirmation-confirm:disabled { opacity: 0.7; cursor: progress; }
+.ve-auto-mode-confirmation-error { padding: 10px; border-inline-start: 3px solid #cf2347; background: #352326; color: #ffd9df; }
+.ve-auto-mode-confirmation :is(button, select):focus-visible { outline: 3px solid #f3c45f; outline-offset: 2px; }
+.ve-auto-mode-confirmation-backdrop:has(> dialog[open]:not(:modal)) { display: block; }
+.ve-auto-mode-confirmation-backdrop:has(> dialog[open]:not(:modal)) > dialog { z-index: var(--ve-layer-critical); }
 #settings-config section[data-category="ve-mobile"] .ve-native-settings-group { margin-block: 10px; padding: 10px; border: 1px solid var(--color-border-light-primary, #777); border-radius: 8px; }
 #settings-config section[data-category="ve-mobile"] .ve-native-settings-group > summary { cursor: pointer; font-weight: bold; overflow-wrap: anywhere; }
 #settings-config section[data-category="ve-mobile"] .ve-native-settings-group > p { font-size: 0.85em; }
@@ -577,6 +609,7 @@ body.ve-mobile-booting {
 .ve-death-save-pips .is-failure { color: #ff7777; }
 .ve-death-save-pips i.is-filled { background: currentColor; box-shadow: 0 0 5px currentColor; }
 
+/* Combat presentation uses plain gateway records; native turn/initiative actions remain behind named commands. */
 .ve-combat-screen { width: min(100%, 740px); min-height: 100%; margin: 0 auto; padding: 14px 14px calc(86px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
 .ve-combat-heading { min-height: 74px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 14px; border: 1px solid var(--ve-border); border-radius: 14px; background: var(--ve-surface); box-shadow: var(--ve-shadow); }
 .ve-combat-heading h2, .ve-combat-heading p { margin: 0; }
@@ -2147,6 +2180,7 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
   pointer-events: none !important;
 }
 
+/* Persistent app frame: the current route owns scrolling inside the frame rather than the browser page. */
 .ve-mobile-app {
   --ve-bg: var(--ve-ink);
   --ve-surface: var(--ve-panel);
@@ -2376,6 +2410,7 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
   overscroll-behavior-y: none;
 }
 
+/* Scene panes keep normal container sizing for their live map geometry. */
 .ve-mobile-app[data-route="scene"] .ve-viewport,
 .ve-mobile-app[data-split-screen="true"] .ve-split-scene-viewport .ve-scene-screen {
   container-type: normal;
@@ -2398,6 +2433,7 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 
 .ve-nav-routes { display: contents; }
 
+/* Primary navigation keeps touch-sized controls available while route contents scroll independently. */
 .ve-bottom-nav {
   position: relative;
   z-index: var(--ve-layer-navigation);
@@ -8334,6 +8370,7 @@ details.ve-action-session-compact-result {
   align-self: start;
 }
 
+/* Chat retains its native handlers while VE owns the surrounding mobile layout. */
 .ve-mobile-app[data-route="chat"] .ve-viewport > .ve-native-chat-screen {
   width: 100%;
   max-width: 860px;
@@ -9282,7 +9319,8 @@ details.ve-action-session-compact-result {
 
 .ve-pwa-name-dialog input {
   box-sizing: border-box;
-  width: 100%;
+  /* Show a short icon label without limiting longer, horizontally editable names. */
+  width: min(100%, calc(16ch + 22px));
   min-width: 0;
   min-height: 44px;
   padding: 8px 10px;
@@ -12130,7 +12168,7 @@ body[data-ve-memory-profile="maximum"] .ve-mobile-app .ve-bottom-nav .ve-main-na
 }
 .ve-mobile-app[data-form-factor] .ve-compact-header .ve-character-inspiration .ve-inspiration-emblem::after { content: none; }
 .ve-mobile-app[data-theme="light"][data-form-factor] .ve-compact-header .ve-character-inspiration .ve-inspiration-emblem {
-  background-image: url("./character-badges/badge_inspiration_single_light.webp");
+  background-image: url("./character-badges/badge_inspiration_single_dark.webp");
 }
 .ve-mobile-app[data-form-factor] .ve-compact-header .ve-character-inspiration.is-active .ve-inspiration-emblem { filter: drop-shadow(0 0 0.325rem var(--ve-character-accent)); }
 /* Tidy's single-badge diamond and accent glow, scoped to VE's native command. */
@@ -12389,14 +12427,13 @@ SOFTWARE.
 .ve-xp-editor .ve-hp-editor-summary { grid-template-columns: minmax(0, 1fr); }
 .ve-xp-editor .ve-hp-editor-amount-label > input { width: 100%; min-height: 52px; text-align: center; }
 
-/* Inactive Inspiration keeps the dark badge in both themes; only the active
-   light-theme state uses the pale supplied badge. */
+/* Both themes use the dark Inspiration badge; the accent glow shows its active state. */
 .ve-mobile-app[data-theme="light"][data-form-factor] .ve-compact-header .ve-character-inspiration:not(.is-active) .ve-inspiration-emblem {
   background-image: url("./character-badges/badge_inspiration_single_dark.webp");
 }
 
 .ve-mobile-app[data-theme="light"][data-form-factor] .ve-compact-header .ve-character-inspiration.is-active .ve-inspiration-emblem {
-  background-image: url("./character-badges/badge_inspiration_single_light.webp");
+  background-image: url("./character-badges/badge_inspiration_single_dark.webp");
 }
 
 /* Every row artwork box is a square viewport. Preserve the complete source

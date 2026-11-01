@@ -10,6 +10,7 @@ export function createElapsedWorkerClock(textElement, {
   let canvas = null;
   let startedAt = null;
 
+  // Release the worker/canvas together and reveal the original DOM timer again.
   const stop = () => {
     worker?.terminate();
     worker = null;
@@ -18,6 +19,7 @@ export function createElapsedWorkerClock(textElement, {
     startedAt = null;
     textElement.classList?.remove("ve-elapsed-worker-text");
   };
+  // Reuse the worker for a new start time or create an offscreen surface when the browser supports it.
   const start = (value) => {
     const startTime = Number(value);
     if (!Number.isFinite(startTime) || value === null || value === undefined) return;
@@ -55,10 +57,12 @@ export function createElapsedWorkerClock(textElement, {
       stop(); // The DOM clock remains a functioning fallback.
     }
   };
+  // Keep the worker's retained label in sync with localization updates.
   const setElapsedLabel = value => {
     elapsedLabel = String(value || "Elapsed");
     worker?.postMessage({ type: "label", elapsedLabel });
   };
+  // Update numeric formatting inside the worker without restarting the loading clock.
   const setLocale = value => { locale = value || "en"; worker?.postMessage({ type: "locale", locale }); };
   return Object.freeze({ start, stop, setElapsedLabel, setLocale });
 }

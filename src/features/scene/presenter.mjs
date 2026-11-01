@@ -12,7 +12,8 @@ import { bindLongPress } from "../../ui/long-press.mjs";
 import { createSceneChoiceTransition } from "../../ui/scene-choice-transition.mjs";
 import { fitJoystickPortrait, joystickPortraitStyle } from "../../ui/token-portrait.mjs";
 
-
+// Render Scene navigation and controls from plain Scene/token records and named commands.
+// Pointer handlers leave gameplay changes to the command boundary and own cleanup in scope.
 export function renderScene({
   state,
   commands,
@@ -137,6 +138,7 @@ export function renderScene({
       hidden: !hasTargets
     },
     on: {
+      // Clear native targets through the command boundary and show a local error if that request is rejected.
       click: () => {
         void commands.clearSceneTargets().then(() => {
           globalThis.navigator?.vibrate?.(5);
@@ -267,6 +269,7 @@ export function renderScene({
     scope,
     directions: controlGeometry.directions,
     repeatDelayMs: preferences.movementRepeatDelayMs,
+    // Show movement-history preview only for the exact selected token during the joystick touch lifetime.
     onTouchChange: (active) => {
       try {
         commands.previewSceneMovementHistory({
@@ -279,6 +282,7 @@ export function renderScene({
         if (active) liveStatus.textContent = movementMessage(error, commands);
       }
     },
+    // Forward one joystick step with exact token/Scene identity and the live visible viewport.
     onStep: async (dx, dy, movementAngle) => {
       try {
         const result = await commands.stepSceneToken({
@@ -302,6 +306,7 @@ export function renderScene({
     control: releaseControl,
     scope,
     isJoystickActive: () => joystick?.isActive() ?? false,
+    // Release the selected native token once and unlock the control only if it is still connected afterwards.
     onRelease: () => {
       releaseControl.disabled = true;
       releaseControl.setAttribute("aria-busy", "true");
@@ -322,6 +327,7 @@ export function renderScene({
 }
 
 /** Build the Scene Directory-eligible folder tree from authoritative folder paths. */
+// Build a sorted Scene/folder tree while preserving each folder's path structure.
 export function buildSceneNavigationTree(scenes = []) {
   const root = sceneBranch(null, scenes[0]?.rootSorting, scenes[0]?.sortingLocale);
   for (const scene of scenes) {
@@ -336,33 +342,40 @@ export function buildSceneNavigationTree(scenes = []) {
   return root;
 }
 
+// Create an internal Scene directory node with its own sort preference.
 function sceneBranch(folder, sorting = "a", locale = "") {
   return { folder, sorting: sorting === "m" ? "m" : "a", locale: String(locale || "") || undefined, folders: new Map(), scenes: [] };
 }
 
+// Sort folders and Scenes recursively according to each branch's setting.
 function sortSceneBranch(branch) {
   branch.folders = new Map(Array.from(branch.folders.entries()).sort(([, left], [, right]) => compareFolderEntries(left.folder, right.folder, branch.sorting, branch.locale)));
   branch.scenes.sort((left, right) => compareSceneDirectoryEntries(left, right, branch.sorting, branch.locale));
   for (const child of branch.folders.values()) sortSceneBranch(child);
 }
 
+// Compare folders with alphabetical or source order, then use labels as a tie-breaker.
 function compareFolderEntries(left, right, sorting, locale) {
   if (sorting === "a") return String(left?.name ?? "").localeCompare(String(right?.name ?? ""), locale);
   return Number(left?.sort ?? 0) - Number(right?.sort ?? 0);
 }
 
+// Compare a folder and Scene together using each record's saved order.
 function compareSceneDirectoryEntries(left, right, sorting, locale) {
   if (sorting === "a") return String(left?.name ?? "").localeCompare(String(right?.name ?? ""), locale);
   return Number(left?.sort ?? 0) - Number(right?.sort ?? 0);
 }
 
+// Count Scenes below a folder, including its nested directories.
 export function sceneFolderCount(branch) {
   return branch.scenes.length + Array.from(branch.folders.values()).reduce((total, child) => total + sceneFolderCount(child), 0);
 }
 
 /** Render the Scene chooser only while it is open; its owner disposes the full subtree on close. */
+// Render the Scene chooser with lazy folders, gateway actions, and cancellable transitions.
 export function renderSceneChooser({ scenes = [], commands, scope, expandedFolderIds = new Set(), expandedLevelSceneIds = new Set(), host = "modal", sceneChoiceTransition = createSceneChoiceTransition() }) {
   const pane = host === "pane";
+  // Return control to the Scene route through its named chooser command.
   const close = () => commands.closeSceneChooser();
   const headingId = pane ? "ve-scene-picker-title" : "ve-scene-chooser-title";
   const current = scenes.find((scene) => scene.viewed) ?? null;
@@ -373,6 +386,7 @@ export function renderSceneChooser({ scenes = [], commands, scope, expandedFolde
   let activeMenuCleanup = null;
   let contextRequest = 0;
   for (const id of expandedLevelSceneIds) if (!scenes.some(scene => scene.id === id && scene.levels?.length)) expandedLevelSceneIds.delete(id);
+  // Fetch current context actions before creating the anchored Scene menu.
   const openContext = (anchor, event, scene, ownerScope = scope) => {
     event?.preventDefault?.();
     event?.stopPropagation?.();
@@ -451,6 +465,7 @@ export function renderSceneChooser({ scenes = [], commands, scope, expandedFolde
   return layer;
 }
 
+// Run layout-dependent chooser work after paint and cancel it with the owner.
 function afterSceneChooserLayout(scope, callback) {
   let cancelled = false;
   if (typeof globalThis.requestAnimationFrame === "function") {
@@ -469,6 +484,7 @@ function afterSceneChooserLayout(scope, callback) {
   });
 }
 
+// Render one tree level while leaving collapsed folder contents unmounted.
 function renderSceneNavigationBranch(branch, context, scope) {
   return [
     ...Array.from(branch.folders.values()).map((child) => renderSceneFolder(child, context, scope)),
@@ -476,6 +492,7 @@ function renderSceneNavigationBranch(branch, context, scope) {
   ];
 }
 
+// Render a folder disclosure and dispose its child rows when it collapses.
 function renderSceneFolder(branch, context, scope) {
   const commands = context.commands;
   const folderId = String(branch.folder.id);
@@ -493,12 +510,14 @@ function renderSceneFolder(branch, context, scope) {
   details.open = initiallyOpen;
   let body = null;
   let bodyScope = null;
+  // Release nested row listeners and nodes when this folder is hidden.
   const disposeBody = () => {
     bodyScope?.dispose();
     bodyScope = null;
     body?.remove?.();
     body = null;
   };
+  // Populate this folder only while open and while its owner remains active.
   const renderBody = () => {
     if (body || folderScope.disposed) return;
     bodyScope = folderScope.child("body");
@@ -519,6 +538,7 @@ function renderSceneFolder(branch, context, scope) {
   return details;
 }
 
+// Bind a Scene or level choice and its supported actions.
 function renderSceneChoice(scene, context, scope) {
   const commands = context.commands;
   const view = node("button", {
@@ -565,9 +585,11 @@ function renderSceneChoice(scene, context, scope) {
     const levels = node("div", { className: "ve-scene-level-list", attrs: { id, role: "group",
       "aria-label": localizedText(commands.localize, "VEMOBILE.Scene.Levels.List", "Levels in {name}", { name: scene.name }) } });
     let levelsScope = null;
+    // Describe whether this Scene's level list is currently expanded in the user's language.
     const label = expanded => localizedText(commands.localize, expanded ? "VEMOBILE.Scene.Levels.Hide" : "VEMOBILE.Scene.Levels.Show",
       expanded ? "Hide levels for {name}" : "Show levels for {name}", { name: scene.name });
     const expander = node("button", { className: "ve-scene-level-toggle", attrs: { type: "button", "aria-controls": id }, children: [icon("fa-chevron-right")] });
+    // Replace the level-list owner when expanded state changes, keeping the control's accessible state in sync.
     const show = expanded => {
       expander.setAttribute("aria-expanded", String(expanded));
       expander.setAttribute("aria-label", label(expanded));
@@ -616,6 +638,7 @@ function renderSceneChoice(scene, context, scope) {
   return row;
 }
 
+// Render gateway-provided Scene actions and own all dismissal listeners.
 function renderSceneContextMenu(host, anchor, record, commands, scope) {
   if (!host) return () => {};
   const menuScope = scope.child(`scene-context:${record.id}`);
@@ -623,6 +646,7 @@ function renderSceneContextMenu(host, anchor, record, commands, scope) {
   const previousExpanded = anchor.getAttribute?.("aria-expanded");
   anchor.setAttribute?.("aria-expanded", "true");
   let closed = false;
+  // Dispose menu resources and optionally close the corresponding gateway menu.
   const close = (closeGateway = true, restoreFocus = true) => {
     if (closed) return;
     closed = true;
@@ -635,7 +659,7 @@ function renderSceneContextMenu(host, anchor, record, commands, scope) {
     const button = node("button", {
       className: "ve-scene-context-option",
       attrs: { type: "button", role: "menuitem" },
-      on: { click: () => {
+      on: { /* Lock the menu while its current option executes, then close through the menu's owned cleanup path. */ click: () => {
         for (const item of menu.querySelectorAll("button")) item.disabled = true;
         void Promise.resolve(commands.selectSceneContextOption?.({ menuId: record.id, optionId: option.id }))
           .catch((error) => commands.reportSceneNavigationError?.(error))
@@ -647,6 +671,7 @@ function renderSceneContextMenu(host, anchor, record, commands, scope) {
     menu.append(button);
   }
   host.append(menu);
+  // Reposition the menu on scroll/resize while its menu scope remains active.
   const position = () => { if (!menuScope.disposed) positionSceneContextMenu(menu, host, anchor, record); };
   position();
   menuScope.listen(globalThis.window, "resize", position, { passive: true });
@@ -680,6 +705,7 @@ function renderSceneContextMenu(host, anchor, record, commands, scope) {
   return close;
 }
 
+// Keep the context menu inside its host while aligned to its invoking row.
 function positionSceneContextMenu(menu, host, anchor, record) {
   const hostBounds = host.getBoundingClientRect?.() ?? { left: 0, top: 0, right: globalThis.innerWidth ?? 360, bottom: globalThis.innerHeight ?? 640 };
   const viewport = globalThis.visualViewport;
@@ -698,6 +724,7 @@ function positionSceneContextMenu(menu, host, anchor, record) {
   menu.style.top = `${Math.max(bounds.top + margin, Math.min(y, bounds.bottom - rect.height - margin)) - hostBounds.top}px`;
 }
 
+// Resolve the Scene's visible label, including level-specific fallback text.
 function sceneChoiceLabel(scene, commands) {
   const viewing = scene.viewed ? localizedText(commands.localize, "VEMOBILE.Scene.CurrentlyViewed", "Currently viewed") : "";
   const active = scene.active ? localizedText(commands.localize, "VEMOBILE.Scene.WorldActive", "World active") : "";
@@ -705,6 +732,7 @@ function sceneChoiceLabel(scene, commands) {
   return [scene.name, viewing, active, risk].filter(Boolean).join(", ");
 }
 
+// Render a compact risk marker for a Scene record that carries risk data.
 function sceneRiskBadge(risk, commands) {
   if (!materiallyHighRisk(risk)) return null;
   const classification = String(risk.risk ?? risk.classification).toLowerCase();
@@ -717,6 +745,7 @@ function sceneRiskBadge(risk, commands) {
   });
 }
 
+// Build localized explanatory text from the prepared Scene risk record.
 function sceneRiskDescription(risk, commands) {
   if (!materiallyHighRisk(risk)) return "";
   const veryHigh = String(risk.risk ?? risk.classification) === "very-high";
@@ -725,16 +754,19 @@ function sceneRiskDescription(risk, commands) {
   return recommendation ? (veryHigh ? localizedText(commands.localize, "VEMOBILE.Scene.VeryHighRiskRecommended", "Very high risk · Recommended: {profile}", { profile }) : localizedText(commands.localize, "VEMOBILE.Scene.HighRiskRecommended", "High risk · Recommended: {profile}", { profile })) : (veryHigh ? localizedText(commands.localize, "VEMOBILE.Scene.VeryHighRisk", "Very high risk") : localizedText(commands.localize, "VEMOBILE.Scene.HighRisk", "High risk"));
 }
 
+// Select the recommendation intended for display beside the Scene choice.
 function visibleSceneRiskRecommendation(risk) {
   if (risk?.profileRecommendationApplicable === false) return "";
   return String(risk?.recommendedMinimumProfile ?? "");
 }
 
+// Identify risk records that should receive the stronger visual treatment.
 function materiallyHighRisk(risk) {
   return ["high", "very-high"].includes(String(risk?.risk ?? risk?.classification ?? "").toLowerCase());
 }
 
 /** Patch target truth without replacing the Scene surface or its gesture owners. */
+// Update target-count and placement-lock labels without rebuilding the Scene.
 export function updateSceneTargetPresentation(surface, targetCount, placementLocked = false, localize = null, locale = "en") {
   const button = surface?.querySelector?.(".ve-scene-clear-targets");
   if (!button) return false;
@@ -747,20 +779,24 @@ export function updateSceneTargetPresentation(surface, targetCount, placementLoc
   return true;
 }
 
+// Decide whether this Scene view should include its initiative rail.
 export function shouldRenderCombatCarousel(combat, preferences = {}) {
   return Boolean(combat && preferences.combatCarousel !== false);
 }
 
+// Hide the Quickbar while token placement owns Scene interaction.
 export function shouldRenderQuickbar(preferences, placement) {
   return Boolean(preferences?.quickbarEnabled && !placement);
 }
 
 /** Full-screen Scene owns the result surface after native template placement,
  * regardless of whether the action began in Character or the Quickbar. */
+// Keep Scene action sessions only in layouts that can host their controls.
 export function shouldRenderSceneActionSession(state, splitViewport = false) {
   return Boolean(state?.actionSession && !actionResultsDeferred(state) && !splitViewport);
 }
 
+// Render native placement guidance and bind its deliberate Scene pointer choice.
 function renderNativeTokenPlacement({ placement, commands, scope }) {
   const remaining = Math.max(0, placement.count - placement.step);
   const label = placement.phase === "preparing" ? localizedText(commands.localize, "VEMOBILE.Interface.Presenter.PreparingTokenPlacement", "Preparing token placement…")
@@ -783,10 +819,13 @@ function renderNativeTokenPlacement({ placement, commands, scope }) {
   });
 }
 
+// Convert a valid Scene press into a placement request, excluding VE controls.
 export function bindNativeTokenPlacementPointer(surface, scope, commands) {
   const pointers = new Set();
   let active = null;
+  // Keep native token positioning out of VE's overlaid map/template controls.
   const eligible = (event) => !event.target?.closest?.("[data-ve-scene-control], [data-ve-template-control]");
+  // Forward only pointer coordinates still inside the placement surface to the native token preview.
   const position = (event) => {
     const bounds = surface.getBoundingClientRect();
     if (event.clientX < bounds.left || event.clientX > bounds.right
@@ -806,6 +845,7 @@ export function bindNativeTokenPlacementPointer(surface, scope, commands) {
       position(event);
     }
   }, { capture: true });
+  // Complete only the pointer that began on the eligible Scene surface.
   const finish = (event) => {
     if (event.type === "pointerup" && active === event.pointerId && pointers.size === 1) position(event);
     pointers.delete(event.pointerId);
@@ -815,7 +855,9 @@ export function bindNativeTokenPlacementPointer(surface, scope, commands) {
   scope.listen(view, "pointercancel", finish, { capture: true });
 }
 
+// Render an Actor token preview and its explicit place/cancel commands.
 function renderActorTokenPlacement({ placement, commands, scope, liveStatus }) {
+  // Resolve placement labels from the current feature localizer.
   const localize = (key, fallback) => commands.localize?.(key, fallback) ?? fallback;
   const ghost = node("div", { className: "ve-actor-token-preview", attrs: { role: "img",
     hidden: true, "aria-label": localize("VEMOBILE.Scene.ActorToken.Preview", "Token placement preview") },
@@ -823,7 +865,7 @@ function renderActorTokenPlacement({ placement, commands, scope, liveStatus }) {
   const overlay = node("div", { className: "ve-actor-token-placement-overlay",
     attrs: { "data-ve-scene-control": true }, children: [ghost] });
   const place = node("button", { className: "ve-template-control is-place", attrs: { type: "button" },
-    on: { click: async () => {
+    on: { /* Prevent duplicate placement confirmation and retain a useful error if native token creation fails. */ click: async () => {
       if (place.disabled) return;
       place.disabled = true;
       try { await commands.placeActorToken(); }
@@ -837,6 +879,7 @@ function renderActorTokenPlacement({ placement, commands, scope, liveStatus }) {
     attrs: { role: "toolbar", "aria-label": localize("VEMOBILE.Scene.ActorToken.Toolbar", "Token placement") },
     children: [node("strong", { className: "ve-template-mode-label", text: localize("VEMOBILE.Scene.ActorToken.Adjust", "Move the token preview") }),
       node("div", { className: "ve-template-placement-controls", children: [cancel, place] })] });
+  // Map pointer coordinates through the current viewport geometry to Scene space.
   const draw = (clientPoint) => {
     if (!overlay.isConnected) return false;
     const geometry = commands.actorTokenPreviewAt(clientPoint);
@@ -855,6 +898,7 @@ function renderActorTokenPlacement({ placement, commands, scope, liveStatus }) {
     if (!draw()) draw({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
   }, 0);
   let frame = 0;
+  // Recheck placement state and host geometry before updating the preview.
   const refresh = () => {
     if (scope.disposed || !overlay.isConnected) return;
     draw();
@@ -865,8 +909,10 @@ function renderActorTokenPlacement({ placement, commands, scope, liveStatus }) {
   return { overlay, hud };
 }
 
+// Bind pointer capture to preview dragging and release it on every cancel path.
 export function bindActorTokenPreviewGesture(overlay, scope, draw) {
   let pointerId = null;
+  // Give up the placement overlay's captured pointer when the gesture finishes or its owner is removed.
   const release = () => {
     if (pointerId === null) return;
     if (overlay.hasPointerCapture?.(pointerId)) overlay.releasePointerCapture(pointerId);
@@ -901,6 +947,7 @@ export function bindActorTokenPreviewGesture(overlay, scope, draw) {
   scope.own(release);
 }
 
+// Render template handles and explicit move, resize, confirm, and cancel actions.
 function renderTemplatePlacement({ placement, commands, scope, liveStatus }) {
   const labels = placement.labels ?? {};
   const origin = node("button", {
@@ -933,6 +980,7 @@ function renderTemplatePlacement({ placement, commands, scope, liveStatus }) {
   const controls = [];
   let pending = false;
   let hud = null;
+  // Serialize template actions and update status only while this overlay is current.
   const run = async (action) => {
     if (pending) return;
     pending = true;
@@ -947,6 +995,7 @@ function renderTemplatePlacement({ placement, commands, scope, liveStatus }) {
       for (const button of controls) button.disabled = placement.phase !== "active" && button.dataset.action !== "cancel";
     }
   };
+  // Create deliberate controls while preserving keyboard activation.
   const control = ({ className = "", label, action, iconName, text, disabled = false }) => {
     const button = node("button", {
       className: `ve-template-control ${className}`,
@@ -986,6 +1035,7 @@ function renderTemplatePlacement({ placement, commands, scope, liveStatus }) {
   return { overlay, hud, origin, direction };
 }
 
+// Reject taps that became drags while keeping keyboard activation available.
 function bindDeliberateTemplateControl(button, scope, activate, movementThreshold = 10) {
   const view = button.ownerDocument?.defaultView ?? globalThis.window;
   let pointer = null;
@@ -999,6 +1049,7 @@ function bindDeliberateTemplateControl(button, scope, activate, movementThreshol
     if (!pointer || pointer.id !== event.pointerId) return;
     if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > movementThreshold) pointer.moved = true;
   }, { passive: true });
+  // Remember movement distance so the browser's follow-up click cannot repeat a drag action.
   const finish = (event, cancelled = false) => {
     if (!pointer || pointer.id !== event.pointerId) return;
     suppressPointerClick = cancelled || pointer.moved;
@@ -1019,6 +1070,7 @@ function bindDeliberateTemplateControl(button, scope, activate, movementThreshol
   });
 }
 
+// Sync template handles and accessible labels from the latest template snapshot.
 function updateTemplateOverlay(surface, templateUi, overlay) {
   if (!templateUi) return;
   const rect = surface.getBoundingClientRect();
@@ -1026,6 +1078,7 @@ function updateTemplateOverlay(surface, templateUi, overlay) {
   positionTemplateHandle(templateUi.direction, overlay?.direction, rect);
 }
 
+// Position a template handle relative to the measured Scene surface.
 function positionTemplateHandle(element, point, surfaceRect) {
   if (!element) return;
   element.hidden = !point;
@@ -1033,6 +1086,7 @@ function positionTemplateHandle(element, point, surfaceRect) {
   element.style.transform = `translate3d(${point.x - surfaceRect.left}px, ${point.y - surfaceRect.top}px, 0) translate(-50%, -50%)`;
 }
 
+// Return the map viewport only when Scene presentation is enabled.
 function visibleSceneViewport(surface, enabled) {
   if (!enabled) return null;
   const rect = surface.getBoundingClientRect();
@@ -1043,17 +1097,21 @@ function visibleSceneViewport(surface, enabled) {
 /** Equal annular sectors: the painted face and browser hit region are identical.
  * Pixel radii keep a 3px gap around the 52px portrait in either hex footprint.
  * The hex pad's existing outer clip supplies its native six-sided boundary. */
+// Compute the clip path for one direction segment in the radial movement pad.
 function dpadSegmentStyle(shape, count, angle) {
   const width = shape === "hex-rows" ? 132 * Math.sqrt(3) / 2 : 132;
   const height = shape === "hex-columns" ? 132 * Math.sqrt(3) / 2 : 132;
   const half = Math.PI / count - 0.006;
+  // Convert a radial pad coordinate into percentage geometry for its current width/height.
   const point = (radius, theta) => `${50 + 100 * radius * Math.cos(theta) / width}% ${50 + 100 * radius * Math.sin(theta) / height}%`;
+  // Sample the inner/outer curved edge used to clip one directional pad segment.
   const arc = (radius, reverse = false) => Array.from({ length: 13 }, (_, i) =>
     point(radius, angle + (reverse ? 1 : -1) * half * (1 - i / 6)));
   const polygon = [...arc(shape === "round" ? 66 : 94), ...arc(29, true)].join(",");
   return `--ve-direction-angle:${angle}rad;--ve-direction-x:${50 + 100 * 47 * Math.cos(angle) / width}%;--ve-direction-y:${50 + 100 * 47 * Math.sin(angle) / height}%;clip-path:polygon(${polygon})`;
 }
 
+// Resolve movement failures to actionable localized status copy.
 function movementMessage(error, commands) {
   const messages = {
     PAUSED: localizedText(commands.localize, "VEMOBILE.Scene.Movement.PAUSED", "The game is paused"),
@@ -1066,6 +1124,7 @@ function movementMessage(error, commands) {
 }
 
 /** Distinguish intentional map disablement from expected loading and failure. */
+// Choose accessible status copy for the current Scene presentation state.
 export function sceneStatusCopy(scene, localize = (_key, fallback) => fallback) {
   const prefix = "VEMOBILE.Controls.Status.";
   if (scene?.canvasDisabled) return { title: localize(prefix + "MapOff", "Live map disabled"), hint: localize(prefix + "MapOffHint", "The game canvas is disabled in this browser. Change it in Settings; Foundry will ask you to reload.") };

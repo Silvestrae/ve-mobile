@@ -1,11 +1,14 @@
+// Plain layout rules shared by the Quickbar and native hotbar.
 export const ACTION_BAR_PAGE_SIZE = 10;
 export const ACTION_BAR_PAGE_COUNT = 5;
 export const ACTION_BAR_SLOT_COUNT = ACTION_BAR_PAGE_SIZE * ACTION_BAR_PAGE_COUNT;
 
+// Keep saved or requested pages within the five-page bar; invalid values open page one.
 export function actionBarPage(value) {
   return Number.isInteger(value) && value >= 1 && value <= ACTION_BAR_PAGE_COUNT ? value : 1;
 }
 
+// Move one page in either direction, wrapping at the ends.
 export function cycleActionBarPage(page, direction) {
   return ((actionBarPage(page) - 1 + Math.sign(direction) + ACTION_BAR_PAGE_COUNT) % ACTION_BAR_PAGE_COUNT) + 1;
 }

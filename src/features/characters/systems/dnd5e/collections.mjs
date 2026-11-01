@@ -22,6 +22,7 @@ const FAVOURITE_INVENTORY_CATEGORIES = Object.freeze([
 ]);
 const FAVOURITE_FEATURE_TYPES = new Set(["feat", "class", "subclass", "background", "race", "species", "facility"]);
 
+// Build a nested, stably sorted inventory tree from plain item records.
 export function groupInventory(items = [], sortMode = "manual", localize = null) {
   const sourceOrder = new Map(items.map((item, index) => [item.id, index]));
   const byId = new Map(items.map((item) => [item.id, item]));
@@ -37,6 +38,7 @@ export function groupInventory(items = [], sortMode = "manual", localize = null)
 
   const included = new Set();
   const grouped = new Map();
+  // Add an item to its top-level group, with a fallback for missing containers.
   const addRoot = (item) => {
     const category = categoryForItem(item);
     grouped.set(category[0], [...(grouped.get(category[0]) ?? []), inventoryNode(item, children, included, sourceOrder, sortMode, new Set())]);
@@ -52,6 +54,7 @@ export function groupInventory(items = [], sortMode = "manual", localize = null)
   })).filter((group) => group.nodes.length);
 }
 
+// Group spells by their casting entry and rank for sheet presentation.
 export function groupSpells(spells = [], sortMode = "manual", localize = null) {
   const sections = new Map();
   const sourceOrder = new Map(spells.map((spell, index) => [spell.id, index]));
@@ -76,16 +79,19 @@ export function groupSpells(spells = [], sortMode = "manual", localize = null) {
     .map((section) => ({ ...section, spells: [...section.spells].sort((first, second) => compareItems(first, second, sourceOrder, sortMode)) }));
 }
 
+// Identify spells known by the Actor but not assigned to a prepared slot.
 export function isSpellUnprepared(spell) {
   return Boolean(spell?.preparationEligible && Number(spell.preparationState) === 0);
 }
 
 /** D&D5e spell availability: only preparation-eligible, currently
  * unprepared spells are excluded. Always-on methods and granted spells stay. */
+// Apply prepared-only filtering without changing the source spell records.
 export function filterSpellsByAvailability(spells = [], preparedOnly = false) {
   return preparedOnly ? spells.filter((spell) => !isSpellUnprepared(spell)) : spells;
 }
 
+// Group character features into localized sections with stable sorting.
 export function groupFeatures(features = [], sortMode = "manual", localize = null) {
   const byId = new Map(features.map((feature) => [feature.id, feature]));
   const sections = new Map();
@@ -113,6 +119,7 @@ export function groupFeatures(features = [], sortMode = "manual", localize = nul
 }
 
 /** Native NPC sheet groups by the first Activity activation, or passive. */
+// Group NPC features by their own presentation categories.
 export function groupNpcFeatures(features = [], sortMode = "manual", localize = null) {
   const preferred = ["passive", "action", "bonus", "reaction", "legendary", "mythic", "lair"];
   const sections = new Map();
@@ -127,17 +134,19 @@ export function groupNpcFeatures(features = [], sortMode = "manual", localize = 
     ? (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }) || compareManual(a, b)
     : compareManual;
   return [...sections.values()]
-    .sort((a, b) => {
-      const aKey = a.key.slice(4);
-      const bKey = b.key.slice(4);
-      const ai = preferred.indexOf(aKey);
-      const bi = preferred.indexOf(bKey);
-      return (ai < 0 ? preferred.length : ai) - (bi < 0 ? preferred.length : bi) || a.label.localeCompare(b.label);
+    .sort((firstSection, secondSection) => {
+      const firstGroupKey = firstSection.key.slice(4);
+      const secondGroupKey = secondSection.key.slice(4);
+      const firstGroupOrder = preferred.indexOf(firstGroupKey);
+      const secondGroupOrder = preferred.indexOf(secondGroupKey);
+      return (firstGroupOrder < 0 ? preferred.length : firstGroupOrder) - (secondGroupOrder < 0 ? preferred.length : secondGroupOrder) || firstSection.label.localeCompare(secondSection.label);
     })
     .map((section) => ({ ...section, features: section.features.sort(compare) }));
 }
 
+// Combine favorite items and spell resources into sorted display sections.
 export function groupFavourites(items = [], sortMode = "manual", resources = [], localize = null) {
+  // Keep manually ranked favorites stable when rank values tie.
   const compareManualFavourite = (first, second) => (Number(first.favouriteSort) || 0) - (Number(second.favouriteSort) || 0)
     || (Number(first.sort) || 0) - (Number(second.sort) || 0)
     || first.name.localeCompare(second.name, undefined, { numeric: true, sensitivity: "base" });
@@ -165,14 +174,17 @@ export function groupFavourites(items = [], sortMode = "manual", resources = [],
   return sections.filter((section) => section.items.length);
 }
 
+// Create one favorite section while preserving its optional backing resource.
 function favouriteSection(key, label, icon, items, compare, resource = null) {
   return Object.freeze({ key, label, icon, resource, items: Object.freeze([...items].sort(compare)) });
 }
 
+// Resolve a collection heading with the provided localizer and fallback copy.
 function collectionText(localize, key, fallback, data) {
   return localizedText(localize, `VEMOBILE.Character.Collections.${key}`, fallback, data);
 }
 
+// Pair favorite spells with the exact resources available to cast them.
 function favouriteSpellSections(spells, resources, compare, localize) {
   const groups = new Map();
   const resourceById = new Map(resources.filter(exactSpellSlotResource).map((resource) => [resource.id, resource]));
@@ -212,25 +224,31 @@ function favouriteSpellSections(spells, resources, compare, localize) {
     .map((section) => favouriteSection(section.key, section.label, section.icon, section.items, compare, section.resource));
 }
 
+// Keep cantrips first, then order spell sections by rank and their stable title.
 function compareFavouriteSpellSections(first, second) {
+  // Assign cantrips the leading rank, followed by increasing spell ranks.
   const rank = (section) => section.key === "spells:cantrips" ? 0
     : section.key.startsWith("spells:level:") ? Number(section.key.split(":").at(-1))
       : section.key === "spells:pact" ? 20 : 30;
   return rank(first) - rank(second) || first.label.localeCompare(second.label, undefined, { numeric: true, sensitivity: "base" });
 }
 
+// Accept spell-slot resources with a supported identifier and current value.
 function exactSpellSlotResource(resource) {
   return resource?.kind === "spell-slot" && Number.isInteger(Number(resource.value))
     && Number.isInteger(Number(resource.max)) && Number(resource.max) > 0;
 }
 
+// Check whether the selected item activity still offers an actionable use.
 function hasUsableActivity(item) {
   return item?.usableActivity === true || (item?.usableActivity === undefined && Boolean(item?.activities?.length));
 }
 
+// Extract concise action and usage details for a favorite item card.
 export function favouriteItemMetadata(item, localize = null) {
   const activity = (item.activityId ? item.activities?.find((candidate) => candidate.id === item.activityId) : null)
     ?? item.activities?.[0] ?? null;
+  // Read a named detail from the selected activity without mutating its record.
   const detail = (label) => activity?.details?.find((entry) => (entry.key ?? entry.label) === label)?.value
     ?? item.details?.find((entry) => (entry.key ?? entry.label) === label)?.value
     ?? "";
@@ -251,6 +269,7 @@ export function favouriteItemMetadata(item, localize = null) {
   });
 }
 
+// Format action cost in the short form used by compact favorite rows.
 export function compactActionUse(value, localize = null) {
   const normalized = String(value ?? "").trim().toLowerCase().replace(/[._-]+/gu, " ");
   if (!normalized || /^(?:none|n\/a|special|varies?)$/u.test(normalized)) return "";
@@ -260,6 +279,7 @@ export function compactActionUse(value, localize = null) {
   return "";
 }
 
+// Ignore empty metadata values when choosing a concise item subtitle.
 function meaningfulMetadata(value) {
   const prepared = String(value ?? "").trim();
   if (!prepared || /^(?:-|—|none|n\/a|not applicable)$/iu.test(prepared)) return "";
@@ -269,11 +289,13 @@ function meaningfulMetadata(value) {
     .replace(/\s*\/\s*/gu, " / ");
 }
 
+// Format remaining and maximum uses for a favorite item summary.
 function formatUses(uses) {
   if (!uses || !(Number(uses.max) > 0)) return "";
   return `${Math.max(0, Number(uses.value) || 0)} / ${Math.max(0, Number(uses.max) || 0)}`;
 }
 
+// Choose the most useful concise subtitle from the current item snapshot.
 export function itemSubtitle(item) {
   if (item.type === "spell") {
     const preparation = item.preparationEligible || item.alwaysPrepared ? item.preparationStatus : "";
@@ -285,10 +307,12 @@ export function itemSubtitle(item) {
   return parts.join(" · ");
 }
 
+// Count every nested entry below an inventory node for its container summary.
 export function countInventoryContents(node) {
   return (node.children ?? []).reduce((count, child) => count + 1 + countInventoryContents(child), 0);
 }
 
+// Build one inventory tree node while preventing cycles in container ancestry.
 function inventoryNode(item, children, included, sourceOrder, sortMode, ancestors) {
   included.add(item.id);
   const nextAncestors = new Set(ancestors).add(item.id);
@@ -299,10 +323,12 @@ function inventoryNode(item, children, included, sourceOrder, sortMode, ancestor
   return { item, children: childNodes };
 }
 
+// Map an item's type and traits to the sheet's inventory category.
 function categoryForItem(item) {
   return INVENTORY_CATEGORIES.find(([, , types]) => types.has(item.type)) ?? INVENTORY_CATEGORIES.at(-1);
 }
 
+// Sort by the selected mode while keeping source order as the deterministic fallback.
 function compareItems(first, second, sourceOrder, sortMode = "manual") {
   if (sortMode === "alphabetical") {
     return first.name.localeCompare(second.name, undefined, { numeric: true, sensitivity: "base" })
@@ -312,6 +338,7 @@ function compareItems(first, second, sourceOrder, sortMode = "manual") {
     || (sourceOrder.get(first.id) ?? Number.MAX_SAFE_INTEGER) - (sourceOrder.get(second.id) ?? Number.MAX_SAFE_INTEGER);
 }
 
+// Order spell groups by rank in manual mode or by localized label alphabetically.
 function compareSpellSections(first, second, sortMode) {
   const groupOrder = Number(first.group === "other") - Number(second.group === "other");
   if (groupOrder) return groupOrder;
@@ -325,10 +352,12 @@ function compareSpellSections(first, second, sortMode) {
   return first.order - second.order || first.firstIndex - second.firstIndex;
 }
 
+// Compare saved sort values with a stable label fallback.
 function compareManual(first, second) {
   return (Number(first.sort) || 0) - (Number(second.sort) || 0) || first.name.localeCompare(second.name);
 }
 
+// Order inventory categories according to the feature's display convention.
 function sourcePriority(type) {
   if (type === "class" || type === "subclass") return -100;
   if (type === "race" || type === "species") return -90;
@@ -336,6 +365,7 @@ function sourcePriority(type) {
   return 0;
 }
 
+// Return an ordinal rank label for spell and feature summaries.
 function ordinal(value) {
   const tens = value % 100;
   if (tens >= 11 && tens <= 13) return `${value}th`;
@@ -345,6 +375,7 @@ function ordinal(value) {
   return `${value}th`;
 }
 
+// Capitalize each word in a fallback category label.
 function titleCase(value) {
   return String(value ?? "").replace(/[-_]+/gu, " ").replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
 }

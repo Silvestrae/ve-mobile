@@ -11,9 +11,11 @@ export function createArmorClassGateway({
 } = {}) {
   const openApps = new Map();
   return Object.freeze({
+    // Open the native Armor Class editor for the exact Actor source while the captured session remains current.
     async open({ actorSourceUuid, worldId, userId, connectionGeneration } = {}) {
       const uuid = validSourceUuid(actorSourceUuid);
       const game = getGame();
+      // Capture and validate the current world/user context for armor-class configuration.
       const currentSession = () => getGame() === game && game?.user?.id === userId && game?.world?.id === worldId
         && getConnectionGeneration() === connectionGeneration && ["phone", "tablet"].includes(getMode());
       if (!currentSession()) {

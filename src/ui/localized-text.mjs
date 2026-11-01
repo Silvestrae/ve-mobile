@@ -15,6 +15,7 @@ export function localizedText(localize, key, fallback = key, data) {
 const numberFormats = new Map();
 const dateFormats = new Map();
 const pluralRules = new Map();
+// Reuse a bounded locale-specific Intl formatter, falling back to English for an invalid locale.
 function formatter(cache, locale, Factory, options, variant = "") {
   const language = locale || "en";
   const key = `${language}|${variant}`;
@@ -27,10 +28,12 @@ function formatter(cache, locale, Factory, options, variant = "") {
   }
   return cache.get(key);
 }
+// Format a number with optional bounded fixed precision, using the current language's separators.
 export function localizedNumber(value, locale = "en", fractionDigits = null) {
   const digits = Number.isInteger(fractionDigits) ? Math.min(20, Math.max(0, fractionDigits)) : null;
   return formatter(numberFormats, locale, Intl.NumberFormat, digits === null ? undefined : { minimumFractionDigits: digits, maximumFractionDigits: digits }, digits ?? "default").format(value);
 }
+// Format a timestamp with the language's normal medium date and short time.
 export function localizedDate(value, locale = "en") {
   return formatter(dateFormats, locale, Intl.DateTimeFormat, { dateStyle: "medium", timeStyle: "short" }).format(value);
 }

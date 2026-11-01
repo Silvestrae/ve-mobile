@@ -5,7 +5,7 @@ import { canRevealPf2eMessage, pf2eMessageReferencesItem } from "./action-messag
 /** Host PF2e's rendered cards intact. renderHTML installs the system's own
  * strike/spell/damage/IWR/degree-of-success listeners and visibility filters. */
 export function createPf2eActionSessionGateway({ getGame = () => globalThis.game } = {}) {
-  return Object.freeze({ async mount(host, session, scope) {
+  return Object.freeze({ /* Render this Actor's PF2e action messages only while the captured owner context remains current. */ async mount(host, session, scope) {
     const game = getGame();
     const world = game?.world?.id;
     const user = game?.user?.id;
@@ -13,10 +13,13 @@ export function createPf2eActionSessionGateway({ getGame = () => globalThis.game
     const actor = resolveActorSource(source, { game });
     const ids = new Set([session?.rootMessageId, ...(session?.messageIds ?? [])].filter(Boolean));
     let queue = Promise.resolve();
+    // Confirm the original game, world, user, and scope still own this render request.
     const current = () => !scope.disposed && getGame() === game && game.world?.id === world && game.user?.id === user
       && resolveActorSource(source, { game }) === actor && canOwn(actor, game.user);
+    // Accept only messages whose speaker still matches the selected PF2e Actor.
     const belongs = message => speakerMatchesActor(message, actor)
       && pf2eMessageReferencesItem(message, session.itemId) && canRevealPf2eMessage(message, game);
+    // Render the current Actor’s PF2e action messages while the captured owner context remains active.
     const render = async () => {
       if (!current()) { host.replaceChildren(); return; }
       const elements = [];
@@ -30,6 +33,7 @@ export function createPf2eActionSessionGateway({ getGame = () => globalThis.game
       }
       if (current()) host.replaceChildren(...elements);
     };
+    // Serialize rerender requests so message updates cannot overlap or replace newer results.
     const schedule = () => { queue = queue.then(render).catch(error => console.warn("VE Mobile | PF2e card rendering failed", error)); return queue; };
     host.classList.add("chat-popout", "themed", "pf2e");
     scope.own(() => host.replaceChildren());

@@ -28,6 +28,7 @@ export function createDurableProfileHandoff({
   const api = {
     get changing() { return preparing || reloadRequested || Boolean(gateway?.changing); },
 
+    // Combine the profile gateway status with local transition and recovery transaction state.
     snapshot() {
       const snapshot = gateway?.snapshot?.() ?? {};
       const transaction = readTransaction();
@@ -39,8 +40,10 @@ export function createDurableProfileHandoff({
     previewEnable: (...args) => gateway?.previewEnable?.(...args) ?? Object.freeze([]),
     applyPresentationClass: (...args) => gateway?.applyPresentationClass?.(...args),
 
+    // Apply the selected graphics profile while retaining recovery ownership for interrupted transitions.
     async apply(profile, { source = "unknown" } = {}) {
       const authorityToken = mobileAuthority?.capture?.() ?? 0;
+      // Require current mobile presentation and authority before changing canvas policy.
       const assertMobile = () => {
         if (mobileAuthority && !mobileAuthority.allows(authorityToken)) throw new Error(localizeFoundry("VEMOBILE.Graphics.AuthorityEnded", "Mobile performance authority ended before the graphics transaction."));
       };
@@ -98,6 +101,7 @@ export function createDurableProfileHandoff({
     disable(options) { return api.apply("normal", options); },
     restorePrevious(options) { return api.apply("normal", options); },
 
+    // Resume or restore any profile transaction left incomplete by a prior interruption.
     async resumeInterrupted() {
       if (mobileAuthority && !mobileAuthority.active()) return Object.freeze({ action: "none" });
       const transaction = readTransaction();
@@ -114,14 +118,17 @@ export function createDurableProfileHandoff({
     }
   };
 
+  // Read the durable Scene preflight transaction record.
   function readTransaction() {
     return normalizeProfileTransaction(safeGet(getGame(), MODULE_ID, KEYS.GRAPHICS_PROFILE_TRANSACTION));
   }
 
+  // Persist the transaction record before applying reversible native settings.
   async function writeTransaction(value) {
     await getGame()?.settings?.set?.(MODULE_ID, KEYS.GRAPHICS_PROFILE_TRANSACTION, value);
   }
 
+  // Request a Foundry reload and retain pending restoration data until the new document is ready.
   async function requestDocumentReload() {
     if (typeof requestReload === "function") {
       try { return (await requestReload()) !== false; }
@@ -184,12 +191,14 @@ export function createScenePreflightGateway({
   const maximumWarningsAcknowledged = new Set();
 
   const api = {
+    // Install the scoped canvas hooks that detect Scene memory risk and resume pending choices.
     install(scope) {
       const canvas = getCanvas();
       if (!canvas || typeof canvas.draw !== "function" || installedCanvas) return false;
       installedCanvas = canvas;
       originalDraw = canvas.draw;
       proxyDraw = async function (scene, ...args) {
+        // Handle Scene draw completion and resume the matching preflight transaction.
         const draw = () => drawWithInterruptionMarker(this, scene, args);
         // Foundry's client performance-setting handlers synchronously request
         // Canvas redraws for each write. During a staged profile transaction
@@ -221,6 +230,7 @@ export function createScenePreflightGateway({
       return true;
     },
 
+    // Evaluate Scene memory risk and return the user's open, settings, cancel, or reload decision.
     async preflight(scene, { source = "user", allowCancel = true } = {}) {
       const sceneId = String(scene?.id ?? "");
       if (!sceneId || !readActive() || normalizeBehavior(readBehavior()) === "off") return approve(sceneId, "proceed", source);
@@ -292,6 +302,7 @@ export function createScenePreflightGateway({
       approved.set(String(sceneId), Number(now()) + 5000);
     },
 
+    // Retry a user's deferred Scene view after its required graphics transition becomes ready.
     async resumePendingUserScene(viewScene) {
       if (resumingPending) return Object.freeze({ action: "waiting" });
       const pending = readPending();
@@ -313,7 +324,7 @@ export function createScenePreflightGateway({
       } finally { resumingPending = false; }
     },
 
-    snapshot() {
+    /* Report the active warning policy, pending Scene request, and last preflight outcome. */ snapshot() {
       return Object.freeze({
         behavior: normalizeBehavior(readBehavior()),
         pending: readPending(),
@@ -323,6 +334,7 @@ export function createScenePreflightGateway({
     }
   };
 
+  // Record that a Scene draw was interrupted while applying the no-canvas transition.
   async function drawWithInterruptionMarker(receiver, scene, args) {
     try { onDrawStart(scene); }
     catch (error) { diagnostics?.record?.("warn", "Unable to mark the mobile Scene draw as in progress", error); }
@@ -334,6 +346,7 @@ export function createScenePreflightGateway({
     }
   }
 
+  // Choose an automatic graphics escalation only when current diagnostics and policy justify it.
   async function automaticallyEscalate(scene, recommendation, context) {
     const sceneId = String(scene.id);
     const target = normalizeProfile(context.plan?.requestedProfile ?? recommendation.recommendedMinimumProfile);
@@ -345,6 +358,7 @@ export function createScenePreflightGateway({
     return applyEscalation(scene, recommendation, { ...context, automatic: true });
   }
 
+  // Apply a selected graphics recovery profile transactionally, rechecking current settings and authority.
   async function applyEscalation(scene, recommendation, context) {
     if (!readActive()) return approve(String(scene?.id ?? ""), "proceed", context.source);
     const sceneId = String(scene.id);
@@ -396,6 +410,7 @@ export function createScenePreflightGateway({
     return approve(sceneId, "proceed", context.source);
   }
 
+  // Apply the no-canvas presentation while preserving the user’s original canvas setting for restoration.
   async function applyNoCanvas(scene, recommendation) {
     if (!readActive()) return approve(String(scene?.id ?? ""), "proceed", "desktop-transition");
     await setNoCanvas(true);
@@ -404,16 +419,19 @@ export function createScenePreflightGateway({
     return Object.freeze({ action: "reload", sceneId: String(scene?.id ?? ""), profile: "no-canvas", recommendation });
   }
 
+  // Clear pending restoration only after the current settings satisfy the recorded target.
   async function clearSatisfiedPending(sceneId, profile) {
     const pending = readPending();
     if (pending.sceneId === sceneId && profileLevel(profile) >= profileLevel(pending.profile)) await writePending({});
   }
 
+  // Record an explicit user approval for the current Scene preflight recommendation.
   function approve(sceneId, action, source) {
     if (source !== "canvas-draw") api.approveNextDraw(sceneId);
     return Object.freeze({ action, sceneId: String(sceneId), source });
   }
 
+  // Consume a matching one-time approval without reusing it for another Scene or policy.
   function consumeApproval(sceneId) {
     const id = String(sceneId ?? "");
     const expires = approved.get(id);
@@ -422,6 +440,7 @@ export function createScenePreflightGateway({
     return expires >= Number(now());
   }
 
+  // Present the current preflight decision with explicit Scene and graphics consequences.
   function showPrompt(scene, recommendation, options) {
     if (activePrompt?.sceneId === String(scene.id)) return activePrompt.promise;
     activePrompt?.dismiss?.("continue");
@@ -431,12 +450,15 @@ export function createScenePreflightGateway({
     return prompt.promise;
   }
 
+  // Read and normalize the pending preflight confirmation record.
   function readPending() {
     return normalizePending(safeGet(getGame(), MODULE_ID, KEYS.MEMORY_PREFLIGHT_STATE));
   }
+  // Persist a pending confirmation before continuing an asynchronous Scene transition.
   async function writePending(value) {
     await getGame()?.settings?.set?.(MODULE_ID, KEYS.MEMORY_PREFLIGHT_STATE, value);
   }
+  // Detect a reload request already made for the same pending transaction.
   function isRepeatReload(pending, sceneId, profile) {
     return pending.sceneId === sceneId && pending.profile === profile && pending.attempt >= 1 && Number(now()) - pending.requestedAt < RELOAD_GUARD_WINDOW_MS;
   }
@@ -444,6 +466,8 @@ export function createScenePreflightGateway({
   return Object.freeze(api);
 }
 
+/** Present a GM with the current Scene risk and the available preflight action;
+ * the caller revalidates all state after the prompt resolves. */
 export function createPreflightPrompt({ document, scene, risk = null, recommendation, current, effective, blocked, blockedSettings = [], targetConflicts = [], plan = null, satisfied = false, needsEscalation = true, repairable = false, overrideFailed = false, allowCancel, maximumAdvisory, theme = "system" }) {
   if (!document?.createElement || !document?.body) return Object.freeze({ sceneId: String(scene?.id ?? ""), promise: Promise.resolve("continue"), dismiss() {} });
   const root = document.createElement("div");
@@ -502,6 +526,7 @@ export function createPreflightPrompt({ document, scene, risk = null, recommenda
     : localizeFoundry("VEMOBILE.Graphics.Preflight.ContentAdvice", "This is a precaution based on scene content, not a measurement of available hardware memory.");
   const actions = document.createElement("div");
   actions.className = "ve-scene-preflight-actions";
+  // Create an accessible button for the Scene preflight prompt.
   const button = (label, value, primary = false) => {
     const control = document.createElement("button");
     control.type = "button";
@@ -523,6 +548,7 @@ export function createPreflightPrompt({ document, scene, risk = null, recommenda
   let resolve;
   let settled = false;
   const promise = new Promise((done) => { resolve = done; });
+  // Close the preflight prompt and release its scoped event handlers.
   const dismiss = (choice) => {
     if (settled) return;
     settled = true;
@@ -538,9 +564,11 @@ export function createPreflightPrompt({ document, scene, risk = null, recommenda
   return Object.freeze({ sceneId: String(scene?.id ?? ""), element: root, promise, dismiss });
 }
 
+// Freeze the last accepted profile so later policy reads cannot mutate the transaction record.
 function freezeLast({ scene, source, risk, recommendation, current, effective, blocked, satisfied, plan }) {
   return Object.freeze({ sceneId: String(scene?.id ?? ""), sceneName: String(scene?.name ?? ""), source: String(source), requestedProfile: plan?.requestedProfile ?? recommendation.recommendedMinimumProfile, configuredProfile: current, currentProfile: current, recommendedProfile: recommendation.recommendedMinimumProfile, recommendedMinimumProfile: recommendation.recommendedMinimumProfile, effectiveProfile: effective, blocked: Boolean(blocked), blockedSettings: Object.freeze([...(plan?.blockedSettings ?? [])]), satisfied: Boolean(satisfied), transactionPlan: plan, risk: recommendation.risk, confidence: recommendation.confidence, reasons: Object.freeze([...(recommendation.reasons ?? [])]), effectiveDecodedBytes: risk?.effectiveDecodedBytes ?? null, originalDecodedBytes: risk?.originalDecodedBytes ?? null, visibleRasterCount: risk?.visibleRasterCount ?? 0, hiddenRasterCount: risk?.hiddenRasterCount ?? 0, videoCount: risk?.videoCount ?? 0 });
 }
+// Validate a preflight plan and retain only supported actions and profile values.
 function normalizePreflightPlan(value, { requestedProfile, configuredProfile, effectiveProfile, preview = [] }) {
   const requested = normalizeProfile(value?.requestedProfile ?? requestedProfile);
   const configured = normalizeProfile(value?.configuredProfile ?? configuredProfile);
@@ -564,12 +592,19 @@ function normalizePreflightPlan(value, { requestedProfile, configuredProfile, ef
     satisfied: configuredSufficient && requirementsSatisfied
   });
 }
+// Normalize the persisted pending confirmation shape.
 function normalizePending(value) { if (!value || Number(value.version) !== PREFLIGHT_STATE_VERSION) return Object.freeze({ version: PREFLIGHT_STATE_VERSION, sceneId: "", profile: "normal", reason: "", generation: "", attempt: 0, requestedAt: 0, source: "" }); return Object.freeze({ version: PREFLIGHT_STATE_VERSION, sceneId: String(value.sceneId ?? ""), sceneName: String(value.sceneName ?? ""), profile: normalizeProfile(value.profile), reason: String(value.reason ?? ""), generation: String(value.generation ?? ""), attempt: Math.max(0, Math.floor(Number(value.attempt) || 0)), requestedAt: Math.max(0, Number(value.requestedAt) || 0), source: String(value.source ?? "") }); }
+// Validate a graphics profile transaction and its captured original values.
 function normalizeProfileTransaction(value) { if (!value || Number(value.version) !== PROFILE_TRANSACTION_VERSION || !["applying", "reload-pending", "failed"].includes(value.phase)) return Object.freeze({ version: PROFILE_TRANSACTION_VERSION, generation: "", profile: "normal", requestedProfile: "normal", configuredProfile: "normal", source: "", requestedAt: 0, reloadRequired: false, phase: "none" }); const profile = normalizeProfile(value.profile); return Object.freeze({ version: PROFILE_TRANSACTION_VERSION, generation: String(value.generation ?? ""), profile, requestedProfile: normalizeProfile(value.requestedProfile ?? profile), configuredProfile: normalizeProfile(value.configuredProfile ?? profile), source: String(value.source ?? ""), requestedAt: Math.max(0, Number(value.requestedAt) || 0), reloadRequired: Boolean(value.reloadRequired), phase: value.phase, error: String(value.error ?? "") }); }
+// Normalize the requested canvas recovery behavior.
 function normalizeBehavior(value) { return ["recommend", "automatic", "off"].includes(value) ? value : "recommend"; }
+// Normalize a graphics profile identifier to a supported level.
 function normalizeProfile(value) { const profile = String(value ?? "normal").toLowerCase(); return Object.hasOwn(MEMORY_PROFILES, profile) ? profile : "normal"; }
+// Resolve the localized label for a graphics profile.
 function profileLabel(value) { const profile = normalizeProfile(value); return localizeFoundry(`VEMOBILE.Graphics.Profile.${profile}.Name`, MEMORY_PROFILES[profile].label); }
+// Return a readable label for a graphics setting key.
 function graphicsSettingLabel(key) { const entries = { "core.performanceMode": ["FoundryPerformance", "Foundry performance"], "core.maxFPS": ["FrameRateLimit", "Frame rate limit"], "core.pixelRatioResolutionScaling": ["HighResolutionMap", "High-resolution map"], "core.mipmap": ["ImageSmoothing", "Image smoothing while zooming"], "core.lightAnimation": ["AnimatedLighting", "Animated lighting"] }; const entry = entries[key]; return entry ? localizeFoundry(`VEMOBILE.Graphics.Preflight.${entry[0]}`, entry[1]) : String(key); }
+// Read the current value of one graphics setting.
 function graphicsSettingValue(value, key = "") {
   if (typeof value === "boolean") return localizeFoundry(value ? "VEMOBILE.Settings.UI.Graphics.On" : "VEMOBILE.Settings.UI.Graphics.Off", value ? "On" : "Off");
   if (key === "core.maxFPS" && Number.isFinite(Number(value))) return localizedNumber(Number(value), globalThis.game?.i18n?.lang ?? "en");
@@ -580,4 +615,5 @@ function graphicsSettingValue(value, key = "") {
   const entry = entries[value];
   return entry ? localizeFoundry(`VEMOBILE.Settings.UI.Graphics.${entry[0]}`, entry[1]) : String(value);
 }
+// Read a nested settings value defensively without changing it.
 function safeGet(game, namespace, key) { try { return game?.settings?.get?.(namespace, key); } catch { return undefined; } }

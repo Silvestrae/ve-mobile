@@ -79,7 +79,7 @@ const ACTION_LABELS = Object.freeze({
   Use: "VEMOBILE.PF2E.Character.Action.Use"
 });
 
-/** Render a PF2e character sheet using only the published Actor record and named commands. */
+/** Render current PF2e records and named commands; retained shell state and pane scopes own their UI. */
 export function renderPf2eCharacters({ state, commands, scope, overlayHost = null, retained = null }) {
   const shell = retained ?? { screen: null, paneScope: null, panelState: new Map() };
   const ownerScope = scope;
@@ -90,6 +90,7 @@ export function renderPf2eCharacters({ state, commands, scope, overlayHost = nul
   shell.actorSourceUuid = actor?.sourceUuid ?? "";
   shell.actor = actor;
   shell.commands = commands;
+  // Scope convenience commands to this Actor generation before child presenters use them.
   commands = Object.create(commands, {
     pf2eActionCurrent: { value: source => !ownerScope.disposed && shell.actorSourceUuid === source },
     openPf2eItemDetails: { value: payload => openItemDetails(shell, payload, ownerScope, overlayHost) }
@@ -114,6 +115,7 @@ export function renderPf2eCharacters({ state, commands, scope, overlayHost = nul
   shell.conditionCommands = commands;
   const status = shell.status;
   const resultsDeferred = actionResultsDeferred(state);
+  // Keep overlays separate from pane rendering so deferred results cannot outlive their owner.
   syncOverlays(shell, { state, commands, ownerScope, overlayHost, resultsDeferred });
   syncHeaderEditor(shell, resultsDeferred);
   syncItemDetails(shell, resultsDeferred);
@@ -137,6 +139,7 @@ export function renderPf2eCharacters({ state, commands, scope, overlayHost = nul
       }
     }
     if (shell.activePanelContext) capturePanelState(shell, shell.activePanelContext);
+    // Reconcile the shared header and tabs before replacing this generation's pane.
     syncHeader(shell, { actor, actors, commands, ownerScope, overlayHost });
     syncTabs(shell, visibleTabs, tab, commands, ownerScope);
     shell.paneScope?.dispose();
@@ -179,23 +182,25 @@ export function renderPf2eCharacters({ state, commands, scope, overlayHost = nul
   return screen;
 }
 
+// Fall back to the overview when restored state names an unavailable PF2e tab.
 function presentationTab(tab) { return TABS.some(([key]) => key === tab) ? tab : "overview"; }
 
+// Update the dying/wounded portrait badges from the current recovery record.
 function syncPortraitConditions(shell, commands, scope) {
-  const { actor, headerRefs: refs } = shell;
-  refs.portraitConditions ??= new Map();
+  const { actor, headerRefs: headerRefs } = shell;
+  headerRefs.portraitConditions ??= new Map();
   const recovery = actor.pf2e?.recovery;
-  refs.portrait.classList.toggle("is-dying", Number(recovery?.dying?.value) > 0);
+  headerRefs.portrait.classList.toggle("is-dying", Number(recovery?.dying?.value) > 0);
   for (const slug of ["dying", "wounded"]) {
-    let entry = refs.portraitConditions.get(slug);
+    let entry = headerRefs.portraitConditions.get(slug);
     if (!entry) {
       const image = node("img", { attrs: { alt: "", hidden: true } });
       const pips = node("span", { className: "ve-pf2e-portrait-pips", attrs: { "aria-hidden": "true" } });
       const button = node("button", { className: "ve-pf2e-portrait-condition", dataset: { condition: slug }, attrs: { type: "button", hidden: true },
         children: [image, pips], on: { click: () => shell.openConditions() } }, scope);
-      refs.portrait.append(button);
+      headerRefs.portrait.append(button);
       entry = { button, image, pips };
-      refs.portraitConditions.set(slug, entry);
+      headerRefs.portraitConditions.set(slug, entry);
     }
     const counter = recovery?.[slug];
     const condition = actor.pf2e?.conditions?.find(row => row.slug === slug && row.active)
@@ -210,19 +215,20 @@ function syncPortraitConditions(shell, commands, scope) {
     const max = Math.max(0, Math.min(20, Math.floor(Number(counter?.max) || 0)));
     entry.pips.replaceChildren(...Array.from({ length: max }, (_, index) => node("i", { className: `ve-pf2e-portrait-pip${index < counter.value ? " is-active" : ""}` })));
   }
-  if (!refs.recoveryButton) {
-    refs.recoveryLabel = node("span");
-    refs.recoveryButton = node("button", { className: "ve-pf2e-portrait-recovery", attrs: { type: "button", hidden: true }, children: [icon("fa-dice-d20"), refs.recoveryLabel],
+  if (!headerRefs.recoveryButton) {
+    headerRefs.recoveryLabel = node("span");
+    headerRefs.recoveryButton = node("button", { className: "ve-pf2e-portrait-recovery", attrs: { type: "button", hidden: true }, children: [icon("fa-dice-d20"), headerRefs.recoveryLabel],
       on: { click: event => issueCommand({ button: event.currentTarget, actor: shell.actor, command: ACTOR_COMMANDS.ROLL_PF2E_RECOVERY, payload: {},
         commands: shell.actionCommands, status: shell.status, scope, resultLabel: text(shell.commands, "Recovery", "VEMOBILE.PF2E.Character.Recovery"),
         isEnabled: () => can(shell.actor, "rollRecovery") }) } }, scope);
-    refs.portrait.append(refs.recoveryButton);
+    headerRefs.portrait.append(headerRefs.recoveryButton);
   }
-  refs.recoveryLabel.textContent = text(commands, "Recovery", "VEMOBILE.PF2E.Character.Recovery");
-  refs.recoveryButton.hidden = !can(actor, "rollRecovery");
-  refs.recoveryButton.disabled = !can(actor, "rollRecovery") || refs.recoveryButton.classList.contains("is-pending");
+  headerRefs.recoveryLabel.textContent = text(commands, "Recovery", "VEMOBILE.PF2E.Character.Recovery");
+  headerRefs.recoveryButton.hidden = !can(actor, "rollRecovery");
+  headerRefs.recoveryButton.disabled = !can(actor, "rollRecovery") || headerRefs.recoveryButton.classList.contains("is-pending");
 }
 
+// Reconcile the shared header whenever the selected Actor or directory changes.
 function syncHeader(shell, { actor, actors, commands, ownerScope, overlayHost }) {
   shell.actors = actors;
   shell.menuHost = overlayHost;
@@ -230,6 +236,7 @@ function syncHeader(shell, { actor, actors, commands, ownerScope, overlayHost })
   if (!shell.headerRefs) {
     const image = node("img", { attrs: { alt: "", draggable: false } });
     const portraitButton = node("button", { className: "ve-character-portrait-button", attrs: { type: "button" }, on: {
+      // Read the retained shell's current Actor when opening the portrait, rather than capturing an old selection.
       click: () => {
         const current = shell.actor;
         if (!current?.img) return;
@@ -287,50 +294,50 @@ function syncHeader(shell, { actor, actors, commands, ownerScope, overlayHost })
   shell.commands = commands;
   shell.actionCommands = commands;
   shell.headerScope ??= ownerScope.child("pf2e-header-actions");
-  const refs = shell.headerRefs;
-  if (refs.image.getAttribute?.("src") !== (actor.img ?? "")) {
-    actor.img ? refs.image.setAttribute("src", actor.img) : refs.image.removeAttribute("src");
+  const headerRefs = shell.headerRefs;
+  if (headerRefs.image.getAttribute?.("src") !== (actor.img ?? "")) {
+    actor.img ? headerRefs.image.setAttribute("src", actor.img) : headerRefs.image.removeAttribute("src");
   }
-  refs.image.hidden = !actor.img;
-  refs.portraitButton.hidden = !actor.img;
-  refs.portraitButton.setAttribute("aria-label", localizedText(commands.localize, "VEMOBILE.Character.ViewPortrait", "View {name} portrait", { name: actor.name ?? "" }));
-  refs.image.setAttribute("alt", localizedText(commands.localize, "VEMOBILE.Character.PortraitOf", "{name}'s portrait", { name: actor.name ?? "" }));
+  headerRefs.image.hidden = !actor.img;
+  headerRefs.portraitButton.hidden = !actor.img;
+  headerRefs.portraitButton.setAttribute("aria-label", localizedText(commands.localize, "VEMOBILE.Character.ViewPortrait", "View {name} portrait", { name: actor.name ?? "" }));
+  headerRefs.image.setAttribute("alt", localizedText(commands.localize, "VEMOBILE.Character.PortraitOf", "{name}'s portrait", { name: actor.name ?? "" }));
   syncPortraitConditions(shell, commands, ownerScope);
-  refs.name.textContent = actor.name ?? "";
-  refs.name.setAttribute("title", actor.name ?? "");
+  headerRefs.name.textContent = actor.name ?? "";
+  headerRefs.name.setAttribute("title", actor.name ?? "");
   const identity = actor.pf2e?.identity ?? {};
   const className = identity.className || actor.classes?.map(entry => entry.name).filter(Boolean).join(" / ") || "";
   const identityText = className || actor.npc?.creatureType || (ACTOR_TYPE_LABELS[actor.type] ? text(commands, actor.type, ACTOR_TYPE_LABELS[actor.type]) : actor.type ?? "");
-  refs.subtitle.replaceChildren(...[
+  headerRefs.subtitle.replaceChildren(...[
     actor.level != null ? node("span", { className: "ve-pf2e-compact-level", text: `${text(commands, "Level", "VEMOBILE.Character.Header.level")} ${number(commands, actor.level)} ` }) : null,
     node("span", { text: identityText })
   ].filter(Boolean));
-  refs.subtitle.setAttribute("title", [identity.ancestry, identity.heritage, className].filter(Boolean).join(" · "));
-  refs.expandedClass.textContent = identityText;
-  refs.expandedClass.setAttribute("title", identityText);
+  headerRefs.subtitle.setAttribute("title", [identity.ancestry, identity.heritage, className].filter(Boolean).join(" · "));
+  headerRefs.expandedClass.textContent = identityText;
+  headerRefs.expandedClass.setAttribute("title", identityText);
   const details = actor.pf2e?.details ?? {};
   const seenTags = new Set();
   const tags = [details.size, identity.heritage, identity.ancestry, ...(identity.traits ?? [])].filter(label => {
     if (!label || seenTags.has(label.toLocaleLowerCase())) return false;
     seenTags.add(label.toLocaleLowerCase()); return true;
   });
-  refs.tags.replaceChildren(...tags.map(label => node("span", { text: label, className: label === details.size ? "is-size" : "" })));
-  refs.tags.hidden = tags.length === 0;
-  refs.levelValue.textContent = actor.level !== null && actor.level !== undefined ? number(commands, actor.level) : "";
-  refs.level.hidden = actor.level === null || actor.level === undefined;
+  headerRefs.tags.replaceChildren(...tags.map(label => node("span", { text: label, className: label === details.size ? "is-size" : "" })));
+  headerRefs.tags.hidden = tags.length === 0;
+  headerRefs.levelValue.textContent = actor.level !== null && actor.level !== undefined ? number(commands, actor.level) : "";
+  headerRefs.level.hidden = actor.level === null || actor.level === undefined;
   const xp = details.experience;
   const hasXp = Number.isFinite(xp?.value) && Number.isFinite(xp?.max) && xp.max > 0;
-  refs.xpGauge.hidden = !hasXp;
-  refs.xpGauge.disabled = !can(actor, "editExperience");
-  refs.xpValue.hidden = !hasXp;
-  refs.experience.hidden = refs.level.hidden && !hasXp && !identityText;
+  headerRefs.xpGauge.hidden = !hasXp;
+  headerRefs.xpGauge.disabled = !can(actor, "editExperience");
+  headerRefs.xpValue.hidden = !hasXp;
+  headerRefs.experience.hidden = headerRefs.level.hidden && !hasXp && !identityText;
   if (hasXp) {
-    refs.xpValue.textContent = `${number(commands, xp.value)} / ${number(commands, xp.max)}`;
-    refs.xpTrack.setAttribute("aria-valuemax", String(xp.max));
-    refs.xpTrack.setAttribute("aria-valuenow", String(Math.max(0, Math.min(xp.max, xp.value))));
-    refs.xpFill.style.setProperty("width", `${Math.max(0, Math.min(100, xp.value / xp.max * 100))}%`);
+    headerRefs.xpValue.textContent = `${number(commands, xp.value)} / ${number(commands, xp.max)}`;
+    headerRefs.xpTrack.setAttribute("aria-valuemax", String(xp.max));
+    headerRefs.xpTrack.setAttribute("aria-valuenow", String(Math.max(0, Math.min(xp.max, xp.value))));
+    headerRefs.xpFill.style.setProperty("width", `${Math.max(0, Math.min(100, xp.value / xp.max * 100))}%`);
   }
-  shell.heading.dataset.headerRevision = [actor.sourceUuid, actor.name, refs.subtitle.textContent, actor.level, tags.join(","), hasXp, xp?.value, xp?.max].join("|");
+  shell.heading.dataset.headerRevision = [actor.sourceUuid, actor.name, headerRefs.subtitle.textContent, actor.level, tags.join(","), hasXp, xp?.value, xp?.max].join("|");
   if (shell.menuController && (shell.menuActors !== actors || shell.menuActor !== actor)) {
     const expanded = [...shell.menuController.expandedFolderIds];
     setActorMenuOpen(shell, false, ownerScope);
@@ -345,21 +352,23 @@ function syncHeader(shell, { actor, actors, commands, ownerScope, overlayHost })
     shell.bannerScope = ownerScope.child("pf2e-character-banner");
     shell.bannerSignature = bannerSignature;
     const resolution = resolvePf2eHeaderBanner(actor, artwork);
-    loadPf2eBanner(refs.hero, resolution.candidates, shell.bannerScope);
+    loadPf2eBanner(headerRefs.hero, resolution.candidates, shell.bannerScope);
   }
-  if (refs.selector.parentElement !== shell.heading) shell.heading.append(refs.selector);
+  if (headerRefs.selector.parentElement !== shell.heading) shell.heading.append(headerRefs.selector);
 }
 
+// Mount or dispose the lazy Actor menu and restore its requested expanded folders.
 function setActorMenuOpen(shell, open, ownerScope, expanded = []) {
   shell.menuScope?.dispose(); shell.menuScope = null; shell.menuController = null;
-  const refs = shell.headerRefs;
-  refs.controls.setAttribute("aria-expanded", String(open));
-  refs.arrow.classList.toggle("fa-chevron-down", !open);
-  refs.arrow.classList.toggle("fa-chevron-up", open);
-  refs.selector.classList.toggle("is-open", open);
+  const headerRefs = shell.headerRefs;
+  headerRefs.controls.setAttribute("aria-expanded", String(open));
+  headerRefs.arrow.classList.toggle("fa-chevron-down", !open);
+  headerRefs.arrow.classList.toggle("fa-chevron-up", open);
+  headerRefs.selector.classList.toggle("is-open", open);
   if (!open || ownerScope.disposed) return;
   const scope = shell.menuScope = ownerScope.child("pf2e-actor-menu");
-  const close = () => { setActorMenuOpen(shell, false, ownerScope); refs.controls.focus?.({preventScroll:true}); };
+  // Close the Actor menu and return keyboard focus to its trigger.
+  const close = () => { setActorMenuOpen(shell, false, ownerScope); headerRefs.controls.focus?.({preventScroll:true}); };
   const controller = shell.menuController = createCharacterMenuController({
     actors: shell.actors, selectedActor: shell.actor, commands: { localize: shell.commands.localize, selectActor: source => shell.commands.selectActor(source) },
     onClose: close, scope, describeActor: entry => [entry.pf2e?.identity?.className, entry.pf2e?.identity?.ancestry].filter(Boolean).join(" · ") || entry.type
@@ -368,13 +377,14 @@ function setActorMenuOpen(shell, open, ownerScope, expanded = []) {
   for (const id of expanded) controller.expandedFolderIds.add(id);
   const menu = controller.element;
   menu.classList.add("ve-pf2e-actor-menu");
-  (shell.menuHost ?? shell.screen.closest?.(".ve-mobile-app") ?? refs.selector).append(menu);
+  (shell.menuHost ?? shell.screen.closest?.(".ve-mobile-app") ?? headerRefs.selector).append(menu);
   scope.own(() => menu.remove());
   controller.mount(); menu.removeAttribute("hidden");
   scope.listen(menu, "keydown", event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } });
-  scope.listen(document, "pointerdown", event => { if (!menu.contains(event.target) && !refs.controls.contains(event.target)) close(); }, {passive:true});
+  scope.listen(document, "pointerdown", event => { if (!menu.contains(event.target) && !headerRefs.controls.contains(event.target)) close(); }, {passive:true});
 }
 
+// Reuse the tab bar and update its selected state from the current route.
 function syncTabs(shell, visibleTabs, selectedTab, commands, ownerScope) {
   const keys = visibleTabs.map(([key]) => key).join(":");
   if (!shell.tabBar) {
@@ -409,47 +419,49 @@ function syncTabs(shell, visibleTabs, selectedTab, commands, ownerScope) {
   if (shell.tabBar.parentElement !== shell.heading) shell.heading.append(shell.tabBar);
 }
 
+// Refresh HP labels and damage indicators without rebuilding the header shell.
 function updateHeaderHealth(shell, actor, commands) {
-  const refs = shell.headerRefs;
+  const headerRefs = shell.headerRefs;
   const hp = actor.hp;
   const heroPoints = headerPointResource(actor);
-  if (!refs.health || refs.healthSourceUuid !== actor.sourceUuid) {
+  if (!headerRefs.health || headerRefs.healthSourceUuid !== actor.sourceUuid) {
     const hpValue = node("strong", { className: "ve-pf2e-hp-value" });
     const hpLabel = node("span", { className: "ve-pf2e-hp-label", text: text(commands, "Hit points", "VEMOBILE.PF2E.Character.Section.HitPoints") });
     const hpTrack = node("div", { className: "ve-pf2e-health-track", attrs: { role: "progressbar", "aria-label": text(commands, "Hit points", "VEMOBILE.PF2E.Character.Section.HitPoints"), "aria-valuemin": "0" } });
     const hpFill = node("span", { className: "ve-pf2e-health-fill" }); hpTrack.append(hpFill);
     const hpCell = node("button", { className: "ve-pf2e-health-cell", attrs: { type: "button" }, children: [hpLabel, node("div", { className: "ve-pf2e-health-number", children: [icon("fa-heart"), hpValue] })], on: { click: () => shell.openHeaderEditor("hp") } }, shell.headerScope);
-    const tempValue = node("strong", { className: "ve-pf2e-temp-value" });
-    const tempCell = node("button", { className: "ve-pf2e-temp-cell", attrs: { type: "button" }, children: [node("span", { text: text(commands, "Temp HP", "VEMOBILE.PF2E.Character.TempHPShort") }), node("div", { className: "ve-pf2e-health-number", children: [icon("fa-shield"), tempValue] })], on: { click: () => shell.openHeaderEditor("temp") } }, shell.headerScope);
+    const temporaryHitPointsValue = node("strong", { className: "ve-pf2e-temp-value" });
+    const temporaryHitPointsButton = node("button", { className: "ve-pf2e-temp-cell", attrs: { type: "button" }, children: [node("span", { text: text(commands, "Temp HP", "VEMOBILE.PF2E.Character.TempHPShort") }), node("div", { className: "ve-pf2e-health-number", children: [icon("fa-shield"), temporaryHitPointsValue] })], on: { click: () => shell.openHeaderEditor("temp") } }, shell.headerScope);
     const pointsValue = node("strong", { className: "ve-pf2e-hero-points-value" });
     const pointsCell = node("button", { className: "ve-pf2e-hero-points", attrs: { type: "button" }, children: [node("span", { text: text(commands, "Hero points", "VEMOBILE.PF2E.Character.HeroPoints") }), pointsValue], on: { click: () => shell.openHeaderEditor("hero") } }, shell.headerScope);
-    refs.health = node("div", { className: "ve-pf2e-header-health-row", children: [hpCell, tempCell, pointsCell, hpTrack] });
-    refs.hpActionButtons = [hpCell, tempCell];
-    refs.healthHpValue = hpValue; refs.healthTemp = tempValue;
-    refs.healthPoints = pointsValue; refs.healthFill = hpFill; refs.healthTrack = hpTrack; refs.hpActions = hpCell;
-    refs.healthSourceUuid = actor.sourceUuid;
+    headerRefs.health = node("div", { className: "ve-pf2e-header-health-row", children: [hpCell, temporaryHitPointsButton, pointsCell, hpTrack] });
+    headerRefs.hpActionButtons = [hpCell, temporaryHitPointsButton];
+    headerRefs.healthHpValue = hpValue; headerRefs.healthTemp = temporaryHitPointsValue;
+    headerRefs.healthPoints = pointsValue; headerRefs.healthFill = hpFill; headerRefs.healthTrack = hpTrack; headerRefs.hpActions = hpCell;
+    headerRefs.healthSourceUuid = actor.sourceUuid;
   }
-  refs.health.hidden = !hp && !heroPoints;
-  refs.hpActions.hidden = !hp;
+  headerRefs.health.hidden = !hp && !heroPoints;
+  headerRefs.hpActions.hidden = !hp;
   if (hp) {
-    refs.healthHpValue.replaceChildren(node("span", { text: number(commands, hp.value) }), node("small", { text: ` / ${number(commands, hp.max)}` }));
-    if (refs.healthTemp) refs.healthTemp.textContent = number(commands, hp.temp);
+    headerRefs.healthHpValue.replaceChildren(node("span", { text: number(commands, hp.value) }), node("small", { text: ` / ${number(commands, hp.max)}` }));
+    if (headerRefs.healthTemp) headerRefs.healthTemp.textContent = number(commands, hp.temp);
     const percentage = Number(hp.max) > 0 ? Math.max(0, Math.min(100, Number(hp.value) / Number(hp.max) * 100)) : 0;
-    refs.healthFill?.style?.setProperty("--ve-pf2e-health-percent", `${percentage}%`);
-    refs.healthTrack?.setAttribute("aria-valuemax", String(hp.max));
-    refs.healthTrack?.setAttribute("aria-valuenow", String(hp.value));
+    headerRefs.healthFill?.style?.setProperty("--ve-pf2e-health-percent", `${percentage}%`);
+    headerRefs.healthTrack?.setAttribute("aria-valuemax", String(hp.max));
+    headerRefs.healthTrack?.setAttribute("aria-valuenow", String(hp.value));
   }
-  if (refs.healthPoints) {
-    const pointsLabel = refs.healthPoints.parentElement?.querySelector("span");
+  if (headerRefs.healthPoints) {
+    const pointsLabel = headerRefs.healthPoints.parentElement?.querySelector("span");
     if (pointsLabel) pointsLabel.textContent = heroPoints?.label ?? text(commands, "Hero points", "VEMOBILE.PF2E.Character.HeroPoints");
-    refs.healthPoints.textContent = heroPoints ? Array.from({ length: Math.max(0, Math.min(3, heroPoints.max)) }, (_, index) => index < heroPoints.value ? "★" : "☆").join("") : "—";
-    refs.healthPoints.setAttribute("aria-label", heroPoints ? `${number(commands, heroPoints.value)} / ${number(commands, heroPoints.max)}` : "—");
+    headerRefs.healthPoints.textContent = heroPoints ? Array.from({ length: Math.max(0, Math.min(3, heroPoints.max)) }, (_, index) => index < heroPoints.value ? "★" : "☆").join("") : "—";
+    headerRefs.healthPoints.setAttribute("aria-label", heroPoints ? `${number(commands, heroPoints.value)} / ${number(commands, heroPoints.max)}` : "—");
   }
-  if (refs.healthPoints?.parentElement) { refs.healthPoints.parentElement.hidden = !heroPoints; refs.healthPoints.parentElement.disabled = !can(actor, "resources"); }
-  for (const button of refs.hpActionButtons ?? []) button.disabled = !hp || !can(actor, "editHitPoints") || button.getAttribute?.("aria-busy") === "true";
-  if (refs.health.parentElement !== refs.hpRow) refs.hpRow.replaceChildren(refs.health);
+  if (headerRefs.healthPoints?.parentElement) { headerRefs.healthPoints.parentElement.hidden = !heroPoints; headerRefs.healthPoints.parentElement.disabled = !can(actor, "resources"); }
+  for (const button of headerRefs.hpActionButtons ?? []) button.disabled = !hp || !can(actor, "editHitPoints") || button.getAttribute?.("aria-busy") === "true";
+  if (headerRefs.health.parentElement !== headerRefs.hpRow) headerRefs.hpRow.replaceChildren(headerRefs.health);
 }
 
+// Update compact header values from the current PF2e record.
 function updateHeaderVitals(shell, actor, commands) {
   const pf2e = actor.pf2e ?? {};
   const primaryClassDc = pf2e.classDC ?? pf2e.details?.proficiencies?.find(row => row.group === "classDCs");
@@ -500,24 +512,26 @@ function updateHeaderVitals(shell, actor, commands) {
   }
 }
 
+// Build an accessible header statistic cell from its label and current value.
 function statCell(commands, label, key, value, iconName, fullLabel = null, tag = "div") {
   return node(tag, { className: "ve-pf2e-vital-cell", attrs: fullLabel ? { title: fullLabel } : {}, children: [icon(iconName), node("span", { text: text(commands, label, key) }), node("strong", { text: value === null || value === undefined ? "—" : String(value) })] });
 }
 
+// Update expanded movement details from the current movement modes.
 function updateSpeedDetails(shell, actor, commands) {
-  const refs = shell.headerRefs;
-  if (refs.speedSource !== actor.sourceUuid) {
-    refs.speedRow.hidden = true; refs.speedToggle?.setAttribute("aria-expanded", "false");
-    refs.speedToggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.remove("fa-chevron-up");
-    refs.speedToggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.add("fa-chevron-down");
-    refs.speedSource = actor.sourceUuid;
+  const headerRefs = shell.headerRefs;
+  if (headerRefs.speedSource !== actor.sourceUuid) {
+    headerRefs.speedRow.hidden = true; headerRefs.speedToggle?.setAttribute("aria-expanded", "false");
+    headerRefs.speedToggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.remove("fa-chevron-up");
+    headerRefs.speedToggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.add("fa-chevron-down");
+    headerRefs.speedSource = actor.sourceUuid;
   }
   const speeds = actor.pf2e?.details?.speeds ?? [];
   const signature = JSON.stringify([actor.sourceUuid, speeds, actor.speed, actor.capabilities?.movementActions]);
-  if (refs.speedSignature === signature) return;
-  refs.speedSignature = signature; refs.speedScope?.dispose();
-  const scope = refs.speedScope = shell.headerScope.child("speed-details");
-  refs.speedRow.replaceChildren(...[["land", "Land", "PF2E.Actor.Speed.Type.Land"], ["swim", "Swim", "PF2E.Actor.Speed.Type.Swim"], ["climb", "Climb", "PF2E.Actor.Speed.Type.Climb"], ["fly", "Fly", "PF2E.Actor.Speed.Type.Fly"], ["burrow", "Burrow", "PF2E.Actor.Speed.Type.Burrow"]].map(([slug, fallback, key]) => {
+  if (headerRefs.speedSignature === signature) return;
+  headerRefs.speedSignature = signature; headerRefs.speedScope?.dispose();
+  const scope = headerRefs.speedScope = shell.headerScope.child("speed-details");
+  headerRefs.speedRow.replaceChildren(...[["land", "Land", "PF2E.Actor.Speed.Type.Land"], ["swim", "Swim", "PF2E.Actor.Speed.Type.Swim"], ["climb", "Climb", "PF2E.Actor.Speed.Type.Climb"], ["fly", "Fly", "PF2E.Actor.Speed.Type.Fly"], ["burrow", "Burrow", "PF2E.Actor.Speed.Type.Burrow"]].map(([slug, fallback, key]) => {
     const entry = speeds.find(speed => speed.slug === slug) ?? (slug === "land" ? actor.speed : null);
     const label = entry?.label || text(commands, fallback, key);
     const roll = entry?.action && actor.capabilities?.movementActions?.includes(entry.action);
@@ -530,24 +544,26 @@ function updateSpeedDetails(shell, actor, commands) {
   }));
 }
 
+// Refresh the selected shield's quick statistics and actions in the header detail panel.
 function updateShieldDetails(shell, actor, commands) {
-  const refs = shell.headerRefs;
+  const headerRefs = shell.headerRefs;
   const shield = actor.pf2e?.shield;
-  if (refs.shieldSource !== actor.sourceUuid) {
-    refs.shieldRow.hidden = true;
-    refs.shieldToggle?.setAttribute("aria-expanded", "false");
-    refs.shieldToggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.remove("fa-chevron-up");
-    refs.shieldToggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.add("fa-chevron-down");
-    refs.shieldSource = actor.sourceUuid;
+  if (headerRefs.shieldSource !== actor.sourceUuid) {
+    headerRefs.shieldRow.hidden = true;
+    headerRefs.shieldToggle?.setAttribute("aria-expanded", "false");
+    headerRefs.shieldToggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.remove("fa-chevron-up");
+    headerRefs.shieldToggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.add("fa-chevron-down");
+    headerRefs.shieldSource = actor.sourceUuid;
   }
   const signature = JSON.stringify([actor.sourceUuid, shield, actor.capabilities?.editArmorClass]);
-  if (refs.shieldSignature === signature) return;
-  refs.shieldSignature = signature;
-  refs.shieldScope?.dispose();
-  const scope = refs.shieldScope = shell.headerScope.child("shield-details");
+  if (headerRefs.shieldSignature === signature) return;
+  headerRefs.shieldSignature = signature;
+  headerRefs.shieldScope?.dispose();
+  const scope = headerRefs.shieldScope = shell.headerScope.child("shield-details");
+  // Render one compact shield statistic with its localized label.
   const cell = (label, key, value) => node("div", { className: "ve-pf2e-shield-stat", children: [node("small", { text: text(commands, label, key) }), node("strong", { text: value })] });
   const state = shield?.destroyed ? ["Destroyed", "VEMOBILE.PF2E.Character.Shield.Destroyed"] : shield?.broken ? ["Broken", "VEMOBILE.PF2E.Character.Shield.Broken"] : ["Intact", "VEMOBILE.PF2E.Character.Shield.Intact"];
-  refs.shieldRow.replaceChildren(...(shield ? [
+  headerRefs.shieldRow.replaceChildren(...(shield ? [
     cell("Shield HP", "VEMOBILE.PF2E.Character.Shield.HP", `${number(commands, shield.hp?.value)} / ${number(commands, shield.hp?.max)}`),
     cell("Raised AC", "VEMOBILE.PF2E.Character.Shield.RaisedAC", shield.raisedArmorClass == null ? "—" : number(commands, shield.raisedArmorClass)),
     cell("Hardness", "VEMOBILE.PF2E.Character.Hardness", number(commands, shield.hardness)),
@@ -557,6 +573,7 @@ function updateShieldDetails(shell, actor, commands) {
   node("button", { className: "ve-pf2e-ac-settings", attrs: { type: "button", disabled: !actor.capabilities?.editArmorClass, "aria-label": text(commands, "Armor Class modifiers", "VEMOBILE.PF2E.Character.ArmorClassModifiers") }, children: [icon("fa-gear")], on: { click: () => shell.openAcEditor() } }, scope));
 }
 
+// Attach stable sort metadata to rows so presentation sorting preserves source structure.
 function prepareListSorting(panel) {
   for (const list of panel.querySelectorAll(".ve-pf2e-feature-list,.ve-pf2e-strike-list,.ve-pf2e-spell-list,.ve-pf2e-feat-rows,.ve-pf2e-proficiency-skills,.ve-pf2e-proficiency-readouts,.ve-pf2e-effect-rows,.ve-pf2e-spell-reference-list")) {
     list.dataset.pf2eSortList = "";
@@ -567,19 +584,21 @@ function prepareListSorting(panel) {
   }
 }
 
+// Open one header detail panel and close any sibling panel already showing.
 function toggleHeaderDetail(shell, selected) {
-  const refs = shell.headerRefs;
-  const opening = refs[selected].hidden;
+  const headerRefs = shell.headerRefs;
+  const opening = headerRefs[selected].hidden;
   for (const [key, toggleKey] of [["shieldRow", "shieldToggle"], ["speedRow", "speedToggle"], ["perceptionRow", "perceptionRowToggle"], ["classDcRow", "classDcRowToggle"]]) {
     const open = key === selected && opening;
-    refs[key].hidden = !open;
-    const toggle = refs[toggleKey];
+    headerRefs[key].hidden = !open;
+    const toggle = headerRefs[toggleKey];
     toggle?.setAttribute("aria-expanded", String(open));
     toggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.toggle("fa-chevron-up", open);
     toggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.toggle("fa-chevron-down", !open);
   }
 }
 
+// Create a header statistic that opens its related detail panel.
 function headerDisclosureCell(shell, commands, label, key, value, glyph, rowKey) {
   const cell = statCell(commands, label, key, value, glyph, null, "button");
   const arrow = node("span", { className: "ve-pf2e-ac-toggle", attrs: { "aria-hidden": "true" }, children: [icon("fa-chevron-down")] });
@@ -592,29 +611,32 @@ function headerDisclosureCell(shell, commands, label, key, value, glyph, rowKey)
   return cell;
 }
 
+// Render perception and its supported roll action in the shared header.
 function perceptionCell(shell, commands) {
   return headerDisclosureCell(shell, commands, "Perception", "VEMOBILE.PF2E.Character.Perception",
     modifier(shell.actor?.pf2e?.perception?.modifier), "fa-eye", "perceptionRow");
 }
 
+// Refresh AC, perception, and class DC details from the current Actor snapshot.
 function updateHeaderDetailPanels(shell, actor, commands) {
-  const refs = shell.headerRefs;
-  if (refs.detailSource !== actor.sourceUuid) {
+  const headerRefs = shell.headerRefs;
+  if (headerRefs.detailSource !== actor.sourceUuid) {
     for (const key of ["perceptionRow", "classDcRow"]) {
-      refs[key].hidden = true;
-      const toggle = refs[`${key}Toggle`]; toggle?.setAttribute("aria-expanded", "false");
+      headerRefs[key].hidden = true;
+      const toggle = headerRefs[`${key}Toggle`]; toggle?.setAttribute("aria-expanded", "false");
       toggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.remove("fa-chevron-up");
       toggle?.querySelector(".ve-pf2e-ac-toggle i")?.classList.add("fa-chevron-down");
     }
-    refs.detailSource = actor.sourceUuid;
+    headerRefs.detailSource = actor.sourceUuid;
   }
   const perception = actor.pf2e?.perception;
   const senses = actor.pf2e?.details?.senses ?? [];
   const classDcs = (actor.pf2e?.details?.proficiencies ?? []).filter(row => row.group === "classDCs");
   const signature = JSON.stringify([actor.sourceUuid, perception, senses, classDcs, actor.capabilities?.rollStatistic, actor.capabilities?.rollInitiative]);
-  if (signature === refs.detailSignature) return;
-  refs.detailSignature = signature; refs.detailScope?.dispose();
-  const scope = refs.detailScope = shell.headerScope.child("header-detail-actions");
+  if (signature === headerRefs.detailSignature) return;
+  headerRefs.detailSignature = signature; headerRefs.detailScope?.dispose();
+  const scope = headerRefs.detailScope = shell.headerScope.child("header-detail-actions");
+  // Build a permitted roll control using this detail panel's Actor command.
   const roll = (label, key, command, payload, enabled) => node("button", {
     className: "ve-pf2e-action-button", attrs: { type: "button", disabled: !enabled, "aria-label": text(commands, label, key) },
     on: { click: event => issueCommand({ button: event.currentTarget, actor: shell.actor, command, payload, commands: shell.actionCommands,
@@ -622,8 +644,9 @@ function updateHeaderDetailPanels(shell, actor, commands) {
       isEnabled: () => command === ACTOR_COMMANDS.ROLL_STATISTIC ? can(shell.actor, "rollStatistic", payload.statistic) : can(shell.actor, "rollInitiative") }) },
     children: [icon("fa-dice-d20")]
   }, scope);
+  // Pair one perception label with its roll or statistic content.
   const detail = (label, content) => node("div", { className: "ve-pf2e-perception-stat", children: [node("small", { text: label }), content] });
-  refs.perceptionRow.replaceChildren(
+  headerRefs.perceptionRow.replaceChildren(
     detail(text(commands, "Initiative", "VEMOBILE.PF2E.Character.Initiative"),
       roll("Roll initiative", "VEMOBILE.Character.Presenter.RollInitiative", ACTOR_COMMANDS.ROLL_INITIATIVE, {}, can(actor, "rollInitiative"))),
     detail(text(commands, "Perception", "VEMOBILE.PF2E.Character.Perception"),
@@ -635,17 +658,19 @@ function updateHeaderDetailPanels(shell, actor, commands) {
       children: (senses.length ? senses : ["—"]).map(sense => node("li", { text: sense }))
     }))
   );
-  refs.classDcRow.replaceChildren(...(classDcs.length ? classDcs.map(row => node("div", { className: "ve-pf2e-proficiency-readout", children: [
+  headerRefs.classDcRow.replaceChildren(...(classDcs.length ? classDcs.map(row => node("div", { className: "ve-pf2e-proficiency-readout", children: [
     node("span", { text: row.label }), node("strong", { text: row.value == null ? "—" : number(commands, row.value) })
   ] })) : [empty(commands)]));
 }
 
+// Try PF2e header artwork in order and stop applying results after scope teardown.
 function loadPf2eBanner(header, candidates, scope) {
   header.style?.removeProperty("--ve-class-art");
   delete header.dataset.bannerCatalogue;
   if (!candidates.length || typeof Image !== "function") return;
   let cancelled = false;
   scope.own(() => { cancelled = true; });
+  // Try banner URLs in order and stop when this header scope is no longer current.
   const tryCandidate = index => {
     const candidate = candidates[index];
     if (!candidate || cancelled) return;
@@ -661,6 +686,7 @@ function loadPf2eBanner(header, candidates, scope) {
   tryCandidate(0);
 }
 
+// Retain, replace, or remove overlays according to current state and result timing.
 function syncOverlays(shell, { state, commands, ownerScope, overlayHost, resultsDeferred }) {
   const sceneSession = state?.actionSessionOrigin === "scene";
   const portraitImage = state?.portraitImage;
@@ -680,6 +706,7 @@ function syncOverlays(shell, { state, commands, ownerScope, overlayHost, results
   shell.overlayState = { session: state?.actionSession, roll: state?.rollResult, deferred: resultsDeferred, sceneSession, portrait: portraitImage };
 }
 
+// Save disclosure, scroll, filter, and focus state before replacing a character panel.
 function capturePanelState(shell, context) {
   const prior = shell.panelState.get(context) ?? {};
   const scroller = shell.scroller;
@@ -697,6 +724,7 @@ function capturePanelState(shell, context) {
   while (shell.panelState.size > 32) shell.panelState.delete(shell.panelState.keys().next().value);
 }
 
+// Restore saved panel interactions only for the matching Actor/tab context.
 function restorePanelState(shell, context) {
   const saved = shell.panelState.get(context);
   if (!saved) { shell.scroller.scrollTop = 0; return; }
@@ -720,6 +748,7 @@ function restorePanelState(shell, context) {
   }
 }
 
+// Render the supported Actor chooser records supplied by the integration gateway.
 function actorChoices(actors, commands, scope) {
   const controller = createCharacterMenuController({ actors, selectedActor: null, commands,
     onClose() {}, scope, embedded: true,
@@ -729,6 +758,7 @@ function actorChoices(actors, commands, scope) {
   return controller.element;
 }
 
+// Dispatch the selected PF2e tab to its dedicated panel presenter.
 function renderTab(tab, actor, state, commands, status, scope, shell) {
   const pf2e = actor.pf2e ?? {};
   if (tab === "abilities") return statisticsPanel(actor, commands, status, scope, shell);
@@ -741,6 +771,7 @@ function renderTab(tab, actor, state, commands, status, scope, shell) {
   return overviewPanel(actor, commands, status, scope, shell);
 }
 
+// Compose the compact overview from vital, strike, resource, and statistic sections.
 function overviewPanel(actor, commands, status, scope, shell) {
   const pf2e = actor.pf2e ?? {};
   const defenses = node("section", { className: "ve-sheet-card ve-pf2e-overview-defenses", children: [
@@ -767,8 +798,10 @@ function overviewPanel(actor, commands, status, scope, shell) {
   ] });
 }
 
+// Group skills and proficiencies while retaining roll controls for permitted checks.
 function statisticsPanel(actor, commands, status, scope, shell = null) {
   const skills = actor.pf2e?.skills ?? [];
+  // Render a proficiency group only when it contains entries.
   const group = (label, key, entries) => entries.length ? collectionGroup({ key: `proficiency:${key}`, label: text(commands, label, key), glyph: "fa-dice-d20", className: "ve-pf2e-proficiency-group", children: [
     node("div", { className: "ve-pf2e-proficiency-skills", children: entries.map(skill => node("div", { className: "ve-pf2e-proficiency-skill", children: [
       skillRoll(skill, actor, commands, status, scope, true),
@@ -782,6 +815,7 @@ function statisticsPanel(actor, commands, status, scope, shell = null) {
   ] });
 }
 
+// Select the icon used for one PF2e overview section.
 function overviewGlyph(kind) {
   const paths = {
     fortitude: ["M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"],
@@ -789,11 +823,12 @@ function overviewGlyph(kind) {
     will: ["M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z", "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0"],
     rest: ["M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z"]
   };
-  return vectorIcon("0 0 24 24", (paths[kind] ?? paths.fortitude).map(d => ({ tag: "path", attrs: {
-    d, fill: "none", stroke: "currentColor", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round"
+  return vectorIcon("0 0 24 24", (paths[kind] ?? paths.fortitude).map(pathData => ({ tag: "path", attrs: {
+    d: pathData, fill: "none", stroke: "currentColor", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round"
   } })), "ve-pf2e-overview-glyph");
 }
 
+// Render saving throw totals and route rolls through the action command boundary.
 function savingThrows(saves, actor, commands, status, scope) {
   return node("section", { className: "ve-sheet-card ve-pf2e-saves", children: [sectionHeading(commands, "Saving throws", "fa-shield"), node("div", {
     className: "ve-pf2e-save-grid", children: saves.map(save => node("button", { className: "ve-pf2e-save", dataset: { save: save.slug }, attrs: {
@@ -810,6 +845,7 @@ function savingThrows(saves, actor, commands, status, scope) {
   })] });
 }
 
+// Present attribute values as localized readouts without exposing system objects.
 function attributesPanel(attributes, commands) {
   return node("section", { className: "ve-sheet-card ve-pf2e-attributes", children: [sectionHeading(commands, "Attributes", "fa-dna"), node("div", {
     className: "ve-pf2e-attribute-grid", children: attributes.map(attribute => node("div", { className: `ve-pf2e-attribute${attribute.key ? " is-key" : ""}`, children: [
@@ -819,6 +855,7 @@ function attributesPanel(attributes, commands) {
   })] });
 }
 
+// Show the most relevant trained skills in the overview panel.
 function skillPreview(skills, actor, commands, status, scope) {
   const quickbar = Array.isArray(actor.quickbar) ? actor.quickbar : [];
   const pinnedSlugs = quickbar.map(slot => slot?.kind === "skill" ? slot.skill : "").filter(Boolean);
@@ -830,6 +867,7 @@ function skillPreview(skills, actor, commands, status, scope) {
   ] }), entries.length ? node("div", { className: "ve-pf2e-skill-grid", children: entries.map(skill => skillRoll(skill, actor, commands, status, scope)) }) : empty(commands)] });
 }
 
+// Present one skill's rank and a capability-gated roll action.
 function skillRoll(skill, actor, commands, status, scope, fullRank = false) {
   const label = skill.label || skill.slug;
   const ariaLabel = skill.rankLabel
@@ -844,29 +882,37 @@ function skillRoll(skill, actor, commands, status, scope, fullRank = false) {
       node("span", { text: label }), rankBadge(commands, skill, fullRank), node("strong", { text: modifier(skill.modifier) })
     ] }, scope);
 }
+// Render a proficiency rank badge in compact or full-label form.
 function rankBadge(commands, statistic, full = false) {
   const rank = full ? statistic?.rankLabel || statistic?.rankAbbreviation : statistic?.rankAbbreviation || statistic?.rankLabel;
   return rank ? node("small", { className: "ve-pf2e-rank-badge", attrs: { "aria-label": localizedText(commands.localize, "VEMOBILE.PF2E.Character.ProficiencyRank", "{rank} proficiency", { rank: statistic.rankLabel || rank }) }, text: rank }) : null;
 }
 
+// Resolve the localized rank label displayed by a proficiency badge.
 function rankBadgeText(commands, statistic) {
   const rank = statistic?.rankLabel;
   return rank ? ` · ${rank}` : "";
 }
 
+// Resolve supplemental sheet copy through the PF2e localization namespace.
 function supplement(commands, key, fallback) { return text(commands, fallback, `VEMOBILE.PF2E.Character.Supplement.${key}`); }
+// Wrap secondary details in the common expandable section presentation.
 function fold(key, label, children) {
   return node("details", { className: "ve-sheet-card ve-pf2e-fold", attrs: { "data-pf2e-disclosure-key": key }, children: [
     node("summary", { children: [node("span", { text: label }), icon("fa-chevron-down")] }), node("div", { className: "ve-pf2e-fold-body", children: children.filter(Boolean) })
   ] });
 }
+// Render prepared label/value pairs as a compact details list.
 function detailRows(rows) {
   return node("dl", { className: "ve-pf2e-detail-rows", children: rows.filter(([, value]) => value !== null && value !== undefined && value !== "").map(([label, value]) => node("div", { children: [node("dt", { text: label }), node("dd", { text: value })] })) });
 }
+// Present identity, ancestry, and character traits from the current Actor snapshot.
 function characterDetails(actor, commands, scope) {
-  const d = actor.pf2e?.details ?? {}, biography = actor.pf2e?.biography ?? {};
+  const details = actor.pf2e?.details ?? {}, biography = actor.pf2e?.biography ?? {};
+  // Build the details trigger only when the selected item remains usable.
   const detailsControl = itemId => ({ attrs: { type: "button", disabled: !itemId || !canItem(actor, itemId) },
     on: { click: () => commands.openPf2eItemDetails({ actorSourceUuid: actor.sourceUuid, itemId, fullPage: true }) } });
+  // Render identity or trait tags with optional section styling.
   const tags = (values, className = "") => node("div", { className: `ve-pf2e-character-tags ${className}`, children:
     (values?.length ? values : ["—"]).map(value => node("span", { text: value })) });
   const personal = [
@@ -878,14 +924,14 @@ function characterDetails(actor, commands, scope) {
   // Land speed, class, ancestry/heritage tags and XP already live in the header.
   return node("div", { className: "ve-pf2e-character-details", children: [
     node("section", { className: "ve-sheet-card ve-pf2e-origins", children: [
-      node("div", { className: `ve-pf2e-origin-highlights${d.deity ? " has-deity" : ""}`, children: [
-        node("button", { ...detailsControl(d.backgroundItemId), className: "ve-pf2e-background-highlight", children: [
+      node("div", { className: `ve-pf2e-origin-highlights${details.deity ? " has-deity" : ""}`, children: [
+        node("button", { ...detailsControl(details.backgroundItemId), className: "ve-pf2e-background-highlight", children: [
           icon("fa-scroll"), node("span", { className: "ve-pf2e-origin-label", text: supplement(commands, "Background", "Background") }),
-          node("strong", { text: d.background || "—" })
+          node("strong", { text: details.background || "—" })
         ] }, scope),
-        d.deity ? node("button", { ...detailsControl(d.deityItemId), className: `ve-pf2e-deity-highlight${d.deityImg ? " is-illustrated" : ""}`, children: [
-          d.deityImg ? node("img", { attrs: { src: d.deityImg, alt: "", loading: "lazy" } }) : null,
-          node("div", { children: [node("span", { className: "ve-pf2e-origin-label", text: supplement(commands, "Deity", "Deity") }), node("strong", { text: d.deity })] })
+        details.deity ? node("button", { ...detailsControl(details.deityItemId), className: `ve-pf2e-deity-highlight${details.deityImg ? " is-illustrated" : ""}`, children: [
+          details.deityImg ? node("img", { attrs: { src: details.deityImg, alt: "", loading: "lazy" } }) : null,
+          node("div", { children: [node("span", { className: "ve-pf2e-origin-label", text: supplement(commands, "Deity", "Deity") }), node("strong", { text: details.deity })] })
         ] }, scope) : null
       ] }),
       personal.some(([, value]) => value) ? fold("personal-details", text(commands, "More details", "VEMOBILE.PF2E.Character.MoreDetails"), [
@@ -893,14 +939,15 @@ function characterDetails(actor, commands, scope) {
       ]) : null
     ] }),
     node("section", { className: "ve-sheet-card ve-pf2e-languages", children: [
-      node("header", { className: "ve-sheet-card-heading", children: [node("h3", { text: supplement(commands, "Languages", "Languages") }), node("small", { text: number(commands, d.languages?.length ?? 0) })] }), tags(d.languages)
+      node("header", { className: "ve-sheet-card-heading", children: [node("h3", { text: supplement(commands, "Languages", "Languages") }), node("small", { text: number(commands, details.languages?.length ?? 0) })] }), tags(details.languages)
     ] }),
-    d.senses?.length ? node("section", { className: "ve-sheet-card ve-pf2e-languages ve-pf2e-senses", children: [
-      node("header", { className: "ve-sheet-card-heading", children: [node("h3", { text: supplement(commands, "Senses", "Senses") }), node("small", { text: number(commands, d.senses.length) })] }), tags(d.senses)
+    details.senses?.length ? node("section", { className: "ve-sheet-card ve-pf2e-languages ve-pf2e-senses", children: [
+      node("header", { className: "ve-sheet-card-heading", children: [node("h3", { text: supplement(commands, "Senses", "Senses") }), node("small", { text: number(commands, details.senses.length) })] }), tags(details.senses)
     ] }) : null
   ] });
 }
 
+// Summarize proficiencies without a primary skill or saving-throw row.
 function supplementaryProficiencies(actor, commands) {
   const rows = actor.pf2e?.details?.proficiencies ?? [];
   return node("div", { className: "ve-pf2e-combat-proficiencies", children: [
@@ -915,24 +962,28 @@ function supplementaryProficiencies(actor, commands) {
     })
   ] });
 }
+// Summarize equipped items and expose the current shield detail controls.
 function equipmentSummary(actor, commands, scope, shell) {
-  const d = actor.pf2e?.details;
-  if (!d?.currency && !d?.invested) return null;
+  const details = actor.pf2e?.details;
+  if (!details?.currency && !details?.invested) return null;
+  // Render one equipment summary value beside its label.
   const readout = (label, value) => node("span", { children: [node("small", { text: label }), node("strong", { text: value })] });
   return node("div", { className: "ve-pf2e-equipment-summary", children: [
-    d.currency ? node("div", { className: "ve-currency-strip ve-pf2e-currency-strip", attrs: { "aria-label": text(commands, "Currency", "VEMOBILE.Character.Presenter.Currency") }, on: { click: () => { if (actor.capabilities?.currency) shell.openCurrencyEditor(); } }, children: [
-      ...["pp", "gp", "sp", "cp"].map(key => node("span", { className: `is-${key}`, attrs: { title: `${key.toUpperCase()} ${number(commands, d.currency[key])}` }, children: [node("small", { text: key.toUpperCase() }), node("strong", { text: number(commands, d.currency[key]) })] })),
+    details.currency ? node("div", { className: "ve-currency-strip ve-pf2e-currency-strip", attrs: { "aria-label": text(commands, "Currency", "VEMOBILE.Character.Presenter.Currency") }, on: { click: () => { if (actor.capabilities?.currency) shell.openCurrencyEditor(); } }, children: [
+      ...["pp", "gp", "sp", "cp"].map(key => node("span", { className: `is-${key}`, attrs: { title: `${key.toUpperCase()} ${number(commands, details.currency[key])}` }, children: [node("small", { text: key.toUpperCase() }), node("strong", { text: number(commands, details.currency[key]) })] })),
       node("button", { className: "ve-currency-edit ve-pf2e-coins", attrs: { type: "button", disabled: !actor.capabilities?.currency, "aria-label": text(commands, "Edit Currency", "VEMOBILE.Character.Presenter.EditCurrency2") }, children: [icon("fa-pen"), node("span", { text: text(commands, "Edit", "VEMOBILE.Character.Presenter.Edit2") })] })
     ] }, scope) : null,
     node("div", { className: "ve-pf2e-wealth", children: [
-      d.currencyGoldValue != null ? readout(text(commands, "Total Currency", "PF2E.TotalCurrency"), `${number(commands, d.currencyGoldValue)} ${text(commands, "gp", "PF2E.CurrencyAbbreviations.gp")}`) : null,
-      d.totalWealthGoldValue != null ? readout(text(commands, "Total Wealth", "PF2E.TotalWealth"), `${number(commands, d.totalWealthGoldValue)} ${text(commands, "gp", "PF2E.CurrencyAbbreviations.gp")}`) : null,
-      d.invested ? readout(supplement(commands, "Invested", "Invested"), `${number(commands,d.invested.value)}/${number(commands,d.invested.max)}`) : null
+      details.currencyGoldValue != null ? readout(text(commands, "Total Currency", "PF2E.TotalCurrency"), `${number(commands, details.currencyGoldValue)} ${text(commands, "gp", "PF2E.CurrencyAbbreviations.gp")}`) : null,
+      details.totalWealthGoldValue != null ? readout(text(commands, "Total Wealth", "PF2E.TotalWealth"), `${number(commands, details.totalWealthGoldValue)} ${text(commands, "gp", "PF2E.CurrencyAbbreviations.gp")}`) : null,
+      details.invested ? readout(supplement(commands, "Invested", "Invested"), `${number(commands,details.invested.value)}/${number(commands,details.invested.max)}`) : null
     ] })
   ] });
 }
+// Group active conditions, effects, and persistent damage with supported actions.
 function effectsPanel(actor, commands, status, scope, shell) {
-  const d = actor.pf2e?.details ?? {};
+  const details = actor.pf2e?.details ?? {};
+  // Create one effect category disclosure from its prepared records.
   const list = (label, key, glyph, entries = []) => collectionGroup({ key: `effects:${key}`, label: text(commands, label, key), glyph, className: "ve-pf2e-effects-list", children: [
     node("div", { className: "ve-pf2e-effect-rows", children: entries.length ? entries.map(effect => itemRow({ item: effect, actor, commands, scope, extraDetails: itemRuleControls(effect, actor, commands, status, scope), className: `ve-pf2e-effect-row${effect.expired ? " is-expired" : ""}`, primaryAction: canItem(actor, effect.id) ? itemPrimaryAction(effect, actor, commands, status, scope) : null, actions: [...itemPostActions(effect, actor, commands, status, scope), actor.capabilities?.owner ? effectControls(effect,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,status,scope})):null], header: [
       itemArt(effect),
@@ -941,12 +992,13 @@ function effectsPanel(actor, commands, status, scope, shell) {
   ] });
   return node("div", { className: "ve-pf2e-effects", children: [
     conditionsPanel(actor, commands, scope, shell),
-    d.afflictions?.length ? list("Afflictions", "TYPES.Item.affliction", "fa-heart-crack", d.afflictions) : null,
-    list("Effects", "PF2E.EffectsLabel", "fa-sparkles", d.effects),
-    list("Divine Intercessions", "PF2E.Actor.Character.FeatSlot.DivineIntercessions", "fa-sun", d.divineIntercessions)
+    details.afflictions?.length ? list("Afflictions", "TYPES.Item.affliction", "fa-heart-crack", details.afflictions) : null,
+    list("Effects", "PF2E.EffectsLabel", "fa-sparkles", details.effects),
+    list("Divine Intercessions", "PF2E.Actor.Character.FeatSlot.DivineIntercessions", "fa-sun", details.divineIntercessions)
   ] });
 }
 
+// Format shield bonus, hardness, and HP from the prepared shield record.
 function shieldSummary(shield, commands) {
   const states = [shield.raised ? text(commands, "Raised", "VEMOBILE.PF2E.Character.Shield.Raised") : "",
     shield.broken ? text(commands, "Broken", "VEMOBILE.PF2E.Character.Shield.Broken") : "",
@@ -958,6 +1010,7 @@ function shieldSummary(shield, commands) {
   ] });
 }
 
+// Present the supported rest action with pending state and result feedback.
 function restControl(actor, commands, status, scope) {
   const button = actionButton(commands, "Rest overnight", "fa-bed", () => issueCommand({ actor, command: ACTOR_COMMANDS.TAKE_REST,
     payload: { rest: "night" }, commands, status, scope }), scope, !can(actor, "rest"));
@@ -969,11 +1022,13 @@ function restControl(actor, commands, status, scope) {
   return button;
 }
 
+// Render PF2e actions, exploration options, and pinned action rows.
 function actionsPanel(actor, commands, status, scope, shell) {
   const pf2e = actor.pf2e ?? {};
   const actions = (pf2e.features ?? []).filter(feature => isActiveFeature(feature) || (feature.traitSlugs ?? []).some(trait => ["exploration", "downtime"].includes(trait)));
   const selected = shell.panelState.get(shell.activePanelContext)?.inputs?.get("actions-mode")?.value ?? "encounter";
   const modes = [["encounter", "Encounter", "PF2E.TabActionsEncounterLabel"], ["exploration", "Exploration", "PF2E.TabActionsExplorationLabel"], ["downtime", "Downtime", "PF2E.TabActionsDowntimeLabel"]];
+  // Assign each action feature to the mode selected by its traits.
   const modeOf = feature => (feature.traitSlugs ?? []).includes("exploration") ? "exploration" : (feature.traitSlugs ?? []).includes("downtime") ? "downtime" : "encounter";
   const groups = [];
   if (pf2e.strikes?.length) {
@@ -1003,6 +1058,7 @@ function actionsPanel(actor, commands, status, scope, shell) {
   return view;
 }
 
+// Hide action category headings whose rows are all filtered out.
 function updateActionGroups(root) {
   if (!root?.classList?.contains("ve-pf2e-actions-view")) return;
   const mode = root.dataset.actionMode ?? "encounter";
@@ -1012,6 +1068,7 @@ function updateActionGroups(root) {
   if (blank) blank.hidden = groups.some(group => !group.hidden);
 }
 
+// Render an exploration or feature action in the compact action list.
 function compactActionRow(feature, actor, commands, status, scope) {
   const cost = feature.actionCost ?? (feature.actions ? { type: "action", value: feature.actions } : null);
   return itemRow({ item: feature, actor, commands, scope, extraDetails: itemRuleControls(feature, actor, commands, status, scope), className: "ve-pf2e-feature ve-pf2e-compact-action", primaryAction: itemPrimaryAction(feature, actor, commands, status, scope), dataset: { actionType: feature.actionType ?? "" }, header: [
@@ -1023,11 +1080,13 @@ function compactActionRow(feature, actor, commands, status, scope) {
     payload: { itemId: feature.id, kind: "item" }, commands, status, scope, actionSession: true }), scope, !canItem(actor, feature.id)), explorationControl(feature,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,status,scope}))] });
 }
 
+// Bind item rule toggles through the shared action-command path.
 function itemRuleControls(item, actor, commands, status, scope) {
   const options = itemRuleOptions(item.id,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,status,scope}));
   const limits = actor.pf2e?.limitedUses?.find(entry => entry.itemId === item.id);
   const rows = ["frequency", "uses"].filter(kind => limits?.[kind]).map(kind => {
     const limit = limits[kind];
+    // Adjust the current item quantity through the shared command handler.
     const change = (delta, button) => issueCommand({actor,command:ACTOR_COMMANDS.EDIT_PF2E_INVENTORY,
       payload:{operation:"limit",itemId:item.id,kind,value:limit.value+delta,originalValue:limit.value,originalMax:limit.max},commands,status,scope});
     return node("div", {className:"ve-pf2e-resource-row",children:[
@@ -1043,20 +1102,24 @@ function itemRuleControls(item, actor, commands, status, scope) {
   return options || rows.length || resources ? node("div", {className:"ve-pf2e-item-rule-controls",children:[options,...rows,resources]}) : null;
 }
 
+// Combine biography and secondary character details in one panel.
 function morePanel(actor, biography, commands, status, scope, shell) {
   return node("div", { className: "ve-pf2e-more ve-pf2e-biography-view", children: [
     biographyPanel(biography, actor, commands, status, scope, shell)
   ] });
 }
 
+// Distinguish action features from passive feats and notes.
 function isActiveFeature(feature) {
   return feature.actionType ? feature.actionType !== "passive" : feature.type === "action" || feature.actions !== null && feature.actions !== undefined;
 }
 
+// Read stable item IDs for the Actor's pinned actions.
 function pinnedIds(actor) {
   return Array.isArray(actor.quickbar) ? actor.quickbar.map(slot => slot?.kind === "item" ? slot.itemId : "").filter(Boolean) : [];
 }
 
+// Resolve pinned IDs to current features before rendering action rows.
 function pinnedRows(pf2e, pinned, actor, commands, status, scope) {
   const rows = [];
   for (const slug of pinned) {
@@ -1068,21 +1131,23 @@ function pinnedRows(pf2e, pinned, actor, commands, status, scope) {
   return rows;
 }
 
+// Choose the primary summary action supported by this item and Actor.
 function itemSummaryAction(item, actor, commands, status, scope) {
   return actionButton(commands, item.name, "fa-comment-dots", () => issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM,
     payload: { itemId: item.id, kind: "item" }, commands, status, scope, actionSession: true }), scope, !canItem(actor, item.id));
 }
 
+// Render grouped statistic rolls while retaining each exact slug.
 function statisticList(title, statistics, defaultSlug, actor, commands, status, scope, saves = false, showRank = false) {
   return node("section", { className: "ve-sheet-card ve-pf2e-statistics-card", children: [
     sectionHeading(commands, title, saves ? "fa-shield" : "fa-dice-d20"),
-    statistics.length ? node("div", { className: "ve-pf2e-statistic-list", children: statistics.map(stat => {
-      const slug = stat.slug || defaultSlug;
+    statistics.length ? node("div", { className: "ve-pf2e-statistic-list", children: statistics.map(statistic => {
+      const slug = statistic.slug || defaultSlug;
       const action = saves ? ACTOR_COMMANDS.ROLL_SAVE : slug === "perception" ? ACTOR_COMMANDS.ROLL_STATISTIC : ACTOR_COMMANDS.ROLL_SKILL;
       const payload = saves ? { ability: slug } : action === ACTOR_COMMANDS.ROLL_STATISTIC ? { statistic: slug } : { skill: slug };
-      const roll = action === ACTOR_COMMANDS.ROLL_SKILL ? skillRoll(stat, actor, commands, status, scope) : rollButton(stat.label || slug, `${modifier(stat.modifier)}${showRank ? rankBadgeText(commands, stat) : ""}`, () => issueCommand({
+      const roll = action === ACTOR_COMMANDS.ROLL_SKILL ? skillRoll(statistic, actor, commands, status, scope) : rollButton(statistic.label || slug, `${modifier(statistic.modifier)}${showRank ? rankBadgeText(commands, statistic) : ""}`, () => issueCommand({
         button: null, actor, command: action, payload, commands, status,
-        resultLabel: `${stat.label || slug} ${text(commands, "Check", "VEMOBILE.PF2E.Character.Check")}`,
+        resultLabel: `${statistic.label || slug} ${text(commands, "Check", "VEMOBILE.PF2E.Character.Check")}`,
         scope
       }), scope, can(actor, saves ? "rollSave" : action === ACTOR_COMMANDS.ROLL_SKILL ? "rollSkill" : "rollStatistic", slug));
       return node("div", { className: "ve-pf2e-statistic-row", children: [roll] });
@@ -1090,9 +1155,11 @@ function statisticList(title, statistics, defaultSlug, actor, commands, status, 
   ] });
 }
 
+// Present bounded HP and temporary HP controls for the current Actor.
 function hpPanel(actor, commands, status, scope) {
   const hp = actor.hp;
   const input = node("input", { attrs: { type: "number", min: "0", step: "1", value: "1", inputmode: "numeric", "aria-label": text(commands, "Hit point amount", "VEMOBILE.PF2E.Character.HitPointAmount") } });
+  // Read the HP amount as a whole non-negative value.
   const amount = () => Math.max(0, Math.floor(Number(input.value) || 0));
   const commandsList = [
     ["Damage", "fa-heart-crack", { operation: "damage", amount }],
@@ -1109,11 +1176,14 @@ function hpPanel(actor, commands, status, scope) {
   ] });
 }
 
+// Exclude resources that have dedicated controls elsewhere in the panel.
 const specialResources = actor => (actor.pf2e?.resources ?? []).filter(resource => !["heroPoints", "focus", "mythic-points"].includes(resource.id));
+// Check whether a special resource belongs in this Actor's view.
 function resourceItemVisible(actor, id) {
   return [...(actor.pf2e?.inventory ?? []), ...(actor.pf2e?.features ?? [])].some(item => item.id === id);
 }
 
+// Render resource counters and execute each update through its native command.
 function resourcesPanel(resources = [], actor, commands, status, scope, heading = true) {
   if (!resources.length) return null;
   return node("section", { className: "ve-sheet-card ve-pf2e-resources", children: [heading ? sectionHeading(commands, "Resources", "fa-gauge") : null, node("div", {
@@ -1126,12 +1196,14 @@ function resourcesPanel(resources = [], actor, commands, status, scope, heading 
     ] }, scope))
   })] });
 
+  // Block duplicate clicks and recheck whether the resource remains editable.
   function changeResource(resource, delta, button) {
     return issueCommand({ actor, command: ACTOR_COMMANDS.SET_PF2E_RESOURCE,
       payload: { resource: resource.id, value: resource.value + delta, originalValue: resource.value, originalMax: resource.max }, commands, status, scope });
   }
 }
 
+// Present each strike with its variants, damage choices, and permitted actions.
 function strikesPanel(strikes, actor, commands, status, scope) {
   return collectionGroup({ key: "actions:strikes", label: text(commands, "Attacks", "VEMOBILE.PF2E.Character.Section.Strikes"), glyph: "fa-swords", open: true, className: "ve-pf2e-strikes", children: [node("div", {
     className: "ve-pf2e-strike-list", children: strikes.map(strike => node("article", { className: "ve-pf2e-strike", dataset: { pf2eSearchText: [strike.label, ...(strike.traits ?? [])].join(" ").toLocaleLowerCase(), itemId: strike.itemId, actionType: "strike" }, children: [
@@ -1164,12 +1236,15 @@ function strikesPanel(strikes, actor, commands, status, scope) {
     ] }, scope))
   })] });
 
+  // Route the selected strike's embedded item action through shared command handling.
   function useItem(payload) {
     return issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM, payload, commands, status, scope, actionSession: true });
   }
 }
 
+// Present auxiliary and damage-type controls supplied by the strike record.
 function strikeNativeControls(strike, actor, commands, status, scope) {
+  // Execute one supplied item action with action-session and error handling.
   const execute = payload => issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM,
     payload: { itemId: strike.itemId, kind: "strike", slug: strike.slug, ...payload }, commands, status, scope });
   const auxiliary = (strike.auxiliaryActions ?? []).map(action => {
@@ -1189,6 +1264,7 @@ function strikeNativeControls(strike, actor, commands, status, scope) {
   return node("div", { className: "ve-pf2e-actions ve-pf2e-native-strike-controls", children: [...auxiliary, versatile] });
 }
 
+// Show carry adjustments when this strike's source item supports them.
 function strikeCarryControls(strike, actor, commands, status, scope) {
   const item = actor.pf2e?.inventory?.find(item => item.id === strike.itemId);
   if (!item) return actionButton(commands, "Details", "fa-book-open", () => execute(commands, ACTOR_COMMANDS.OPEN_ITEM_SHEET, actor, { itemId: strike.itemId }, status, scope), scope, !canItem(actor, strike.itemId));
@@ -1201,13 +1277,16 @@ function strikeCarryControls(strike, actor, commands, status, scope) {
   ] });
 }
 
+// Build the nested PF2e inventory while preventing cycles in container records.
 function inventoryPanel(actor, commands, status, scope, shell) {
   const inventory = actor.pf2e?.inventory ?? [];
   const byId = new Map(inventory.map(item => [item.id, item]));
   const topLevel = inventory.filter(item => !item.containerId || !byId.has(item.containerId));
+  // Map an item type into the category list used by this inventory panel.
   const category = item => item.type === "weapon" || item.type === "shield" ? "weapon" : item.type === "ammo" || item.category === "ammo" ? "ammo" : ["armor", "consumable", "treasure", "backpack"].includes(item.type) ? item.type : "equipment";
   const sections = [["weapon", "Weapons & Shields", "PF2E.Actor.Inventory.Section.WeaponsAndShields", "fa-swords"], ["armor", "Armor", "TYPES.Item.armor", "fa-shirt"], ["equipment", "Equipment", "TYPES.Item.equipment", "fa-toolbox"], ["consumable", "Consumables", "TYPES.Item.consumable", "fa-flask"], ["ammo", "Ammunition", "TYPES.Item.ammo", "fa-bow-arrow"], ["treasure", "Treasure", "TYPES.Item.treasure", "fa-coins"], ["backpack", "Containers", "TYPES.Item.backpack", "fa-backpack"]];
   const order = new Map(inventory.map((item, index) => [item.id, index]));
+  // Render nested item rows while stopping at any container already in this path.
   const renderItem = (item, ancestors = new Set()) => {
     const next = new Set([...ancestors, item.id]);
     const contents = inventory.filter(child => child.containerId === item.id && !next.has(child.id));
@@ -1248,15 +1327,18 @@ function inventoryPanel(actor, commands, status, scope, shell) {
   return view;
 }
 
+// Add secondary item actions after the primary inventory action.
 function itemPostActions(item, actor, commands, status, scope) {
   return canItem(actor, item.id) ? [actionButton(commands, "Post to chat", "fa-comment-dots", () => issueCommand({ actor,
     command: ACTOR_COMMANDS.USE_ITEM, payload: { itemId: item.id, kind: "item" }, commands, status, scope, actionSession: true }), scope)] : [];
 }
 
+// Confirm that the published Actor capabilities allow consuming this item.
 function canConsumeItem(actor, item) {
   return canItem(actor, item.id) && (item.type !== "consumable" || actor.pf2e?.limitedUses?.find(limit => limit.itemId === item.id)?.uses?.value !== 0);
 }
 
+// Select the item's primary action from its current capability and action record.
 function itemPrimaryAction(item, actor, commands, status, scope) {
   const consume = item.type === "consumable";
   return { label: `${text(commands, consume ? "Use" : "Post to chat", ACTION_LABELS[consume ? "Use" : "Post to chat"])}: ${item.name}`,
@@ -1264,6 +1346,7 @@ function itemPrimaryAction(item, actor, commands, status, scope) {
       payload: { itemId: item.id, kind: consume ? "consume" : "item" }, commands, status, scope, actionSession: true }) };
 }
 
+// Compose an inventory card with carry state, supported controls, and details.
 function itemCard(item, actor, commands, status, scope) {
   const actions = [actionButton(commands, item.type === "consumable" ? "Use" : "Post to chat", item.type === "consumable" ? "fa-hand" : "fa-comment-dots", () => issueCommand({
     actor, command: ACTOR_COMMANDS.USE_ITEM, payload: { itemId: item.id, kind: item.type === "consumable" ? "consume" : "item" }, commands, status, scope, actionSession: true
@@ -1289,6 +1372,7 @@ function itemCard(item, actor, commands, status, scope) {
   ], actions });
 }
 
+// Build the carry selector from options and selection in the item record.
 function carrySelectForItem(item, commands, scope) {
   const current = item.carryType === "held"
     ? (Number(item.handsHeld) === 2 ? "held-2" : "held-1")
@@ -1303,6 +1387,7 @@ function carrySelectForItem(item, commands, scope) {
   ] }, scope) };
 }
 
+// Render spellcasting entries lazily with local filters and preserved panel state.
 function spellsPanel(actor, commands, status, scope, shell) {
   const entries = actor.pf2e?.spellcasting ?? [];
   const focus = actor.pf2e?.resources?.find(resource => resource.id === "focus");
@@ -1310,6 +1395,7 @@ function spellsPanel(actor, commands, status, scope, shell) {
   const modes = [["known", "Known Spells", "PF2E.Actor.Character.Spellcasting.Tab.KnownSpells"], ["rituals", "Rituals", "PF2E.Actor.Character.Spellcasting.Tab.Rituals"], ["activations", "Activations", "PF2E.Actor.Character.Spellcasting.Tab.Activations"]];
   const panes = new Map();
   let view;
+  // Build a known-spells view or one of the alternate spell browsing collections.
   const createPane = mode => {
     if (mode === "known") {
       const cards = entries.map(entry => spellEntry(entry, actor, commands, status, scope, shell)).filter(Boolean);
@@ -1329,6 +1415,7 @@ function spellsPanel(actor, commands, status, scope, shell) {
       ] })) : [empty(commands)] })
     ] });
   };
+  // Reuse an existing spell pane or mount one with saved filters and disclosures.
   const ensurePane = mode => {
     let pane = panes.get(mode);
     if (pane) return pane;
@@ -1366,14 +1453,17 @@ function spellsPanel(actor, commands, status, scope, shell) {
   return view;
 }
 
+// Require item permission and an unspent activation before enabling this cast.
 const canSpellReference = (actor, item) => canItem(actor, item.id) && (item.castAction?.kind !== "activation" || item.castAction.originalUses !== 0);
 
+// Render the primary cast/use action for a spell obtained from an item.
 function spellReferencePrimary(item, actor, commands, status, scope) {
   if (!item.castAction) return canItem(actor,item.id) ? itemPrimaryAction(item,actor,commands,status,scope) : null;
   return {label: text(commands,"Cast",ACTION_LABELS.Cast)+": "+item.name, enabled:canSpellReference(actor,item),
     activate:button=>issueCommand({button,actor,command:ACTOR_COMMANDS.USE_ITEM,payload:item.castAction,commands,status,scope,actionSession:true})};
 }
 
+// Summarize one casting entry and expose its supported preparation editor.
 function castingSummary(entry, commands, actor, scope, shell) {
   return node("section", { className: "ve-sheet-card ve-pf2e-casting-summary", children: [
     node("div", { className: "ve-pf2e-casting-identity", children: [icon("fa-book-open"), node("div", { children: [
@@ -1386,6 +1476,7 @@ function castingSummary(entry, commands, actor, scope, shell) {
   ] });
 }
 
+// Build spell groups for one exact spellcasting entry.
 function spellEntry(entry, actor, commands, status, scope, shell) {
   const options = entry.options ?? [];
   if (!options.length && !entry.preparation && !entry.management) return null;
@@ -1407,6 +1498,7 @@ function spellEntry(entry, actor, commands, status, scope, shell) {
   ] });
 }
 
+// Describe the prepared or spontaneous slots in one spell-rank group.
 function slotSummary(entry, group, commands) {
   if (group.cantrip) return null;
   const slot = entry.slots?.find(slot => slot.rank === group.rank);
@@ -1414,6 +1506,7 @@ function slotSummary(entry, group, commands) {
   return node("small", { className: "ve-pf2e-slot-count", text: `${supplement(commands, "Slots", "Slots")} ${number(commands, slot.value ?? 0)}/${number(commands, slot.max)}` });
 }
 
+// Present one spell's actions with exact entry, slot, and current capability context.
 function spellRow(spell, entry, actor, commands, status, scope) {
   const traits = spell.traits ?? [];
   const cost = spell.actionCost;
@@ -1436,7 +1529,9 @@ function spellRow(spell, entry, actor, commands, status, scope) {
   const payload = { itemId: spell.spellId, kind: "cast", entryId: entry.entryId, rank: spell.rank,
     ...(spell.slotId === null ? {} : { slotId: spell.slotId }) };
   const enabled = !spell.expended && canItem(actor, spell.spellId);
+  // Cast this spell from its exact entry, rank, and slot payload.
   const cast = button => issueCommand({ button, actor, command: ACTOR_COMMANDS.USE_ITEM, payload, commands, status, scope, actionSession: true });
+  // Build cast control on demand so the row shares the same revalidated cast path.
   const castButton = () => actionButton(commands, "Cast", "fa-wand-sparkles", () => cast(), scope, !enabled);
   const row = itemRow({ item, actor, commands, scope, extraDetails: itemRuleControls(item, actor, commands, status, scope), className: `ve-pf2e-spell${spell.expended ? " is-expended" : ""}`,
     disclosureKey: `spell:${entry.entryId}:${spell.presentationId}`,
@@ -1462,6 +1557,7 @@ function filterChips({ className, key, label, options, selected, visible = () =>
   });
   select.value = selected;
   if (dropdown) scope.listen(select, "focus", () => rememberPanelFocus(shell, key));
+  // Refresh selected filter chips and apply their current presentation filters.
   const sync = () => {
     for (const chip of chips) {
       const active = chip.dataset.filterValue === select.value;
@@ -1479,6 +1575,7 @@ function filterChips({ className, key, label, options, selected, visible = () =>
   return node("div", { className: `${className} ve-pf2e-filter-chips`, attrs: { role: "group", "aria-label": label }, children: [select, ...chips] });
 }
 
+// Create a search field and retain its focus across panel refreshes.
 function searchInput(commands, fallback, key, stateKey, scope, shell) {
   const saved = shell.panelState.get(shell.activePanelContext)?.inputs?.get(stateKey)?.value ?? "";
   return node("label", { className: "ve-pf2e-search", children: [icon("fa-magnifying-glass"), node("input", {
@@ -1488,10 +1585,12 @@ function searchInput(commands, fallback, key, stateKey, scope, shell) {
   }, scope)] }, scope);
 }
 
+// Record which filter or search control should regain focus after rendering.
 function rememberPanelFocus(shell, key) {
   const saved = shell.panelState.get(shell.activePanelContext) ?? { inputs: new Map(), disclosures: new Map() };
   saved.focusKey = key; shell.panelState.set(shell.activePanelContext, saved);
 }
+// Hide rows that do not match the entered text, without changing source data.
 function filterPresentationRows(input, query) {
   const root = input.closest?.(".ve-pf2e-actions-view, .ve-pf2e-gear-view, .ve-pf2e-spells, .ve-pf2e-feats");
   if (!root) return;
@@ -1504,11 +1603,13 @@ function filterPresentationRows(input, query) {
   if (needle) for (const container of root.querySelectorAll(".ve-pf2e-container-contents")) if ([...container.querySelectorAll(".ve-pf2e-item")].some(row => !row.hidden)) container.open = true;
 }
 
+// Apply a local spell filter to one row while leaving its snapshot unchanged.
 function setPresentationFilter(row, kind, hidden) {
   row.dataset[kind] = String(hidden);
   row.hidden = row.dataset.pf2eSearchHidden === "true" || row.dataset.pf2eFilterHidden === "true";
 }
 
+// Hide spell-rank headings when all of their rows are filtered out.
 function hideEmptySpellGroups(root) {
   for (const group of root?.querySelectorAll?.(".ve-pf2e-spell-rank-group") ?? []) {
     const rows = [...group.querySelectorAll(".ve-pf2e-spell")];
@@ -1517,6 +1618,7 @@ function hideEmptySpellGroups(root) {
   for (const entry of root?.querySelectorAll?.(".ve-pf2e-spell-entry") ?? []) entry.hidden = [...entry.querySelectorAll(".ve-pf2e-spell-rank-group")].every(group => group.hidden);
 }
 
+// Format item bulk and any prepared bulk adjustment for inventory rows.
 function bulkSummary(bulk, commands) {
   const amount = bulk.value ?? "—";
   const thresholds = [bulk.encumberedAfter !== null && bulk.encumberedAfter !== undefined ? `${text(commands, "Encumbered", "VEMOBILE.PF2E.Character.Bulk.Encumbered")} ${bulk.encumberedAfter}` : "",
@@ -1527,6 +1629,7 @@ function bulkSummary(bulk, commands) {
   ] });
 }
 
+// Choose the action-cost glyph that matches the prepared feature cost.
 function costGlyph(commands, cost) {
   const type = cost?.type;
   const count = Number(cost?.value);
@@ -1536,6 +1639,7 @@ function costGlyph(commands, cost) {
   return node("span", { className: `ve-pf2e-action-cost${glyph ? " ve-pf2e-native-cost" : ""} is-${type || "unknown"}`, attrs: { "aria-label": label, title: label }, text: glyph || label });
 }
 
+// Group feats and passive features using PF2e item actions where available.
 function featsPanel(actor, commands, status, scope, shell) {
   const features = (actor.pf2e?.features ?? []).filter(feature => feature.type === "feat" || feature.type === "campaignFeature" || !isActiveFeature(feature));
   const groups = actor.pf2e?.featGroups?.length ? actor.pf2e.featGroups : [{ id: "features", label: text(commands, "Feats", "PF2E.Item.Feat.Plural"), entries: features }];
@@ -1553,16 +1657,19 @@ function featsPanel(actor, commands, status, scope, shell) {
   ] });
 }
 
+// Group related feats or features into a reusable list presentation.
 function featureList(features, actor, commands, status, scope, title) {
   return node("section", { className: "ve-sheet-card ve-pf2e-features", children: [sectionHeading(commands, title, "fa-book-sparkles"), features.length ? node("div", {
     className: "ve-pf2e-feature-list", children: features.map(feature => featureRow(feature, actor, commands, status, scope))
   }) : empty(commands)] });
 }
 
+// Present one PF2e feature with its native action and detail affordances.
 function featureRow(feature, actor, commands, status, scope) {
   return compactActionRow(feature, actor, commands, status, scope);
 }
 
+// Load enriched biography content and discard it if the Actor or pane scope changes.
 function biographyPanel(biography, actor, commands, status, scope, shell) {
   const context = shell.activePanelContext;
   const enriched = node("div", { className: "ve-pf2e-biography-enriched is-loading", attrs: { "aria-busy": "true", "data-actor-source-uuid": actor.sourceUuid } });
@@ -1616,6 +1723,7 @@ function biographyPanel(biography, actor, commands, status, scope, shell) {
   return node("section", { className: "ve-pf2e-biography", children: [enriched] });
 }
 
+// Derive visible condition choices from active entries in this Actor snapshot.
 function conditionChoices(actor) {
   const active = (actor?.pf2e?.conditions ?? []).filter(condition => condition.active);
   const choices = new Map((actor?.pf2e?.availableConditions ?? []).map(condition => [condition.slug, { ...condition, active: false, value: 0, locked: false }]));
@@ -1629,6 +1737,7 @@ function conditionChoices(actor) {
   return [...choices.values()].sort((a,b) => Number(b.active) - Number(a.active) || a.label.localeCompare(b.label));
 }
 
+// Render condition artwork as a standalone image or compact badge.
 function conditionArt(condition, commands, badge = false) {
   return node("span", { className: "ve-pf2e-condition-art", children: [
     condition.img ? node("img", { attrs: { src: condition.img, alt: "", draggable: false } }) : icon("fa-circle-exclamation"),
@@ -1636,6 +1745,7 @@ function conditionArt(condition, commands, badge = false) {
   ] });
 }
 
+// Present active conditions and open the shared editable conditions overlay.
 function conditionsPanel(actor, commands, scope, shell) {
   const active = conditionChoices(actor).filter(condition => condition.active);
   return node("section", { className: "ve-sheet-card ve-pf2e-conditions", children: [
@@ -1651,6 +1761,7 @@ function conditionsPanel(actor, commands, scope, shell) {
 }
 
 /** A locally owned sub-sheet: live snapshots update rows without closing it or losing scroll. */
+// Open the scoped condition overlay and keep its modal ownership on the shell.
 function openConditionsOverlay(shell, ownerScope, overlayHost) {
   if (ownerScope.disposed || !shell.actor || shell.conditionModal) return;
   const scope = ownerScope.child("pf2e-conditions-overlay");
@@ -1704,9 +1815,11 @@ function openConditionsOverlay(shell, ownerScope, overlayHost) {
   close.focus?.({ preventScroll: true });
 }
 
+// Render one condition row and recheck Actor context before changing its value.
 function conditionOverlayRow(condition, shell, modal, status, rowScope, scope) {
   const commands = shell.conditionCommands;
   const editable = can(shell.actor, "conditions") && !condition.locked && !modal.pending.has(condition.slug);
+  // Recheck this exact character's current condition and lock its row while the native increase/decrease executes.
   const change = async direction => {
     if (scope.disposed || shell.actor?.sourceUuid !== modal.sourceUuid || !can(shell.actor, "conditions") || modal.pending.has(condition.slug)) return;
     const current = conditionChoices(shell.actor).find(row => row.slug === condition.slug);
@@ -1716,6 +1829,7 @@ function conditionOverlayRow(condition, shell, modal, status, rowScope, scope) {
     try { await issueCommand({ actor: shell.actor, command: ACTOR_COMMANDS.SET_PF2E_CONDITION, payload: { conditionId: condition.slug, direction }, commands: shell.conditionCommands, status, scope }); }
     finally { modal.pending.delete(condition.slug); if (!scope.disposed) modal.render(); }
   };
+  // Build one accessible condition adjustment button with the row's current permission and pending-state checks.
   const step = direction => node("button", { attrs: { type: "button", disabled: !editable || (direction < 0 && !condition.active),
     "data-condition-focus": `${condition.slug}:${direction}`, "aria-label": localizedText(commands.localize, direction < 0 ? "VEMOBILE.PF2E.Character.Action.DecreaseCondition" : "VEMOBILE.PF2E.Character.Action.IncreaseCondition", direction < 0 ? "Decrease {condition}" : "Increase {condition}", { condition: condition.label }) },
     children: [icon(direction < 0 ? "fa-minus" : "fa-plus")], on: { click: () => change(direction) } }, rowScope);
@@ -1731,10 +1845,11 @@ function conditionOverlayRow(condition, shell, modal, status, rowScope, scope) {
   ] });
 }
 
+// Bind an explicit user action with busy-state protection and optional live enablement.
 function actionButton(commands, label, iconName, onClick, scope, disabled = false, accessibleLabel = null, isEnabled = null) {
   const localizedLabel = ACTION_LABELS[label] ? text(commands, label, ACTION_LABELS[label]) : label;
   return node("button", { className: "ve-pf2e-action-button", attrs: { type: "button", disabled, "aria-label": accessibleLabel ?? localizedLabel },
-    on: { click: async event => {
+    on: { /* Lock this action button while its callback runs and recompute availability only if the mounted owner survives. */ click: async event => {
       const button = event.currentTarget;
       if (button.disabled) return;
       button.disabled = true;
@@ -1745,8 +1860,9 @@ function actionButton(commands, label, iconName, onClick, scope, disabled = fals
   }, scope);
 }
 
+// Render a PF2e roll control with its prepared modifier and enabled state.
 function rollButton(label, meta, onClick, scope, enabled) {
-  return node("button", { className: "ve-quick-roll ve-pf2e-roll", attrs: { type: "button", disabled: !enabled }, on: { click: async event => {
+  return node("button", { className: "ve-quick-roll ve-pf2e-roll", attrs: { type: "button", disabled: !enabled }, on: { /* Prevent duplicate activation and restore only a still-mounted button after its action settles. */ click: async event => {
     const button = event.currentTarget;
     if (button.disabled) return;
     button.disabled = true;
@@ -1756,6 +1872,7 @@ function rollButton(label, meta, onClick, scope, enabled) {
   }, scope);
 }
 
+// Revalidate Actor/session ownership around an async action and show its result safely.
 async function issueCommand({ button, actor, command, payload, commands, status, scope, resultLabel = "", actionSession = false, isEnabled = null }) {
   if (scope.disposed || button?.disabled) return;
   if (button) { button.disabled = true; button.classList.add("is-pending"); button.setAttribute("aria-busy", "true"); }
@@ -1765,7 +1882,9 @@ async function issueCommand({ button, actor, command, payload, commands, status,
   let openedRootId = "";
   // A roll popup or resource publication replaces the pane during its own
   // action. Result ownership belongs to the retained character shell.
+  // Check the shell's exact Actor source after every asynchronous command boundary.
   const current = () => commands.pf2eActionCurrent?.(actor.sourceUuid) ?? !scope.disposed;
+  // Open each native action's root message once and only while the originating Actor view remains current.
   const onActionSession = session => {
     const id = String(session?.rootMessageId ?? "");
     if (!id || id === openedRootId || !current()) return;
@@ -1790,6 +1909,7 @@ async function issueCommand({ button, actor, command, payload, commands, status,
   }
 }
 
+// Run one named command and present failures only while its pane remains mounted.
 function execute(commands, command, actor, payload, status, scope) {
   const details = command === ACTOR_COMMANDS.OPEN_ITEM_SHEET && commands.openPf2eItemDetails;
   const result = details ? details({ actorSourceUuid: actor.sourceUuid, ...payload })
@@ -1802,25 +1922,33 @@ function execute(commands, command, actor, payload, status, scope) {
   });
 }
 
+// Read the published capability bit, optionally narrowed to one feature slug.
 function can(actor, capability, slug = null) {
   const value = actor?.capabilities?.[capability];
   return Array.isArray(value) ? (!slug || value.includes(slug)) : value === true;
 }
 
+// Resolve item use permission from the current Actor record by stable item ID.
 function canItem(actor, id) {
   const value = actor?.capabilities?.useItem;
   return value === true || (Array.isArray(value) && value.includes(id));
 }
 
+// Build the standard heading row used by PF2e sheet sections.
 function sectionHeading(commands, label, iconName, action = null) {
   return node("header", { className: "ve-sheet-card-heading", children: [icon(iconName), node("h3", { text: SECTION_LABELS[label] ? text(commands, label, SECTION_LABELS[label]) : label }), action] });
 }
 
+// Format one localized PF2e statistic as a plain readout.
 function statReadout(commands, label, key, value) {
   return node("div", { className: "ve-pf2e-stat-readout", children: [node("span", { text: text(commands, label, key) }), node("strong", { text: typeof value === "number" ? number(commands, value) : String(value ?? "—") })] });
 }
 
+// Render the shared PF2e empty-state message.
 function empty(commands) { return node("p", { className: "ve-empty", text: text(commands, "Nothing to show here.", "VEMOBILE.PF2E.Character.Empty") }); }
+// Resolve localized PF2e labels with caller-provided fallback text.
 function text(commands, fallback, key) { return localizedText(commands?.localize, key, fallback); }
+// Format snapshot numbers using the current locale.
 function number(commands, value) { return localizedNumber(Number(value ?? 0), commands?.locale ?? "en"); }
+// Add a sign to finite modifiers and show a dash for unavailable values.
 function modifier(value) { const n = Number(value); return Number.isFinite(n) ? `${n >= 0 ? "+" : ""}${n}` : "—"; }

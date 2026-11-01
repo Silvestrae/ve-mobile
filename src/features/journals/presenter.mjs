@@ -4,9 +4,11 @@ import { renderImageViewer } from "../../ui/image-viewer.mjs";
 import { buildJournalTree, journalBranchCount } from "./model.mjs";
 import { bindJournalFontSize } from "./font-size-controller.mjs";
 
+// Render the journal library or the currently selected page from snapshot state.
 export function renderJournals({ state, commands, scope }) {
   if (state.journal) return journalReader(state, commands, scope);
   const journals = state.snapshot?.journals ?? [];
+  // Use the feature localizer with plain fallback text for library labels.
   const localize = (key, fallback, data) => commands.localize?.(key, fallback, data) ?? fallback;
   const status = node("p", { className: `ve-journal-status${state.journalError ? " is-error" : ""}`, attrs: { role: "status", "aria-live": "polite" }, text: state.journalLoading ? localize("VEMOBILE.Journals.Opening", "Opening journal…") : localize(state.journalError, state.journalError) });
   return node("section", { className: "ve-list-screen ve-journal-library", attrs: { "aria-busy": String(Boolean(state.journalLoading)) }, children: [
@@ -16,10 +18,12 @@ export function renderJournals({ state, commands, scope }) {
   ] });
 }
 
+// Render one folder level while keeping journal and folder order from the model.
 function renderBranch(branch, commands, scope) {
   return [...Array.from(branch.folders.values()).map((child) => folderNode(child, commands, scope)), ...branch.journals.map((journal) => journalButton(journal, commands, scope))];
 }
 
+// Build a disclosure row for a folder and reflect native open state accessibly.
 function folderNode(branch, commands, scope) {
   const details = node("details", { className: "ve-journal-folder", children: [
     node("summary", { attrs: { "aria-expanded": "false" }, children: [icon("fa-chevron-right"), icon("fa-folder"), node("strong", { text: branch.folder.name }), node("small", { text: journalBranchCount(branch) })] }),
@@ -29,6 +33,7 @@ function folderNode(branch, commands, scope) {
   return details;
 }
 
+// Open a journal by stable ID and show its available page count.
 function journalButton(journal, commands, scope) {
 
   return node("button", { className: "ve-journal-entry", attrs: { type: "button" }, on: { click: () => void commands.openJournal(journal.id).catch(() => {}) }, children: [
@@ -38,13 +43,16 @@ function journalButton(journal, commands, scope) {
   ] }, scope);
 }
 
+// Render page navigation, native editing when permitted, and image viewing.
 function journalReader(state, commands, scope) {
+  // Use the feature localizer for page navigation and editor guidance.
   const localize = (key, fallback, data) => commands.localize?.(key, fallback, data) ?? fallback;
   const journal = state.journal;
   const pages = journal.pages ?? [];
   const selectedIndex = Math.max(0, pages.findIndex((page) => page.id === state.journalPageId));
   const page = pages[selectedIndex] ?? null;
   const editStatus = node("p", { className: "ve-journal-status is-error", attrs: { role: "status", "aria-live": "polite", hidden: true } });
+  // Ask Foundry to open its editor; the gateway rechecks edit authority.
   const editCurrentPage = async () => {
     editStatus.hidden = true;
     try { await commands.openNativeJournalEditor(journal.id, page?.id ?? ""); }
@@ -72,6 +80,7 @@ function journalReader(state, commands, scope) {
   ].filter(Boolean) });
 }
 
+// Present rich text, image pages, or a link for other readable attachments.
 function journalPage(page, selectedHeading, commands, scope) {
   if (page.type === "text") {
     const content = node("article", { className: "ve-journal-rich-text" });
@@ -80,8 +89,8 @@ function journalPage(page, selectedHeading, commands, scope) {
     if (selectedHeading) queueMicrotask(() => {
       if (scope.disposed || !content.isConnected) return;
       const headings = [...content.querySelectorAll("h1, h2, h3, h4, h5, h6")].filter((heading) => !heading.hasAttribute("data-no-toc"));
-      const toc = page.toc ?? [];
-      const index = toc.findIndex((heading) => heading.slug === selectedHeading);
+      const tableOfContents = page.toc ?? [];
+      const index = tableOfContents.findIndex((heading) => heading.slug === selectedHeading);
       const target = [...content.querySelectorAll("[id]")].find((element) => element.id === selectedHeading) ?? headings[index];
       const scroller = content.closest(".ve-viewport");
       if (!target || !scroller) return;

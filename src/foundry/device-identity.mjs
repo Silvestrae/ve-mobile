@@ -16,6 +16,8 @@ export function createDeviceIdentityGateway({
   });
 }
 
+/** Read available browser model hints without persisting or combining identity
+ * signals; fall back to a device family when the browser withholds the model. */
 export async function resolveDeviceIdentity(navigatorRef = globalThis.navigator) {
   const navigator = navigatorRef ?? {};
   const userAgentData = navigator.userAgentData;
@@ -45,6 +47,7 @@ export async function resolveDeviceIdentity(navigatorRef = globalThis.navigator)
   return Object.freeze({ label: localizeFoundry("VEMOBILE.Interface.DeviceIdentity.DesktopBrowser", "Desktop browser"), precision: "family" });
 }
 
+// Normalize the device model string while removing identifying suffixes and unsupported characters.
 function cleanModel(value) {
   const model = String(value ?? "").replace(/[\u0000-\u001F\u007F]/gu, "").trim();
   // Some privacy-reduced browser hints return a placeholder such as "K".

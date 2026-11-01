@@ -1,8 +1,10 @@
+// Render the kernel-provided result without rolling dice or interpreting live system documents.
 import { localizedText } from "./localized-text.mjs";
 import { icon, node } from "./dom.mjs";
 
 const ROLL_RESULT_DIE_ICONS = new Set([4, 6, 8, 10, 12, 20, 100]);
 
+// Show the evaluated dice/modifier steps, falling back to the formula when no breakdown is available.
 function rollResultExpression(result, localize) {
   if (!result.breakdown?.length) {
     return result.formula ? node("code", { className: "ve-roll-result-expression is-formula-only", text: result.formula }) : null;
@@ -35,13 +37,14 @@ function rollResultExpression(result, localize) {
   });
 }
 
+// Build a one-dismiss result surface and clear its model before a route change can dispose the presenter.
 export function renderRollResultOverlay(result, commands, scope) {
   if (!result) return null;
   let dismissing = false;
   return node("div", {
     className: "ve-roll-result-layer",
     attrs: { role: "presentation", "data-ve-scene-control": true },
-    on: { click: (event) => {
+    on: { /* Dismiss the result model immediately so a later native result or route teardown cannot revive the overlay. */ click: (event) => {
       if (dismissing) return;
       dismissing = true;
       event.preventDefault();

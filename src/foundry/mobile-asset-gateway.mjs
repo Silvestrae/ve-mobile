@@ -21,6 +21,7 @@ import {
 
 const DEFAULT_QUALITY = 0.91;
 
+/** Resolve Auto/On/Off against the physical device class, not forced layout mode. */
 export function shouldUseMobileDerivatives(setting, physicalDeviceClass) {
   const preference = ["auto", "on", "off"].includes(setting) ? setting : "auto";
   if (preference === "on") return true;
@@ -28,6 +29,9 @@ export function shouldUseMobileDerivatives(setting, physicalDeviceClass) {
   return ["phone", "tablet"].includes(physicalDeviceClass);
 }
 
+/** Own the mobile-asset catalogue, derivative aliases, scene-risk snapshots and
+ * optimizer operations. Catalogue identity and session hooks invalidate the
+ * bounded caches; policy-dependent risk is derived only for requested scenes. */
 export function createFoundryMobileAssetGateway({
   getGame = () => globalThis.game,
   getPixi = () => globalThis.PIXI,
@@ -68,16 +72,21 @@ export function createFoundryMobileAssetGateway({
   let sessionKey = "";
   let ownerGeneration = 0;
   const publishedRisks = new Map();
+  // Increment the diagnostic counter for the supplied asset operation.
   const count = name => performanceObserver?.increment?.(name);
+  // Capture current world and user identity for session-scoped asset caches.
   const currentSession = () => {
     const game = getGame();
     return `${game?.world?.id ?? ""}:${game?.user?.id ?? ""}:${getConnectionGeneration()}`;
   };
+  // Clear policy-dependent risk results without discarding the source catalogue.
   const invalidateRisk = () => publishedRisks.clear();
+  // Invalidate the cached catalogue and every risk derived from it.
   const invalidateCatalog = () => {
     catalogInput = catalogSnapshot = optimizerSnapshot = null;
     invalidateRisk();
   };
+  // Reset asset caches when the active world or user changes.
   const ensureSession = () => {
     const current = currentSession();
     if (current !== sessionKey) {
@@ -87,6 +96,7 @@ export function createFoundryMobileAssetGateway({
       invalidateCatalog();
     }
   };
+  // Read and normalize the persisted catalogue, reusing it only for the current session.
   const readCatalog = () => {
     ensureSession();
     const input = safeSetting(getGame(), MODULE_ID, KEYS.MOBILE_ASSET_CATALOG);
@@ -100,6 +110,7 @@ export function createFoundryMobileAssetGateway({
     catalogInput = input;
     return catalogSnapshot;
   };
+  // Capture session and generation ownership so async asset work can stop when its owner changes.
   const captureOperation = (signal) => {
     ensureSession();
     const expectedSession = sessionKey;
@@ -112,6 +123,7 @@ export function createFoundryMobileAssetGateway({
       assertGm(getGame());
     };
   };
+  // Persist a catalogue only while the captured world and user still own the operation.
   const writeCatalog = async (catalog) => {
     assertGm(getGame());
     const checkCurrent = captureOperation();
@@ -119,6 +131,7 @@ export function createFoundryMobileAssetGateway({
     checkCurrent();
     return readCatalog();
   };
+  // Collect the catalogue, graphics policy, recovery state, and device class used to derive scene risks.
   const riskContext = ({ assumeMobileDerivatives = false, catalog = readCatalog() } = {}) => {
     const policy = getGraphicsPolicy?.() ?? {};
     const recovery = getRecovery?.() ?? {};
@@ -137,6 +150,7 @@ export function createFoundryMobileAssetGateway({
       substitution: assumeMobileDerivatives ? null : lastAliasStatus
     });
   };
+  // Add a recommendation based on current recovery acknowledgement and graphics policy.
   const withRecommendation = (record, context) => {
     const acknowledgedAt = Number(safeSetting(getGame(), MODULE_ID, KEYS.GRAPHICS_RECOVERY_ACKNOWLEDGED) ?? 0);
     const newLoss = Number(context.recovery.lastContextLossAt ?? 0) > acknowledgedAt;
@@ -162,6 +176,7 @@ export function createFoundryMobileAssetGateway({
       profileRecommendationApplicable: ["phone", "tablet"].includes(context.physicalDeviceClass)
     });
   };
+  // Resolve requested live Scenes, derive risks, and reuse results only while source and policy revisions remain valid.
   const risksForScenes = (sceneIds, options = {}) => {
     const ids = [...new Set((sceneIds ?? []).map((sceneId) => String(sceneId ?? "")).filter(Boolean))];
     if (!ids.length) return Object.freeze({});
@@ -208,9 +223,11 @@ export function createFoundryMobileAssetGateway({
     }
     return result;
   };
+  // Return one Scene’s current risk record through the batched scene-risk path.
   const riskForScene = (sceneId, options = {}) => risksForScenes([sceneId], options)[String(sceneId ?? "")];
 
   const api = {
+    // Register alternate asset paths from the current client preference and available mobile variants.
     registerAliases() {
       const preference = safeSetting(getGame(), MODULE_ID, KEYS.MOBILE_OPTIMIZED_ASSETS) ?? "auto";
       const physicalDeviceClass = String(getPhysicalDeviceClass());
@@ -249,8 +266,8 @@ export function createFoundryMobileAssetGateway({
         const derivative = asset.derivative;
         if (!eligibleDerivative(asset, derivative)) continue;
         let effective = true;
-        for (const [alias, src] of normalizedAliasPairs(asset.canonicalSource, derivative.source, getDocument()?.baseURI)) {
-          if (registeredAliases.get(alias) === src) continue;
+        for (const [alias, derivativeSource] of normalizedAliasPairs(asset.canonicalSource, derivative.source, getDocument()?.baseURI)) {
+          if (registeredAliases.get(alias) === derivativeSource) continue;
           if (registeredAliases.has(alias)) {
             reloadRequiredAliases.add(alias);
             effective = false;
@@ -262,8 +279,8 @@ export function createFoundryMobileAssetGateway({
             continue;
           }
           try {
-            pixi.Assets.add({ alias, src });
-            registeredAliases.set(alias, src);
+            pixi.Assets.add({ alias, src: derivativeSource });
+            registeredAliases.set(alias, derivativeSource);
           } catch (error) {
             effective = false;
             diagnostics?.record?.("warn", `Mobile derivative alias could not be registered: ${alias}`, error);
@@ -295,6 +312,7 @@ export function createFoundryMobileAssetGateway({
     },
     invalidateCatalog,
     invalidateRisk,
+    // Invalidate the asset catalogue when its settings or relevant world sources change.
     watch(owner) {
       owner.hook("updateSetting", setting => {
         const key = String(setting?.key ?? setting?.id ?? "");
@@ -311,6 +329,7 @@ export function createFoundryMobileAssetGateway({
       });
     },
 
+    // Project the selected asset catalogue and its current mapping status into immutable records.
     snapshot({ catalog = readCatalog() } = {}) {
       const game = getGame();
       const physicalDeviceClass = String(getPhysicalDeviceClass());
@@ -338,6 +357,7 @@ export function createFoundryMobileAssetGateway({
       return Object.freeze({ assets: api.snapshot({ catalog }), risk: riskForScene(sceneId, { catalog }) });
     },
 
+    // Scan eligible world assets and report progress while honoring cancellation and current permissions.
     async scan({ onProgress = () => {}, signal } = {}) {
       const game = getGame();
       assertGm(game);
@@ -378,6 +398,7 @@ export function createFoundryMobileAssetGateway({
       activeScan = null;
     },
 
+    // Generate optimized asset variants for the selected sources, stopping when cancelled or no longer authorized.
     async generate({ sources, profile = "balanced", longEdge = null, quality = DEFAULT_QUALITY, onProgress = () => {}, signal } = {}) {
       const game = getGame();
       assertGm(game);
@@ -402,6 +423,7 @@ export function createFoundryMobileAssetGateway({
       return Object.freeze({ cancelled: false, results: Object.freeze(results) });
     },
 
+    // Enable or disable one GM-managed source mapping after resolving it from the current catalogue.
     async setMappingEnabled(source, enabled) {
       assertGm(getGame());
       const canonical = canonicalAssetSource(source, getDocument()?.baseURI);
@@ -414,6 +436,7 @@ export function createFoundryMobileAssetGateway({
       return stored;
     },
 
+    // Remove one GM-managed mapping and invalidate any cached catalogue that includes it.
     async removeMapping(source) {
       assertGm(getGame());
       const canonical = canonicalAssetSource(source, getDocument()?.baseURI);
@@ -423,6 +446,7 @@ export function createFoundryMobileAssetGateway({
       return stored;
     },
 
+    // Ask for a Scene-specific memory decision only when the current risk assessment requires it.
     async confirmSceneRisk(scene, risk = riskForScene(scene?.id)) {
       if (!risk?.warningRequired || (risk.profileRecommendationApplicable === false && !risk.priorGraphicsLoss)) return "open";
       const DialogV2 = globalThis.foundry?.applications?.api?.DialogV2;
@@ -449,6 +473,9 @@ export function createFoundryMobileAssetGateway({
 }
 
 async function generateOne({ source, profile, longEdge, quality, game, getDocument, readCatalog, writeCatalog, readMetadata, createDerivative, filePicker, now, checkCurrent }) {
+  // Verify the source hash before resizing, the uploaded file after storage, and
+  // the catalogue mapping again before activation. checkCurrent prevents work
+  // started by an older world/user/session from publishing a late result.
   checkCurrent();
   const catalog = readCatalog();
   const asset = catalog?.assets?.[source];
@@ -521,6 +548,8 @@ export async function readImageMetadata(url, {
   fetchFn = globalThis.fetch,
   createBitmap = globalThis.createImageBitmap
 } = {}) {
+  // Fetch same-origin Foundry assets, hash their bytes and decode dimensions;
+  // close the temporary bitmap whether decoding or metadata validation fails.
   if (typeof fetchFn !== "function") throw new Error(localizeFoundry("VEMOBILE.Assets.ImageFetchUnavailable", "Image fetch is unavailable."));
   const response = await fetchFn(url, { credentials: "same-origin" });
   if (!response?.ok) throw new Error(localizeFoundry("VEMOBILE.Assets.ImageFetchFailed", "Image request failed ({status}).", { status: response?.status ?? "unknown" }));
@@ -553,6 +582,8 @@ export async function generateWebpDerivative(blob, dimensions, {
   createBitmap = globalThis.createImageBitmap,
   createCanvas = () => globalThis.document?.createElement?.("canvas")
 } = {}) {
+  // Use a temporary canvas only for this requested derivative and release its
+  // bitmap, canvas backing store and fallback object URL on every exit.
   let bitmap;
   let verify;
   let objectUrl = null;
@@ -587,6 +618,8 @@ export async function generateWebpDerivative(blob, dimensions, {
 }
 
 export function normalizedAliasPairs(source, derivative, baseHref = "") {
+  // Register relative and absolute forms because Foundry may cache a source
+  // under either spelling, while canonical paths keep alias identity stable.
   const canonicalSource = canonicalAssetSource(source, baseHref);
   const canonicalDerivative = canonicalAssetSource(derivative, baseHref);
   if (!canonicalSource || !canonicalDerivative) return Object.freeze([]);
@@ -598,9 +631,10 @@ export function normalizedAliasPairs(source, derivative, baseHref = "") {
   } catch {
     // Relative aliases remain sufficient when the page base is unavailable.
   }
-  return Object.freeze([...pairs].map(([alias, src]) => Object.freeze([alias, src])));
+  return Object.freeze([...pairs].map(([alias, derivativeSource]) => Object.freeze([alias, derivativeSource])));
 }
 
+// Project one catalogue asset into the optimizer’s supported display record.
 function optimizerAssetRow(asset, catalog) {
   const derivativeBytes = asset.derivative?.width && asset.derivative?.height ? asset.derivative.width * asset.derivative.height * 4 : null;
   const stale = asset.derivative ? mappingIsStale(asset.derivative, { sourceHash: asset.sourceHash, width: asset.width, height: asset.height }) : false;
@@ -618,6 +652,7 @@ function optimizerAssetRow(asset, catalog) {
   });
 }
 
+// Check whether a stored derivative still matches current source metadata and settings.
 function eligibleDerivative(asset, derivative) {
   return Boolean(derivative?.enabled !== false
     && derivative?.status === "active"
@@ -625,10 +660,12 @@ function eligibleDerivative(asset, derivative) {
     && !mappingIsStale(derivative, { sourceHash: asset?.sourceHash, width: asset?.width, height: asset?.height }));
 }
 
+// Repair derivative status values against the normalized catalogue shape.
 export function repairCatalogDerivativeStatuses(catalog) {
   return repairDerivativeStatuses(normalizeCatalog(catalog));
 }
 
+// Adjust the recommendation for capable Android devices while preserving recent failure policy.
 function adaptRecommendationForCapableAndroid(recommendation, device, recovery) {
   const recentFailure = Boolean(
     recovery?.contextLossThisSession
@@ -645,6 +682,7 @@ function adaptRecommendationForCapableAndroid(recommendation, device, recovery) 
   });
 }
 
+// Validate catalogue shape and derivative records before caching or publishing them.
 function normalizeCatalog(value) {
   if (!value || Number(value.schemaVersion) !== MOBILE_ASSET_CATALOG_VERSION || !value.assets || !value.scenes) {
     return Object.freeze({ schemaVersion: MOBILE_ASSET_CATALOG_VERSION, generatedAt: 0, assets: Object.freeze({}), scenes: Object.freeze({}) });
@@ -652,16 +690,19 @@ function normalizeCatalog(value) {
   return value;
 }
 
+// Resolve a canonical asset source against the current Foundry base URL.
 function resolveAssetUrl(source, baseHref = "") {
   try { return new URL(source, baseHref).href; } catch { return source; }
 }
 
+// Compute a SHA-256 digest for source or derivative bytes.
 async function sha256Hex(buffer, cryptoRef = globalThis.crypto) {
   if (!cryptoRef?.subtle?.digest) throw new Error(localizeFoundry("VEMOBILE.Assets.ShaUnavailable", "SHA-256 is unavailable in this browser."));
   const hash = await cryptoRef.subtle.digest("SHA-256", buffer);
   return [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+// Create the target folder before uploading an optimized derivative.
 async function ensureDirectory(picker, folder) {
   try {
     await picker.browse("data", folder);
@@ -673,6 +714,7 @@ async function ensureDirectory(picker, folder) {
   await picker.browse("data", folder);
 }
 
+// Encode a processed canvas as an image blob using supported browser methods.
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve, reject) => {
     if (typeof canvas?.toBlob !== "function") return reject(new Error(localizeFoundry("VEMOBILE.Assets.WebpUnavailable", "WebP encoding is unavailable.")));
@@ -680,6 +722,7 @@ function canvasToBlob(canvas, type, quality) {
   });
 }
 
+// Check a canonical asset path through the active FilePicker source.
 async function fileExists(picker, source) {
   const canonical = canonicalAssetSource(source);
   const separator = canonical.lastIndexOf("/");
@@ -692,12 +735,14 @@ async function fileExists(picker, source) {
   }
 }
 
+// Track aliases that need reload because their registered mapping was changed.
 function markAliasReloadRequired(source, registeredAliases, reloadRequiredAliases, baseHref) {
   for (const [alias] of normalizedAliasPairs(source, source, baseHref)) {
     if (registeredAliases.has(alias)) reloadRequiredAliases.add(alias);
   }
 }
 
+// Load an image URL and resolve when its dimensions are available.
 function loadImageElement(url) {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -707,35 +752,42 @@ function loadImageElement(url) {
   });
 }
 
+// Read a setting defensively and return an absent value when the API is unavailable.
 function safeSetting(game, namespace, key) {
   try { return game?.settings?.get?.(namespace, key); } catch { return undefined; }
 }
 
+// Escape values included in generated optimizer markup.
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/gu, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 }
 
+// Convert Foundry collections and arrays into a safe list.
 function collectionValues(value) {
   if (!value) return [];
   if (Array.isArray(value)) return value;
   try { return typeof value.values === "function" ? [...value.values()] : [...value]; } catch { return []; }
 }
 
+// Require current GM authority before catalogue writes or asset optimization.
 function assertGm(game) {
   if (!game?.user?.isGM) throw new Error(localizeFoundry("VEMOBILE.Assets.GmOnly", "Only a GM may manage mobile asset derivatives."));
   if (!game?.settings?.set) throw new Error(localizeFoundry("VEMOBILE.Assets.SettingsUnavailable", "Foundry settings are unavailable."));
 }
 
+// Validate one world/path component before building the derivative destination.
 function safePathSegment(value) {
   const segment = String(value ?? "").trim();
   return /^[a-z0-9][a-z0-9_-]{0,127}$/iu.test(segment) ? segment : "";
 }
 
+// Clamp image quality to the supported finite range.
 function clampQuality(value) {
   const quality = Number(value);
   return Number.isFinite(quality) ? Math.min(0.98, Math.max(0.5, quality)) : DEFAULT_QUALITY;
 }
 
+// Share one asynchronous read among callers and retain its settled result.
 function once(read) {
   let resolved = false;
   let value;

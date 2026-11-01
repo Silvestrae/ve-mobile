@@ -13,6 +13,7 @@ export function createFoundryActiveEffectContextGateway({
   let sequence = 0;
 
   return Object.freeze({
+    // Build a native effect-context menu from the current Actor and captured session.
     async open(request, expectedSession = {}) {
       const game = getGame();
       assertSession(game, expectedSession);
@@ -88,6 +89,7 @@ export function createFoundryActiveEffectContextGateway({
       });
     },
 
+    // Re-resolve the selected effect and invoke its native action only if the menu context remains current.
     async select(request, expectedSession = {}) {
       const current = owned;
       if (!current || String(request?.menuId ?? "") !== current.menuId) return Object.freeze({ ok: true, action: "stale" });
@@ -126,17 +128,20 @@ export function createFoundryActiveEffectContextGateway({
     close: closeOwnedMenu
   });
 
+  // Close the context menu only if it is still owned by this gateway instance.
   async function closeOwnedMenu() {
     const current = owned;
     owned = null;
     current?.bridge?.cleanup?.();
   }
 
+  // Record a bounded diagnostic outcome for the context action.
   function record(phase, actorSourceUuid, effectId, extra = {}) {
     diagnostics?.record?.("debug", `Active Effect context | ${phase} | actor=${actorSourceUuid} effect=${effectId}${Object.keys(extra).length ? ` ${JSON.stringify(extra)}` : ""}`);
   }
 }
 
+// Adapt D&D5e’s native context provider while retaining original callbacks and final ownership checks.
 function createNativeProviderBridge({ actor, effect, actorSourceUuid, effectReference, nativeDataset, document, applications, DialogV2 }) {
   if (!document?.body?.append || !document?.createElement || typeof applications?.set !== "function") {
     throw new Error(localizeFoundry("VEMOBILE.Character.ActiveEffectContextGateway.DDESNativeActiveEffectProviderIs", "D&D5e's native Active Effect provider is unavailable."));
@@ -167,6 +172,7 @@ function createNativeProviderBridge({ actor, effect, actorSourceUuid, effectRefe
   });
   applications.set(host.id, bridgeApp);
   let cleaned = false;
+  // Remove the provider bridge and restore the previous context-menu state.
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
@@ -183,6 +189,7 @@ function createNativeProviderBridge({ actor, effect, actorSourceUuid, effectRefe
   return { actor, effect, host, component, anchor, cleanup };
 }
 
+// Read native effect menu descriptors for the current Actor and user.
 function nativeDescriptors(component, anchor, effect, hooks) {
   if (typeof component?._getContextOptions !== "function") {
     throw new Error(localizeFoundry("VEMOBILE.Character.ActiveEffectContextGateway.DDESNativeActiveEffectOptionsAre", "D&D5e's native Active Effect options are unavailable."));
@@ -193,6 +200,7 @@ function nativeDescriptors(component, anchor, effect, hooks) {
   return Array.isArray(descriptors) ? descriptors : [];
 }
 
+// Check whether this effect and Actor are still eligible for the requested context action.
 function eligible(descriptor, anchor) {
   try {
     if (typeof descriptor?.condition === "function") return descriptor.condition(anchor) !== false;
@@ -202,6 +210,7 @@ function eligible(descriptor, anchor) {
   }
 }
 
+// Resolve the exact active effect under its parent Actor, including synthetic Actor provenance.
 function resolveEffect(game, actorSourceUuid, { effectId, effectUuid = "", parentId = "" }) {
   const actor = resolveActorSource(actorSourceUuid, { game });
   if (!actor) return null;
@@ -232,6 +241,7 @@ function resolveEffect(game, actorSourceUuid, { effectId, effectUuid = "", paren
   return nativeDataset ? { actor, effect, nativeDataset } : null;
 }
 
+// Check current Actor ownership and fail closed when permission evaluation throws.
 function canOwn(actor, user) {
   if (user?.isGM) return true;
   try {
@@ -241,28 +251,33 @@ function canOwn(actor, user) {
   }
 }
 
+// Resolve an effect action label through Foundry localization with a fallback.
 function localize(game, key) {
   const value = typeof game?.i18n?.localize === "function" ? game.i18n.localize(key) : key;
   return String(value ?? key ?? "");
 }
 
+// Normalize a required stable Actor or effect identifier.
 function identifier(value, field) {
   const id = String(value ?? "").trim();
   if (!id || id.length > 128) throw new Error(localizeFoundry("VEMOBILE.Character.CommandGateway.IsRequired", "{field} is required.", { field: (field) }));
   return id;
 }
 
+// Normalize an optional identifier while preserving an absent value.
 function optionalIdentifier(value, maximum) {
   const id = String(value ?? "").trim();
   if (id.length > maximum) throw new Error(localizeFoundry("VEMOBILE.Character.ActiveEffectContextGateway.ActiveEffectIdentityIsInvalid", "Active Effect identity is invalid."));
   return id;
 }
 
+// Accept finite pointer coordinates for context-menu positioning.
 function finiteCoordinate(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
 }
 
+// Reject context actions from a different world, user, or connection generation.
 function assertSession(game, expected) {
   if (!game?.user || !game?.world) throw new Error(localizeFoundry("VEMOBILE.Character.ActiveEffectContextGateway.TheFoundrySessionIsUnavailable", "The Foundry session is unavailable."));
   if (expected.worldId && String(game.world.id) !== String(expected.worldId)) throw new Error(localizeFoundry("VEMOBILE.Character.ActiveEffectContextGateway.TheActiveWorldChanged", "The active world changed."));

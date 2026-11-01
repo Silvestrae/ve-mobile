@@ -1,11 +1,14 @@
-import { ACTOR_COMMANDS as C } from "../../../../kernel/command-names.mjs";
+import { ACTOR_COMMANDS } from "../../../../kernel/command-names.mjs";
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
 
+// Read the explicit permission used by persistent-damage edit controls.
 const canEdit = actor => actor?.capabilities?.editPersistentDamage === true;
+// Resolve the current Actor's prepared persistent-damage records.
 const actorRecord = shell => shell.actor?.pf2e?.persistentDamage;
 
 /** Close a persistent-damage dialog when its snapshot or view is no longer current. */
+// Refresh the open dialog after its Actor snapshot or edit authority changes.
 export function syncPersistentDamageDialog(shell, deferred = false) {
   const modal = shell.persistentDamageModal;
   if (!modal) return;
@@ -15,6 +18,7 @@ export function syncPersistentDamageDialog(shell, deferred = false) {
 }
 
 /** Open a compact editor for the current actor's PF2e persistent damage. */
+// Open a scoped editor for the current Actor's persistent-damage conditions.
 export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
   const actor = shell.actor;
   const record = actorRecord(shell);
@@ -23,7 +27,9 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
 
   const scope = ownerScope.child("pf2e-persistent-damage-dialog");
   const commands = shell.commands;
-  const t = (key, fallback, values) => localizedText(commands?.localize, key, fallback, values);
+  // Resolve dialog labels and status messages with plain fallback copy.
+  const translate = (key, fallback, values) => localizedText(commands?.localize, key, fallback, values);
+  // Recheck permission and exact source identity immediately before each save.
   const writable = () => canEdit(shell.actor) && shell.actor?.sourceUuid === actor.sourceUuid;
   const focus = shell.screen.ownerDocument?.activeElement;
   const modal = shell.persistentDamageModal = {
@@ -31,14 +37,14 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
     tab: shell.screen.dataset.pf2eView,
     pending: false
   };
-  const title = t("VEMOBILE.PF2E.PersistentDamage.Title", "Persistent damage");
+  const title = translate("VEMOBILE.PF2E.PersistentDamage.Title", "Persistent damage");
   const closeButton = node("button", { className: "ve-pf2e-editor-close", attrs: {
-    type: "button", "aria-label": t("VEMOBILE.Controls.Close", "Close")
+    type: "button", "aria-label": translate("VEMOBILE.Controls.Close", "Close")
   }, children: [icon("fa-xmark")], on: { click: () => modal.close() } }, scope);
   const body = node("div", { className: "ve-pf2e-editor-body ve-pf2e-persistent-damage-body" });
   const error = node("p", { className: "ve-pf2e-editor-error", attrs: { role: "alert" } });
   const footer = node("footer", { children: [node("button", { attrs: { type: "button" },
-    text: t("VEMOBILE.Controls.Close", "Close"), on: { click: () => modal.close() } }, scope)] });
+    text: translate("VEMOBILE.Controls.Close", "Close"), on: { click: () => modal.close() } }, scope)] });
   const form = node("form", { className: "ve-pf2e-document-dialog ve-pf2e-persistent-damage-dialog", attrs: {
     role: "dialog", "aria-modal": "true", "aria-label": title
   }, children: [
@@ -53,6 +59,7 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
   let renderedWritable;
   let busyDisabled = null;
   const removedIds = new Set();
+  // Reserve a stable key for each condition, including new unsaved rows.
   const draftKey = id => id || "__new__";
 
   modal.close = (restoreFocus = true) => {
@@ -63,6 +70,7 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
 
   const viewport = shell.screen.ownerDocument?.defaultView?.visualViewport;
   const view = shell.screen.ownerDocument?.defaultView;
+  // Keep the dialog within the visible viewport as the keyboard resizes it.
   const fit = () => {
     layer.style.top = `${viewport?.offsetTop ?? 0}px`;
     layer.style.left = `${viewport?.offsetLeft ?? 0}px`;
@@ -85,6 +93,7 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
   });
   scope.listen(form, "submit", event => { event.preventDefault(); });
 
+  // Disable edits during a command and restore each control's prior state afterward.
   const setBusy = busy => {
     modal.pending = busy;
     form.setAttribute("aria-busy", String(busy));
@@ -97,12 +106,13 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
     for (const control of controls) control.disabled = busyDisabled?.get(control) ?? (!writable() && control.dataset.readOnlyDisable === "true");
     busyDisabled = null;
   };
+  // Commit one explicit edit and change the local draft only after success.
   const run = async (operation, payload, draftAfterSuccess) => {
     if (modal.pending || scope.disposed || !writable()) return;
     setBusy(true);
     error.textContent = "";
     try {
-      await commands.execute(C.EDIT_PF2E_PERSISTENT_DAMAGE, {
+      await commands.execute(ACTOR_COMMANDS.EDIT_PF2E_PERSISTENT_DAMAGE, {
         actorSourceUuid: actor.sourceUuid, operation, ...payload
       });
       if (scope.disposed) return;
@@ -117,12 +127,13 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
       }
       if (operation === "add") { createFormula.value = ""; createDc.value = "15"; }
     } catch (failure) {
-      if (!scope.disposed) error.textContent = failure?.message ?? t("VEMOBILE.PF2E.Character.ActionFailed", "That action could not be completed.");
+      if (!scope.disposed) error.textContent = failure?.message ?? translate("VEMOBILE.PF2E.Character.ActionFailed", "That action could not be completed.");
     } finally {
       if (!scope.disposed) { setBusy(false); modal.refresh(); }
     }
   };
 
+  // Create an accessible group for one condition's editable fields.
   const field = (kind, label, scopeForRows, id) => node(kind, { attrs: {
     ...(kind === "input" ? { type: "text", maxlength: "500", autocomplete: "off", required: true } : {}),
     "aria-label": label,
@@ -130,27 +141,28 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
   } }, scopeForRows);
 
   const createFormula = node("input", { attrs: { type: "text", maxlength: "500", required: true,
-    autocomplete: "off", "aria-label": t("VEMOBILE.PF2E.PersistentDamage.Formula", "Damage formula") } });
+    autocomplete: "off", "aria-label": translate("VEMOBILE.PF2E.PersistentDamage.Formula", "Damage formula") } });
   const createType = node("select", { attrs: { required: true,
-    "aria-label": t("VEMOBILE.PF2E.PersistentDamage.DamageType", "Damage type") } });
+    "aria-label": translate("VEMOBILE.PF2E.PersistentDamage.DamageType", "Damage type") } });
   const createDc = node("input", { attrs: { type: "number", min: "1", max: "999", step: "1", inputmode: "numeric",
-    required: true, value: "15", "aria-label": t("VEMOBILE.PF2E.PersistentDamage.DC", "Recovery DC") } });
+    required: true, value: "15", "aria-label": translate("VEMOBILE.PF2E.PersistentDamage.DC", "Recovery DC") } });
   const addButton = node("button", { className: "is-primary", attrs: { type: "button", "data-read-only-disable": "true" },
-    text: t("VEMOBILE.PF2E.PersistentDamage.Add", "Add"), on: { click: () => {
+    text: translate("VEMOBILE.PF2E.PersistentDamage.Add", "Add"), on: { click: () => {
       if (!createFormula.reportValidity() || !createType.reportValidity() || !createDc.reportValidity() || !writable()) return;
       void run("add", { formula: createFormula.value, damageType: createType.value, dc: Number(createDc.value) });
     } } }, scope);
   const addFields = node("div", { className: "ve-pf2e-persistent-damage-add", children: [
-    node("label", { children: [node("span", { text: t("VEMOBILE.PF2E.PersistentDamage.Formula", "Damage formula") }), createFormula] }),
-    node("label", { children: [node("span", { text: t("VEMOBILE.PF2E.PersistentDamage.DamageType", "Damage type") }), createType] }),
-    node("label", { children: [node("span", { text: t("VEMOBILE.PF2E.PersistentDamage.DC", "Recovery DC") }), createDc] }), addButton
+    node("label", { children: [node("span", { text: translate("VEMOBILE.PF2E.PersistentDamage.Formula", "Damage formula") }), createFormula] }),
+    node("label", { children: [node("span", { text: translate("VEMOBILE.PF2E.PersistentDamage.DamageType", "Damage type") }), createType] }),
+    node("label", { children: [node("span", { text: translate("VEMOBILE.PF2E.PersistentDamage.DC", "Recovery DC") }), createDc] }), addButton
   ] });
   const addSection = node("section", { className: "ve-pf2e-persistent-damage-add-section", children: [
-    node("h3", { text: t("VEMOBILE.PF2E.PersistentDamage.AddTitle", "Add persistent damage") }), addFields
+    node("h3", { text: translate("VEMOBILE.PF2E.PersistentDamage.AddTitle", "Add persistent damage") }), addFields
   ] });
   const list = node("div", { className: "ve-pf2e-persistent-damage-list", attrs: { "aria-live": "polite" } });
   body.append(addSection, list);
 
+  // Refresh available damage types while keeping the current valid selection.
   const typeOptions = types => {
     const selected = createType.value;
     createType.replaceChildren(...types.map(type => node("option", { text: type.label, attrs: { value: type.value } })));
@@ -158,16 +170,18 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
     else if (types.length) createType.value = types[0].value;
     createType.disabled = !types.length || !writable() || modal.pending;
   };
+  // Build a damage-type selector that can still display a legacy current type.
   const makeTypeSelect = (types, current, rowScopeForRows, id) => {
     const options = [...types];
     if (current && !options.some(type => type.value === current)) options.unshift({ value: current, label: current, unavailable: true });
-    const select = node("select", { attrs: { "aria-label": t("VEMOBILE.PF2E.PersistentDamage.DamageType", "Damage type"),
+    const select = node("select", { attrs: { "aria-label": translate("VEMOBILE.PF2E.PersistentDamage.DamageType", "Damage type"),
       ...(id ? { "data-field-id": `${id}:type` } : {}) }, children: options.map(type => node("option", {
       text: type.label, attrs: { value: type.value, disabled: type.unavailable === true }
     })) }, rowScopeForRows);
     select.value = current || "";
     return select;
   };
+  // Rebuild rows from the latest record while preserving local drafts, focus, and scroll.
   const renderRows = currentRecord => {
     const active = layer.ownerDocument.activeElement;
     const focusId = active?.getAttribute?.("data-field-id");
@@ -178,13 +192,14 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
     typeOptions(currentRecord.types ?? []);
     const conditions = (currentRecord.conditions ?? []).filter(entry => !removedIds.has(entry.id));
     if (!conditions.length) {
-      list.append(node("p", { className: "ve-pf2e-persistent-damage-empty", text: t("VEMOBILE.PF2E.PersistentDamage.Empty", "No persistent damage is recorded.") }));
+      list.append(node("p", { className: "ve-pf2e-persistent-damage-empty", text: translate("VEMOBILE.PF2E.PersistentDamage.Empty", "No persistent damage is recorded.") }));
       body.scrollTop = scroll;
       return;
     }
     for (const condition of conditions) {
       const key = draftKey(condition.id);
       const original = { formula: condition.formula, damageType: condition.damageType, dc: condition.dc, active: condition.active };
+      // Detect when a submitted local draft now matches the refreshed source record.
       const matchesValues = values => values && values.formula === condition.formula
         && values.damageType === condition.damageType && Number(values.dc) === condition.dc;
       let draft = drafts.get(key);
@@ -194,13 +209,14 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
       }
       draft ??= { original, values: { formula: condition.formula, damageType: condition.damageType, dc: String(condition.dc ?? "") } };
       const item = node("article", { className: "ve-pf2e-persistent-damage-row" });
-      const formula = field("input", t("VEMOBILE.PF2E.PersistentDamage.Formula", "Damage formula"), rowScope, condition.id);
+      const formula = field("input", translate("VEMOBILE.PF2E.PersistentDamage.Formula", "Damage formula"), rowScope, condition.id);
       formula.value = draft.values.formula;
       const type = makeTypeSelect(currentRecord.types ?? [], draft.values.damageType, rowScope, condition.id);
       const dc = node("input", { attrs: { type: "number", min: "1", max: "999", step: "1", inputmode: "numeric",
-        required: true, "aria-label": t("VEMOBILE.PF2E.PersistentDamage.DC", "Recovery DC"), "data-field-id": `${condition.id}:dc` } }, rowScope);
+        required: true, "aria-label": translate("VEMOBILE.PF2E.PersistentDamage.DC", "Recovery DC"), "data-field-id": `${condition.id}:dc` } }, rowScope);
       dc.value = draft.values.dc;
-      const save = node("button", { attrs: { type: "button", "data-read-only-disable": "true" }, text: t("VEMOBILE.Character.Presenter.SaveChanges", "Save changes"), on: {
+      const save = node("button", { attrs: { type: "button", "data-read-only-disable": "true" }, text: translate("VEMOBILE.Character.Presenter.SaveChanges", "Save changes"), on: {
+        // Validate the edited damage formula/DC and carry original condition data into the native update boundary.
         click: () => {
           if (!formula.reportValidity() || !dc.reportValidity()) return;
           void run("update", { itemId: condition.id,
@@ -209,19 +225,20 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
           }, { key, value: { formula: formula.value, damageType: type.value, dc: dc.value } });
         }
       } }, rowScope);
-      const remove = node("button", { attrs: { type: "button", "data-read-only-disable": "true" }, text: t("VEMOBILE.PF2E.PersistentDamage.Remove", "Remove"), on: {
+      const remove = node("button", { attrs: { type: "button", "data-read-only-disable": "true" }, text: translate("VEMOBILE.PF2E.PersistentDamage.Remove", "Remove"), on: {
         click: () => void run("remove", { itemId: condition.id,
           original: { formula: condition.formula, damageType: condition.damageType, dc: condition.dc, active: condition.active } })
       } }, rowScope);
-      const recover = node("button", { attrs: { type: "button", "data-read-only-disable": "true" }, text: t("VEMOBILE.PF2E.PersistentDamage.Recovery", "Recovery"), on: {
+      const recover = node("button", { attrs: { type: "button", "data-read-only-disable": "true" }, text: translate("VEMOBILE.PF2E.PersistentDamage.Recovery", "Recovery"), on: {
         click: () => void run("recover", { itemId: condition.id,
           original: { formula: condition.formula, damageType: condition.damageType, dc: condition.dc, active: condition.active } })
       } }, rowScope);
-      const roll = node("button", { attrs: { type: "button", "data-read-only-disable": "true" }, text: t("VEMOBILE.PF2E.PersistentDamage.RollDamage", "Roll damage"), on: {
+      const roll = node("button", { attrs: { type: "button", "data-read-only-disable": "true" }, text: translate("VEMOBILE.PF2E.PersistentDamage.RollDamage", "Roll damage"), on: {
         click: () => void run("roll-damage", { itemId: condition.id,
           original: { formula: condition.formula, damageType: condition.damageType, dc: condition.dc, active: condition.active } })
       } }, rowScope);
       if (!condition.active) { recover.disabled = true; roll.disabled = true; }
+      // Keep row edits local so cancel does not save a partial record.
       const markDraft = () => {
         const existing = drafts.get(key);
         drafts.set(key, { original: existing?.original ?? original,
@@ -237,9 +254,9 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
       for (const control of [formula, type, dc, save, remove, recover, roll]) if (!writable()) control.disabled = true;
       item.append(node("h3", { text: `${condition.formula} · ${condition.damageType}` }),
         node("div", { className: "ve-pf2e-persistent-damage-fields", children: [
-          node("label", { children: [node("span", { text: t("VEMOBILE.PF2E.PersistentDamage.Formula", "Damage formula") }), formula] }),
-          node("label", { children: [node("span", { text: t("VEMOBILE.PF2E.PersistentDamage.DamageType", "Damage type") }), type] }),
-          node("label", { children: [node("span", { text: t("VEMOBILE.PF2E.PersistentDamage.DC", "Recovery DC") }), dc] })
+          node("label", { children: [node("span", { text: translate("VEMOBILE.PF2E.PersistentDamage.Formula", "Damage formula") }), formula] }),
+          node("label", { children: [node("span", { text: translate("VEMOBILE.PF2E.PersistentDamage.DamageType", "Damage type") }), type] }),
+          node("label", { children: [node("span", { text: translate("VEMOBILE.PF2E.PersistentDamage.DC", "Recovery DC") }), dc] })
         ] }), node("div", { className: "ve-pf2e-persistent-damage-actions", children: [save, remove, recover, roll] }));
       list.append(item);
     }

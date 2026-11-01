@@ -1,21 +1,25 @@
 import { node, icon } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
 
+// Verify item use permission against the Actor's current item list.
 const allowed = (actor, itemId) => actor?.capabilities?.useItem === true
   || (Array.isArray(actor?.capabilities?.useItem) && actor.capabilities.useItem.includes(itemId));
 
+// Close or refresh the detail surface when its Actor or item permission changes.
 export function syncItemDetails(shell, deferred) {
   const modal = shell.itemDetails;
   if (modal && (deferred || shell.actor?.sourceUuid !== modal.sourceUuid || !allowed(shell.actor, modal.itemId))) modal.close(false);
 }
 
 /** Item reading is a mobile surface; editing remains an explicit native action. */
+// Resolve the requested item from the current exact Actor before presenting details.
 export async function openItemDetails(shell, { actorSourceUuid, itemId, fullPage = false }, ownerScope, overlayHost) {
   if (ownerScope.disposed || shell.actor?.sourceUuid !== actorSourceUuid || !allowed(shell.actor, itemId)) return;
   shell.itemDetails?.close(false);
   const scope = ownerScope.child("pf2e-item-details");
   const commands = shell.commands;
-  const t = (key, fallback) => localizedText(commands.localize, key, fallback);
+  // Resolve item detail copy through the current command localizer.
+  const translate = (key, fallback) => localizedText(commands.localize, key, fallback);
   const focus = shell.screen.ownerDocument?.activeElement;
   const modal = shell.itemDetails = { sourceUuid: actorSourceUuid, itemId };
   let layer;
@@ -24,8 +28,8 @@ export async function openItemDetails(shell, { actorSourceUuid, itemId, fullPage
     if (restoreFocus && !ownerScope.disposed && focus?.isConnected) focus.focus?.({ preventScroll: true });
   };
   scope.own(() => { layer?.remove(); if (shell.itemDetails === modal) shell.itemDetails = null; });
-  const title = node("h2", { text: t("VEMOBILE.PF2E.Character.Details", "Details") });
-  const close = node("button", { attrs: { type: "button", "aria-label": t("VEMOBILE.Controls.Close", "Close") }, children: [icon("fa-xmark")], on: { click: () => modal.close() } }, scope);
+  const title = node("h2", { text: translate("VEMOBILE.PF2E.Character.Details", "Details") });
+  const close = node("button", { attrs: { type: "button", "aria-label": translate("VEMOBILE.Controls.Close", "Close") }, children: [icon("fa-xmark")], on: { click: () => modal.close() } }, scope);
   const description = node("div", { className: "ve-pf2e-item-description", attrs: { "aria-busy": "true" } });
   const traits = node("div", { className: "ve-pf2e-item-traits" });
   const image = node("img", { attrs: { alt: "", hidden: true } });

@@ -1,6 +1,7 @@
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
 
+// Render a disclosure group for a PF2e collection category.
 export function collectionGroup({ key, label, glyph, children, open = false, extra = null, className = "", dataset = {}, attrs = {} }) {
   return node("details", { className: `ve-sheet-card ve-pf2e-collection-group ${className}`, attrs: {
     open, "data-pf2e-disclosure-key": key, ...attrs
@@ -12,7 +13,8 @@ export function collectionGroup({ key, label, glyph, children, open = false, ext
 
 /** Presentation-only sorting preserves native item order and all existing row nodes. */
 export function listControls(root, commands, scope, { label = "Inventory", stateKey = "inventory-sort", showSort = true } = {}) {
-  const t = (key, fallback, values) => localizedText(commands.localize, key, fallback, values);
+  // Resolve collection-control labels through the current presentation localizer.
+  const translate = (key, fallback, values) => localizedText(commands.localize, key, fallback, values);
   const sort = node("select", { attrs: { hidden: true, "data-pf2e-state-key": stateKey, "aria-hidden": "true" }, children:
     ["manual", "alphabetical"].map(value => node("option", { attrs: { value }, text: value })) });
   const sortIcon = icon("fa-arrow-down-short-wide");
@@ -21,17 +23,20 @@ export function listControls(root, commands, scope, { label = "Inventory", state
     sort.value = sort.value === "alphabetical" ? "manual" : "alphabetical";
     applySort();
   } } }, scope);
-  const expandButton = node("button", { attrs: { type: "button" }, children: [expansionIcon], on: { click() {
+  const expandButton = node("button", { attrs: { type: "button" }, children: [expansionIcon], on: { /* Expand or collapse the current PF2e collection disclosures without changing native item data. */ click() {
     const groups = [...root.querySelectorAll("details.ve-pf2e-collection-group, details.ve-pf2e-container-contents")];
     const expanded = !groups.some(group => group.open);
     for (const group of groups) group.open = expanded;
     updateExpansion();
   } } }, scope);
+  // Sort sibling rows while keeping granted children attached to their native parent.
   function applySort() {
     const alphabetical = sort.value === "alphabetical";
     for (const list of root.querySelectorAll("[data-pf2e-sort-list],.ve-pf2e-item-list,.ve-pf2e-container-contents")) {
       const rows = [...list.children].filter(row => row.hasAttribute("data-pf2e-sort-order"));
+      // Preserve the native numeric item order as the baseline and alphabetical tie-break.
       const manual = (a, b) => Number(a.dataset.pf2eSortOrder) - Number(b.dataset.pf2eSortOrder);
+      // Sort by localized item names only when requested, retaining native order for ties.
       const compare = (a, b) => alphabetical ? a.dataset.pf2eSortName.localeCompare(b.dataset.pf2eSortName, commands.locale, { numeric: true, sensitivity: "base" }) || manual(a, b) : manual(a, b);
       // A granted feat travels with its parent. Sort siblings, never flatten the
       // native feature hierarchy or change prepared spell command identities.
@@ -43,19 +48,21 @@ export function listControls(root, commands, scope, { label = "Inventory", state
         const parent = row.dataset.pf2eSortParent && byId.get(row.dataset.pf2eSortParent);
         (parent && manual(parent.row, row) < 0 ? parent.children : roots).push(tree);
       }
+      // Sort each container's sibling rows while keeping the nested container tree together.
       const flatten = trees => trees.sort((a, b) => compare(a.row, b.row)).flatMap(tree => [tree.row, ...flatten(tree.children)]);
       list.append(...flatten(roots));
     }
     sortIcon.className = `fa-solid ${alphabetical ? "fa-arrow-down-a-z" : "fa-arrow-down-short-wide"}`;
     sortButton.title = alphabetical
-      ? t("VEMOBILE.Character.Copy.SortedAtoZswitchtoFoundryorder", "Sorted A to Z; switch to Foundry order")
-      : t("VEMOBILE.Character.Copy.UsingFoundryorderswitchtoAtoZ", "Using Foundry order; switch to A to Z");
+      ? translate("VEMOBILE.Character.Copy.SortedAtoZswitchtoFoundryorder", "Sorted A to Z; switch to Foundry order")
+      : translate("VEMOBILE.Character.Copy.UsingFoundryorderswitchtoAtoZ", "Using Foundry order; switch to A to Z");
     sortButton.setAttribute("aria-label", sortButton.title);
   }
+  // Keep the expand/collapse icon and label aligned with the current disclosures.
   function updateExpansion() {
     const anyOpen = [...root.querySelectorAll("details.ve-pf2e-collection-group")].some(group => group.open);
     expansionIcon.className = `fa-solid ${anyOpen ? "fa-angles-down" : "fa-angles-right"}`;
-    expandButton.title = t(anyOpen ? "VEMOBILE.Character.Copy.Collapseallcollectionsections" : "VEMOBILE.Character.Copy.Expandallcollectionsections",
+    expandButton.title = translate(anyOpen ? "VEMOBILE.Character.Copy.Collapseallcollectionsections" : "VEMOBILE.Character.Copy.Expandallcollectionsections",
       anyOpen ? "Collapse all {collection} sections" : "Expand all {collection} sections", { collection: label });
     expandButton.setAttribute("aria-label", expandButton.title);
   }
@@ -80,6 +87,7 @@ export function listControls(root, commands, scope, { label = "Inventory", state
   return controls;
 }
 
+// Apply the shared list controls with the inventory label and state key.
 export function inventoryControls(root, commands, scope) {
   return listControls(root, commands, scope, { label: localizedText(commands.localize, "VEMOBILE.Character.Tabs.Inventory", "Inventory") });
 }

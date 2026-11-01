@@ -70,6 +70,7 @@ export function createModuleOverlayGateway({
   let lastReconcileKey = "";
   let lastVisible = Object.freeze([]);
 
+  // Remove the gateway’s current overlay presentation and release resources owned by the previous reconciliation.
   const clearPresentation = () => {
     for (const adapter of adapters.values()) adapter.scope.dispose();
     adapters.clear();
@@ -86,11 +87,17 @@ export function createModuleOverlayGateway({
     lastVisible = Object.freeze([]);
   };
 
+  // Read and normalize the saved module-overlay catalogue.
   const readCatalog = () => normalizeCatalog(readSetting(getGame(), KEYS.MODULE_OVERLAY_CATALOG));
+  // Read the current module visibility choices.
   const readVisibility = () => normalizeVisibility(readSetting(getGame(), KEYS.MODULE_OVERLAY_VISIBILITY));
+  // Read the preferred module-overlay ordering.
   const readOrder = () => normalizeOrder(readSetting(getGame(), KEYS.MODULE_OVERLAY_ORDER));
+  // Read the saved overlay scale overrides.
   const readScale = () => normalizeScaleRecord(readSetting(getGame(), KEYS.MODULE_OVERLAY_SCALE));
+  // Apply saved visibility, scale, and ordering to the discovered overlay records.
   const orderedEntries = () => orderOverlayEntries(readCatalog().entries, readOrder());
+  // Classify an element as a persistent desktop overlay only when its structure and owning module support that role.
   const isPersistentRoot = (root, application = null) => {
     const rootId = stableRootId(root);
     const formWorkflow = root?.matches?.("form") || root?.querySelector?.("form")?.matches?.("form");
@@ -122,6 +129,7 @@ export function createModuleOverlayGateway({
       || (OVERLAY_WORDS.test(identity) && (explicitOverlayStructure(root) || application?.nonDismissible === true)));
   };
 
+  // Rebuild overlay discovery and presentation for the current route and viewport, replacing stale nodes and ownership.
   const reconcile = (nextContext = context, { force = false } = {}) => {
     performanceObserver?.increment?.("overlay.reconcile.requested");
     context = Object.freeze({ ...context, ...nextContext });
@@ -233,11 +241,14 @@ export function createModuleOverlayGateway({
   };
 
   return Object.freeze({
+    // Install overlay discovery, persistence listeners, and deterministic presentation cleanup in this scope.
     enable(scope, { reconcileApplications: reconcileNativeApplications = null } = {}) {
       if (owner === scope) return;
       owner = scope;
       reconcileApplications = reconcileNativeApplications;
+      // Refresh known roots after relevant Foundry/module changes.
       const refreshKnown = () => reconcile(context, { force: true });
+      // Schedule a known-root refresh after the current Foundry render hook completes.
       const refreshKnownAfterHook = () => queueMicrotask(() => {
         if (owner === scope && !scope.disposed) refreshKnown();
       });
@@ -277,6 +288,7 @@ export function createModuleOverlayGateway({
       refreshKnown();
     },
 
+    // Return the current accepted overlay records and ownership diagnostics as immutable data.
     snapshot() {
       const catalog = readCatalog();
       const visibility = readVisibility();
@@ -293,6 +305,7 @@ export function createModuleOverlayGateway({
       });
     },
 
+    // Re-scan current module roots and publish the overlays that pass ownership and role checks.
     async scan() {
       const game = getGame();
       if (!game?.settings?.set) throw new Error(localizeFoundry("VEMOBILE.Interface.ModuleOverlayGateway.FoundryClientSettingsAreUnavailable", "Foundry client settings are unavailable."));
@@ -317,6 +330,7 @@ export function createModuleOverlayGateway({
     scanDiagnostics: () => lastScanDiagnostics,
     isPersistentRoot,
 
+    // Return the detailed scan decisions used to explain accepted, rejected, or ambiguous roots.
     diagnosticSnapshot() {
       const document = getDocument();
       const game = getGame();
@@ -328,6 +342,7 @@ export function createModuleOverlayGateway({
         })));
     },
 
+    // Persist one overlay's visibility choice and reconcile its current presentation.
     async setVisible(id, visible) {
       const game = getGame();
       const catalog = readCatalog();
@@ -342,6 +357,7 @@ export function createModuleOverlayGateway({
       return Object.freeze({ ok: true, id, visible: Boolean(next[id]) });
     },
 
+    // Save the requested overlay order after validating it against the current overlay set.
     async setOrder(ids) {
       const game = getGame();
       const catalogIds = readCatalog().entries.map((entry) => entry.id);
@@ -354,6 +370,7 @@ export function createModuleOverlayGateway({
       return this.snapshot();
     },
 
+    // Save one overlay's scale preference and apply it through the owned style adapter.
     async setScale(id, scale) {
       const game = getGame();
       if (!readCatalog().entries.some((entry) => entry.id === id)) {
@@ -369,6 +386,7 @@ export function createModuleOverlayGateway({
     },
 
     reconcile,
+    // Cancel gestures owned by overlays before the next reconciliation moves their controls.
     cancelInteractions() {
       for (const adapter of adapters.values()) adapter.scope.dispose();
       adapters.clear();
@@ -377,6 +395,7 @@ export function createModuleOverlayGateway({
   });
 }
 
+/** Scan bounded Foundry roots for user-visible module overlays. */
 export function discoverModuleOverlays(options = {}) {
   return inspectModuleOverlays(options).entries;
 }
@@ -390,6 +409,7 @@ export function inspectModuleOverlays({ document, modules, foundry, ui } = {}) {
   const candidates = boundedCandidates(document, appOwnership);
   const found = new Map();
   const diagnostics = [];
+  // Record a bounded diagnostic note for the current overlay reconciliation.
   const note = (element, outcome, reason, extra = {}) => diagnostics.push(Object.freeze({
     rootId: stableRootId(element) || "(unstable root)", outcome, reason, ...extra
   }));
@@ -480,6 +500,7 @@ export function inspectModuleOverlays({ document, modules, foundry, ui } = {}) {
   return Object.freeze({ entries, diagnostics: Object.freeze(diagnostics) });
 }
 
+// Determine whether an application instance and element still belong to the current Foundry/module owner.
 function applicationOwnership(modules, foundry, ui) {
   const result = new Map();
   const applications = uniqueValues([
@@ -502,6 +523,7 @@ function applicationOwnership(modules, foundry, ui) {
   return result;
 }
 
+// Find the live Foundry application associated with an overlay root.
 function applicationForElement(element, foundry, ui) {
   return uniqueValues([
     ...registryValues(foundry?.applications?.instances),
@@ -543,7 +565,9 @@ export function createApplicationWindowMover(application, root) {
 export function createPositionedElementMover(root) {
   const style = root?.style;
   if (!style?.setProperty || !root?.getBoundingClientRect) return null;
+  // Read the requested horizontal edge from the overlay configuration.
   const readLeft = () => style.getPropertyValue?.("left") ?? style.left ?? "";
+  // Read the requested vertical edge from the overlay configuration.
   const readTop = () => style.getPropertyValue?.("top") ?? style.top ?? "";
   const inlineLeft = readLeft();
   const inlineTop = readTop();
@@ -566,17 +590,21 @@ export function createPositionedElementMover(root) {
   };
 }
 
+// Convert finite numeric configuration values while rejecting invalid values.
 function finiteNumber(value, fallback = 0) {
+  // Convert a finite numeric input or use the specified fallback.
   const number = Number(value);
   if (Number.isFinite(number)) return number;
   const alternative = Number(fallback);
   return Number.isFinite(alternative) ? alternative : 0;
 }
 
+// Collect plausible module overlay roots from explicit adapters and known DOM candidates.
 function boundedCandidates(document, appOwnership) {
   const result = [];
   const seen = new Set();
   const queue = [];
+  // Add one candidate only when its root and module identity are not already represented.
   const push = (element) => {
     if (!element || seen.has(element) || result.length >= MAX_SCAN_ELEMENTS) return false;
     seen.add(element);
@@ -602,6 +630,7 @@ function boundedCandidates(document, appOwnership) {
   return result;
 }
 
+// Resolve an element’s likely owning module from its application, root, and registered module metadata.
 function identifyModuleOwnership(element, modules, rootId = stableRootId(element)) {
   const explicit = [element?.dataset?.moduleId, element?.dataset?.module, element?.dataset?.packageId].filter(Boolean).map(String);
   if (explicit.length) {
@@ -625,6 +654,7 @@ function identifyModuleOwnership(element, modules, rootId = stableRootId(element
   return rejected("no active-module ownership match");
 }
 
+// Classify the application’s role from its capabilities and semantic DOM structure.
 function overlayRole(element, application, adapter, document) {
   if (adapter) return Object.freeze({ accepted: true, reason: adapter.evidence });
   const identity = `${element?.id ?? ""} ${typeof element?.className === "string" ? element.className : ""}`;
@@ -649,11 +679,13 @@ function overlayRole(element, application, adapter, document) {
   return Object.freeze({ accepted: interactive, reason: interactive ? localizeFoundry("VEMOBILE.Interface.ModuleOverlayGateway.OwnedSemanticInteractiveOverlayRoot", "owned semantic interactive overlay root") : "non-interactive infrastructure root" });
 }
 
+// Recognize a supported explicit overlay marker in the candidate’s own structure.
 function explicitOverlayStructure(element) {
   return Boolean(element?.matches?.(".overlay, .widget, .hud, [role='toolbar'], [role='region']")
     || /(?:^|\s)[^\s]*docked(?:\s|$)/iu.test(String(element?.className ?? "")));
 }
 
+// Detect when Foundry has hidden an application frame, which makes it unsuitable for overlay admission.
 function renderedApplicationFrameHidden(element, document) {
   const header = element?.querySelector?.(".window-header");
   if (!header) return false;
@@ -674,18 +706,22 @@ export function classifyOverlayInteraction(root) {
   return "pointer-window";
 }
 
+// Return the recognized module-ownership result for a candidate.
 function owned(module, reason, adapter = null) {
   return Object.freeze({ status: "owned", module, reason, adapter });
 }
 
+// Return the reason a candidate failed module-overlay eligibility checks.
 function rejected(reason) {
   return Object.freeze({ status: "rejected", reason });
 }
 
+// Mark a candidate whose module or semantic role cannot be established safely.
 function ambiguous(modules, reason) {
   return Object.freeze({ status: "ambiguous", modules: Object.freeze(modules), reason });
 }
 
+// Find the registered module adapter for the identified module.
 function adapterFor(module, rootId) {
   return MODULE_OVERLAY_ADAPTERS[module?.id]?.find((entry) => entry.rootId === rootId) ?? null;
 }
@@ -701,6 +737,7 @@ function safeKnownRoot(root, module, document, entry) {
   return exactCatalogIdentity && (ownership.status === "owned" || Boolean(entry?.moduleId === module.id));
 }
 
+// Exclude Foundry infrastructure and elements that cannot act as overlay roots.
 function excludedElement(element, { known = false } = {}) {
   return element?.id === "dice-box-canvas" || Boolean(element?.closest?.(known
     ? ".ve-mobile-app, .ve-mobile-bootstrap, .ve-mobile-settings-app, #notifications, #tooltip, #context-menu"
@@ -708,11 +745,13 @@ function excludedElement(element, { known = false } = {}) {
     || element?.matches?.("script, style, link, template"));
 }
 
+// Stop scanning below an element whose subtree cannot contain an independent supported overlay.
 function shouldSkipDescendants(element) {
   return Boolean(element?.matches?.("script, style, link, template, canvas")
     || element?.closest?.(".ve-mobile-app, .ve-mobile-bootstrap, .ve-mobile-dialog, .ve-mobile-settings-app"));
 }
 
+// Collect the candidate element and supported descendants that can host persistent overlays.
 function overlayHosts(root, document) {
   const result = [];
   let current = root?.parentElement;
@@ -723,6 +762,7 @@ function overlayHosts(root, document) {
   return result;
 }
 
+/** Combine live root geometry and adapter state into the overlay safety snapshot. */
 export function inspectOverlayRuntime(entry, document, adapters = new Map(), viewport = null, capturedFor = "current") {
   const root = document?.getElementById?.(entry.rootId) ?? null;
   const style = computedStyle(document, root);
@@ -754,10 +794,12 @@ export function inspectOverlayRuntime(entry, document, adapters = new Map(), vie
   });
 }
 
+// Read computed style defensively when a browser style surface is available.
 function computedStyle(document, element) {
   try { return element ? document?.defaultView?.getComputedStyle?.(element) ?? globalThis.getComputedStyle?.(element) ?? null : null; } catch { return null; }
 }
 
+// Return finite element bounds or null for detached and invalid nodes.
 function safeRect(element) {
   try {
     const rect = element?.getBoundingClientRect?.();
@@ -765,6 +807,7 @@ function safeRect(element) {
   } catch { return null; }
 }
 
+// Find the nearest ancestor that hides the candidate from layout or interaction.
 function firstHiddenAncestor(root, document) {
   let current = root;
   while (current && current !== document?.body) {
@@ -775,15 +818,18 @@ function firstHiddenAncestor(root, document) {
   return null;
 }
 
+// Format touch/overlay observations into the bounded diagnostic representation.
 function formatTouchTrace(event) {
   return `event=${event.event} phase=${event.phase} pointer=${event.pointerId}/${event.pointerType} buttons=${event.buttons} pressure=${event.pressure} captured=${event.captured} prevented=${event.defaultPrevented} touchAction=${event.touchAction}`;
 }
 
+// Convert a value to a finite number, preserving invalid measurements as null.
 function number(value) {
   const result = Number(value);
   return Number.isFinite(result) ? result : null;
 }
 
+// Choose a readable overlay label from adapter and application metadata.
 function friendlyOverlayName(element, module, adapter = null) {
   if (adapter?.overlayName) return adapter.overlayName;
   const explicit = element?.dataset?.overlayName ?? element?.getAttribute?.("aria-label") ?? element?.getAttribute?.("title");
@@ -795,6 +841,7 @@ function friendlyOverlayName(element, module, adapter = null) {
   return words.join(" ") || "Canvas Overlay";
 }
 
+// Build a stable identifier from the module and root metadata when no explicit ID exists.
 function stableRootId(element) {
   const id = String(element?.id ?? "").trim();
   if (!/^[A-Za-z][A-Za-z0-9:_-]{1,159}$/u.test(id) || /^app-?\d+$/iu.test(id)) return "";
@@ -803,16 +850,19 @@ function stableRootId(element) {
 
 const SCENE_TAB_IDENTITY = /(?:^|[-_\s])scene[-_\s](?:nav(?:igation)?|tabs?)(?:$|[-_\s])/iu;
 
+// Recognize Foundry’s Scene tab surface so it is not treated as a module-owned overlay.
 function isSceneTabSurface(element) {
   if (element?.closest?.("#scene-navigation")) return true;
   return SCENE_TAB_IDENTITY.test(`${element?.id ?? ""} ${typeof element?.className === "string" ? element.className : ""} ${element?.dataset?.moduleId ?? ""} ${element?.dataset?.module ?? ""}`);
 }
 
+// Recognize the supported Carolingian dock surface by its current DOM signature.
 function isCarolingianSurface(element) {
   if ([element?.dataset?.moduleId, element?.dataset?.module, element?.dataset?.packageId].includes("crlngn-ui")) return true;
   return /(?:^|[-_\s])crlngn[-_]/iu.test(`${element?.id ?? ""} ${typeof element?.className === "string" ? element.className : ""}`);
 }
 
+// Reject modules whose known surface must not be admitted as a persistent overlay.
 function isBlockedOverlayModule(module) {
   return module?.id === "crlngn-ui" || SCENE_TAB_IDENTITY.test(`${module?.id ?? ""} ${module?.title ?? ""}`);
 }
@@ -824,6 +874,7 @@ function forbiddenOverlayEntry(entry) {
     || SCENE_TAB_IDENTITY.test(`${entry.rootId} ${entry.overlayName}`);
 }
 
+// Validate saved module overlay entries and clamp their persisted settings to supported bounds.
 function normalizeCatalog(value) {
   const entries = Array.isArray(value) ? value : value?.entries;
   return Object.freeze({
@@ -838,16 +889,19 @@ function normalizeCatalog(value) {
   });
 }
 
+// Normalize a visibility value to the gateway’s explicit visible/hidden states.
 function normalizeVisibility(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return Object.freeze({});
   return Object.freeze(Object.fromEntries(Object.entries(value).filter(([key, enabled]) => key && enabled === true)));
 }
 
+/** Normalize one UI scale to five-point steps within the supported range. */
 export function normalizeOverlayScale(value) {
   const scale = Math.round(Number(value) / 5) * 5;
   return Number.isFinite(scale) ? Math.max(50, Math.min(100, scale)) : 100;
 }
 
+/** Keep only valid overlay IDs and non-default normalized scale values. */
 export function normalizeScaleRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return Object.freeze({});
   return Object.freeze(Object.fromEntries(Object.entries(value)
@@ -857,6 +911,7 @@ export function normalizeScaleRecord(value) {
     .slice(0, 128)));
 }
 
+/** Deduplicate and bound persisted order IDs before they reach sorting logic. */
 export function normalizeOrder(value) {
   if (!Array.isArray(value)) return Object.freeze([]);
   return Object.freeze([...new Set(value.map((entry) => String(entry ?? "").trim()).filter(Boolean))].slice(0, 128));
@@ -872,10 +927,12 @@ export function orderOverlayEntries(entries, storedOrder = []) {
   return Object.freeze(ordered);
 }
 
+// Read a Foundry setting with a safe fallback when the module namespace or key is unavailable.
 function readSetting(game, key) {
   try { return game?.settings?.get?.(MODULE_ID, key); } catch { return undefined; }
 }
 
+// Resolve an application’s current root element across supported Foundry application shapes.
 function applicationElement(app) {
   const element = app?.element;
   if (element?.nodeType === 1) return element;
@@ -883,6 +940,7 @@ function applicationElement(app) {
   return null;
 }
 
+// Observe root detachment and release or reconcile overlay ownership when the DOM node is removed.
 function watchRootRemoval(root, scope, onRemoved) {
   const parent = root?.parentNode;
   const Observer = root?.ownerDocument?.defaultView?.MutationObserver ?? globalThis.MutationObserver;
@@ -914,6 +972,7 @@ export function createSceneBoundPresentation(root, adapter, scope, application =
     transformOrigin: style.getPropertyValue("transform-origin"),
     transformOriginPriority: style.getPropertyPriority("transform-origin")
   });
+  // Restore the presentation-owned styles and properties captured for this root.
   const restore = () => {
     applicationScale?.restore();
     restoreProperty(style, "clip-path", original.clipPath, original.clipPriority);
@@ -925,6 +984,7 @@ export function createSceneBoundPresentation(root, adapter, scope, application =
   };
   scope?.own?.(restore);
   return Object.freeze({
+    // Apply viewport, stack order, and scale while retaining the root's original inline styles.
     update(viewport, order = 0, requestedScale = 100) {
       restoreProperty(style, "translate", original.translate, original.translatePriority);
       restoreProperty(style, "clip-path", original.clipPath, original.clipPriority);
@@ -965,6 +1025,7 @@ export function createSceneBoundPresentation(root, adapter, scope, application =
   });
 }
 
+// Resolve a user-selected horizontal dock edge from the saved edge or viewport geometry.
 function explicitHorizontalEdge(root) {
   const style = computedStyle(root?.ownerDocument, root);
   if (!style || !["absolute", "fixed"].includes(style.position)) return null;
@@ -986,6 +1047,7 @@ function createApplicationScaleController(application) {
   if (!Number.isFinite(initialScale) || !(initialScale > 0)) return null;
   let changed = false;
   return Object.freeze({
+    // Apply the requested scale while preserving the overlay's original style for later restoration.
     update(requestedScale) {
       const desired = initialScale * normalizeOverlayScale(requestedScale) / 100;
       const current = Number(application.position?.scale);
@@ -998,6 +1060,7 @@ function createApplicationScaleController(application) {
         return false;
       }
     },
+    // Restore the exact inline style values captured when this overlay adapter was created.
     restore() {
       if (!changed) return;
       try {
@@ -1019,6 +1082,7 @@ export function transparentHitAreaRoot(root, rect = safeRect(root), scene = null
   return transparent && Boolean(root?.querySelector?.("button, a[href], input, select, textarea, [role='button'], [role='toolbar']"));
 }
 
+// Read the current Scene canvas bounds used to constrain overlay positioning.
 function sceneRect(viewport) {
   const left = Number(viewport?.left);
   const top = Number(viewport?.top);
@@ -1028,17 +1092,20 @@ function sceneRect(viewport) {
   return { left, top, width, height, right: left + width, bottom: top + height };
 }
 
+// Limit a drag offset so the overlay remains within the available viewport.
 function clampDelta(start, end, minimum, maximum) {
   if (start < minimum) return minimum - start;
   if (end > maximum) return maximum - end;
   return 0;
 }
 
+// Restore one captured inline property only if the gateway still owns the value.
 function restoreProperty(style, property, value, priority) {
   if (value) style.setProperty(property, value, priority);
   else style.removeProperty(property);
 }
 
+// Summarize overlay discovery outcomes without serializing live DOM or application objects.
 function formatScanDiagnostic(candidate) {
   const result = String(candidate?.outcome ?? "rejected").toUpperCase();
   return [
@@ -1053,14 +1120,17 @@ function formatScanDiagnostic(candidate) {
   ].join(" | ");
 }
 
+// Read values from the supported Foundry application registry shape.
 function registryValues(registry) {
   try { return typeof registry?.values === "function" ? [...registry.values()] : []; } catch { return []; }
 }
 
+// Return the first occurrence of each value while retaining discovery order.
 function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+// Collect normalized module IDs and names that can identify an owning application.
 function moduleAliases(module) {
   const id = semanticSlug(module?.id);
   const title = semanticSlug(module?.title);
@@ -1100,14 +1170,17 @@ function ownershipIdentities(element) {
   return [...new Set(fragments.map(semanticSlug).filter(Boolean))];
 }
 
+// Check whether a normalized text token contains the requested identifier.
 function tokenContains(identity, alias) {
   return identity === alias || identity.startsWith(`${alias}-`) || identity.endsWith(`-${alias}`) || identity.includes(`-${alias}-`);
 }
 
+// Normalize human labels into comparable lowercase semantic keys.
 function semanticSlug(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 160);
 }
 
+// Escape special characters before using module text in a regular expression.
 function escapePattern(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }

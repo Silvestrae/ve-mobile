@@ -1,3 +1,4 @@
+// Persistent renderer shell: own route surfaces, split layout, overlays and geometry while app-kernel.mjs owns commands.
 import { localizedText, localizedNumber } from "./localized-text.mjs";
 import { icon, node, vectorIcon } from "./dom.mjs";
 import { renderCharacters } from "../features/characters/presenter.mjs";
@@ -30,6 +31,7 @@ const SCREENS = Object.freeze({
 });
 export const RECONNECT_BLOCKER_DELAY_MS = 120;
 
+// Own the persistent frame and its child presenters, including cleanup when construction fails partway through.
 export function createAppFrame({ store, commands, policy, scope, mobileBackGateway = null, performanceObserver = null, nativeApplications = null }) {
   const root = node("div", { className: "ve-mobile-app", attrs: { role: "application", "aria-label": localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.VEMobile", "VE Mobile") } });
   const viewport = node("main", { className: "ve-viewport" });
@@ -81,6 +83,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   const graphicsRecovery = createGraphicsRecoveryPrompt(commands, scope);
   const rotateSuggestion = tabletRotateSuggestion(commands.localize);
   const sceneChoiceTransition = createSceneChoiceTransition({
+    // Add bounded current route/Scene/history context to the picker's injected gesture trace.
     trace: (entry) => commands.traceScenePickerEvent?.({
       ...entry,
       route: store.state.route,
@@ -93,12 +96,16 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     })
   });
 
+  // Measure the currently exposed Scene pane, using the split host only while Split Screen is active.
   const authoritativeSceneViewport = () => {
     const host = activeSplitScreen ? splitSceneViewport : store.state.route === "scene" ? viewport : null;
     return host ? elementViewport(host) : null;
   };
+  // Resolve the current character pane's real scroller after a presenter has mounted or changed.
   const characterScroller = () => viewport.querySelector(".ve-character-content-scroller") ?? viewport;
+  // Read scroll position from that live scroller rather than an old detached node.
   const characterScrollTop = () => characterScroller().scrollTop;
+  // Share the current Scene bounds with CSS/native overlays and remove them when no map pane is exposed.
   const syncSceneViewport = () => {
     if (!mounted) return;
     const bounds = authoritativeSceneViewport();
@@ -107,6 +114,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     if (moduleOverlayContext) commands.syncModuleOverlays?.({ ...moduleOverlayContext, viewport: bounds });
   };
 
+  // Restore an exact actor/tab position while cancelling delayed attempts after user input or remounting.
   const restoreCharacterScroll = (state, desiredScrollTop) => {
     characterScrollRestoreScope?.dispose();
     characterScrollRestoreScope = scope.child("character-scroll-restore");
@@ -116,11 +124,13 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     const context = characterScrollContext(state);
     if (!context) { restoreScope.dispose(); return; }
     const generation = ++characterScrollRestoreGeneration;
+    // Keep this delayed scroll restoration tied to its owner, generation and exact character/tab context.
     const isCurrent = () => mounted
       && !restoreScope.disposed
       && store.state?.route === "characters"
       && generation === characterScrollRestoreGeneration
       && characterScrollContextKey(store.state?.selectedActorSourceUuid, store.state?.characterTab) === context.key;
+    // Reacquire the current scroller before restoring; a retained old DOM node may no longer be mounted.
     const apply = () => {
       if (!isCurrent()) return false;
       const scroller = characterScroller();
@@ -165,6 +175,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     scope,
     canPause: () => Boolean(store.state.snapshot?.user?.canPause),
     blocked: () => Boolean(activeTemplatePlacement || store.state.reconnect || store.state.modeTransition),
+    // Choose the single-tap Scene action from the current route/split layout after double-tap handling settles.
     onSingle: () => {
       const action = sceneNavigationTapAction({ route: store.state.route, splitActive: activeSplitScreen });
       if (action === "open-full-scene") commands.openFullScene();
@@ -181,6 +192,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       attrs: { type: "button" },
       dataset: { route },
       on: {
+        // Let active placement keep input ownership and route Scene taps through the shared single/double-tap recognizer.
         click: (event) => {
           if (activeTemplatePlacement) return;
           if (route !== "scene") sceneTabGesture.cancel();
@@ -236,6 +248,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     },
     getRoot: () => root.ownerDocument ?? root
   });
+  // Describe admitted native application layers for the shared Back/CloseWatcher stack.
   const nativeBackLayers = () => [...(nativeApplications?.admissions?.layers ?? []), ...(nativeApplications?.settings?.layers ?? []), ...(!controlsGuide.element.hidden ? ["controls-guide"] : [])];
   const closeWatcherBack = createVeCloseWatcherBack({
     scope,
@@ -244,6 +257,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   });
   mobileBackGateway?.enable(scope, {
     onBack: () => backDispatcher.back(),
+    // Expose plain navigation/back-layer diagnostics without retaining mutable browser-history or DOM objects.
     getDiagnosticContext: () => ({
       route: store.state.route,
       routeDepth: store.state.routeHistory?.length ?? 0,
@@ -272,6 +286,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     openGuide: anchor => controlsGuide.show(anchor) });
   root.append(controlsInvitation.element, controlsGuide.element);
 
+  // Reconcile state into persistent or replaced route surfaces, retaining panes only while their owning context stays valid.
   const render = (state) => {
     if (!mounted || scope.disposed) return;
     performanceObserver?.increment?.("render.frame");
@@ -791,11 +806,13 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     controlsContextKey = key;
   }, { immediate: false }));
   render(store.state);
+  // Keep Android Back layers aligned with the current state and admitted native applications.
   const syncCloseWatchers = (state) => closeWatcherBack.sync(veCloseWatcherLayers(state, { splitActive: activeSplitScreen, nativeLayers: nativeBackLayers() }));
   scope.own(store.subscribe(syncCloseWatchers, { immediate: false }));
   syncCloseWatchers(store.state);
   scope.own(nativeApplications?.admissions?.watch?.(() => closeWatcherBack.sync()) ?? (() => {}));
   scope.own(nativeApplications?.settings?.watch?.(() => closeWatcherBack.sync()) ?? (() => {}));
+  // Reserve the rendered GM controls' actual height and account for bottom versus side navigation.
   function syncCombatControlGeometry() {
     if (!mounted) return;
     const navBounds = nav.getBoundingClientRect();
@@ -805,6 +822,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     const controlHeight = combatControlsHost.hidden ? 0 : combatControlsHost.getBoundingClientRect().height;
     root.style.setProperty("--ve-gm-combat-row-reservation", controlHeight > 0 ? `${controlHeight + 8}px` : "0px");
   }
+  // Reconcile Scene and combat-control geometry from the same resize notification.
   const syncFrameGeometry = () => { syncSceneViewport(); syncCombatControlGeometry(); };
   const sceneResizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(syncFrameGeometry) : null;
   let releaseSceneResizeObserver = null;
@@ -822,6 +840,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     scope.listen(globalThis.window, "resize", syncFrameGeometry, { passive: true });
     scope.listen(globalThis.window, "orientationchange", syncFrameGeometry, { passive: true });
   }
+  // Publish the live pane's visibility, geometry and input readiness for kernel/scene-interaction-readiness.mjs.
   const readSceneInteractionState = () => {
     const state = store.state;
     const latestPolicy = policy();
@@ -848,9 +867,11 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       viewport: splitScreen ? elementViewport(splitSceneViewport) : null
     });
   };
+  // Notify readiness consumers after presentation or geometry changes.
   const publishSceneInteraction = () => {
     for (const listener of [...sceneInteractionListeners]) listener(readSceneInteractionState());
   };
+  // Attach a scope-owned readiness listener and deliver the current presentation immediately.
   const watchSceneInteraction = (listener) => {
     if (!mounted || scope.disposed) return () => {};
     const owner = scope.child("scene-interaction-watch");
@@ -865,6 +886,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
         finally { releaseObserver?.(); }
       });
       releaseObserver = observer ? performanceObserver?.track?.("lifecycle.resize-observer") : null;
+      // Rebind observation after a Scene presenter remount, then report its current readiness.
       const reconcile = () => {
         if (owner.disposed) return;
         const next = activeSplitScreen
@@ -885,6 +907,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       throw error;
     }
   };
+  // Temporarily expose the full Scene for native placement, then wait for its layout to settle.
   const setSceneFocusOverride = async (focused, { signal, immediate = false } = {}) => {
     if (!mounted || scope.disposed) return null;
     const request = ++sceneFocusRequest;
@@ -913,6 +936,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     }
   };
   return Object.freeze({
+    // Attach this frame after removing stray old roots, then publish readiness and pending prompts.
     mount() {
       if (!mounted || scope.disposed) return;
       for (const existing of document.querySelectorAll?.(".ve-mobile-app") ?? []) {
@@ -930,6 +954,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     readSceneInteractionState,
     watchSceneInteraction,
     setSceneFocusOverride,
+    // Capture the user's route, layout and map anchor before replacing presentation.
     captureModeTransitionState() {
       externalLayoutTransition = true;
       const sceneBounds = elementViewport(authoritativeSceneViewportHost());
@@ -952,6 +977,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
         sceneAnchor: sceneBounds ? commands.captureSceneViewportAnchor?.(sceneBounds) ?? null : null
       });
     },
+    // Describe current mounted geometry for transition diagnostics without exposing live DOM handles.
     modeTransitionDiagnosticSnapshot() {
       const visualViewport = globalThis.window?.visualViewport;
       return Object.freeze({
@@ -967,6 +993,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
         interactionListeners: sceneInteractionListeners.size
       });
     },
+    // Wait until the authoritative Scene host has stable geometry for this transition.
     async settleModeTransition({ isCurrent = () => true } = {}) {
       const bounds = await waitForStableElementGeometry(viewport, { localize: commands.localize, isCurrent, maxFrames: 45 });
       if (!isCurrent()) return null;
@@ -974,6 +1001,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
       publishSceneInteraction();
       return bounds;
     },
+    // Restore captured presentation intent only while the same transition still owns the frame.
     async restoreModeTransitionState(preserved, bounds, { isCurrent = () => true } = {}) {
       if (!isCurrent()) return false;
       if (store.state.route === "characters") restoreCharacterScrollPosition(characterScroller(), Number(preserved?.viewportScrollTop) || 0, characterHeaderScroll, { clampContent: true });
@@ -995,6 +1023,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     }
   });
 
+  // Dispose frame-owned surfaces and restore the body's Scene/presentation state without leaving detached listeners.
   function unmount() {
     characterScrollMemory.clear();
     characterScrollRestoreScope?.dispose();
@@ -1043,10 +1072,12 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     root.remove();
   }
 
+  // Return the real Scene host for geometry settlement, including the split pane when active.
   function authoritativeSceneViewportHost() {
     return activeSplitScreen ? splitSceneViewport : store.state.route === "scene" ? viewport : null;
   }
 
+  // Rebuild only the current picker owner when its visible Scene/navigation context changes.
   function reconcileSceneChooser(state, splitActive) {
     if (!state.sceneChooserOpen) expandedSceneLevelIds.clear();
     const open = Boolean(state.sceneChooserOpen && state.route === "scene" && !state.templatePlacement && !splitActive);
@@ -1073,6 +1104,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     sceneChooserOverlays.replaceChildren(renderSceneChooser({ scenes, commands, scope: sceneChooserScope, expandedFolderIds: expandedSceneFolderIds, expandedLevelSceneIds: expandedSceneLevelIds, sceneChoiceTransition }));
   }
 
+  // Retain the user's map anchor across a layout change only while the same Scene/presentation still owns it.
   function restoreSceneAnchorAfterLayout(anchor, host, { fixedScreenPosition = false } = {}) {
     sceneLayoutAnchorScope?.dispose();
     sceneLayoutAnchorScope = scope.child("scene-layout-anchor");
@@ -1094,6 +1126,7 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
   }
 }
 
+// Offer explicit recovery actions for a recorded graphics incident without silently changing a profile.
 export function createGraphicsRecoveryPrompt(commands, scope) {
   const title = node("h2", { text: localizedText(commands.localize, "VEMOBILE.Interface.AppFrame.GraphicsRecovery", "Graphics recovery") });
   const message = node("p");
@@ -1113,7 +1146,9 @@ export function createGraphicsRecoveryPrompt(commands, scope) {
     ] })]
   });
   title.id = "ve-graphics-recovery-title";
+  // Hide this recovery prompt after its incident has been acknowledged.
   const dismiss = () => { element.hidden = true; };
+  // Disable recovery actions while one profile/reload request is pending.
   const lock = (value) => { enable.disabled = settings.disabled = continueNormally.disabled = value; };
   scope.listen(continueNormally, "click", async () => {
     lock(true);
@@ -1149,6 +1184,7 @@ export function createGraphicsRecoveryPrompt(commands, scope) {
   });
   return Object.freeze({
     element,
+    // Show an actionable recorded graphics incident and its available profile choices.
     present() {
       const state = commands.readGraphicsRecovery?.();
       if (!state || state.behavior !== "ask" || !state.reliablePending) return false;
@@ -1170,18 +1206,21 @@ export function createGraphicsRecoveryPrompt(commands, scope) {
   });
 }
 
+// Translate only a supported memory-profile name, falling back to Normal for unknown values.
 function profileName(value, localize) {
   const profile = ["normal", "balanced", "strong", "maximum"].includes(value) ? value : "normal";
   const fallback = { normal: "Normal", balanced: "Balanced", strong: "Strong", maximum: "Maximum" };
   return localizedText(localize, `VEMOBILE.MemoryProfile.${profile}.Label`, fallback[profile]);
 }
 
+// Choose the Scene tab's single-tap action from the current route and split layout.
 export function sceneNavigationTapAction({ route, splitActive = false } = {}) {
   if (splitActive) return route === "scene" ? "open-full-scene" : "open-split-scene-chooser";
   if (route !== "scene") return "navigate-scene";
   return "toggle-chooser";
 }
 
+// Publish one measured rectangle for shared map controls and admitted overlays.
 export function applySceneViewportVariables(element, bounds) {
   const values = {
     "--ve-scene-left": `${bounds.left}px`,
@@ -1194,12 +1233,14 @@ export function applySceneViewportVariables(element, bounds) {
   for (const [property, value] of Object.entries(values)) element?.style?.setProperty?.(property, value);
 }
 
+// Remove map geometry when VE no longer owns an exposed Scene pane.
 export function clearSceneViewportVariables(element) {
   for (const property of ["--ve-scene-left", "--ve-scene-top", "--ve-scene-width", "--ve-scene-height", "--ve-scene-right", "--ve-scene-bottom"]) {
     element?.style?.removeProperty?.(property);
   }
 }
 
+// Own the reconnect progress surface, delayed reveal and clocks for one active recovery generation.
 export function createReconnectBlocker(scope, {
   localize = null,
   locale = "en",
@@ -1250,14 +1291,17 @@ export function createReconnectBlocker(scope, {
   let presentationScope = null;
   let activeState = null;
 
+  // Reveal the blocker only after its short delay has elapsed.
   const reveal = () => {
     element.dataset.visible = "true";
   };
+  // Display elapsed timings with localized digits and compact millisecond/second units.
   const formatTiming = (value) => {
     const milliseconds = Math.max(0, Number(value) || 0);
     if (milliseconds < 1_000) return `${localizedNumber(Math.round(milliseconds), locale)} ms`;
     return `${localizedNumber(milliseconds / 1_000, locale, 1)} s`;
   };
+  // Refresh current/previous reconnect timings from the active state's monotonic start time.
   const renderTiming = () => {
     const startedAt = Number(activeState?.startedAt);
     const current = Number(now());
@@ -1277,6 +1321,7 @@ export function createReconnectBlocker(scope, {
       && lastSuccessfulMs >= 0;
     previous.textContent = localizedText(localize, "VEMOBILE.Interface.AppFrame.LastResync2", "Last resync · {hasPreviousformatTimin}", { hasPreviousformatTimin: (hasPrevious ? formatTiming(lastSuccessfulMs) : "—") });
   };
+  // Schedule the next timing tick only for the same live presentation generation.
   const scheduleElapsed = (ownedScope, ownedGeneration) => {
     ownedScope.timeout(() => {
       if (generation !== ownedGeneration || presentationScope !== ownedScope || ownedScope.disposed) return;
@@ -1284,6 +1329,7 @@ export function createReconnectBlocker(scope, {
       scheduleElapsed(ownedScope, ownedGeneration);
     }, elapsedUpdateMs);
   };
+  // Replace the old reconnect owner before scheduling a new generation's reveal and timer.
   const resetPresentation = (state) => {
     presentationScope?.dispose();
     elapsedClock.stop();
@@ -1301,6 +1347,7 @@ export function createReconnectBlocker(scope, {
   scope.own(() => presentationScope?.dispose());
   scope.own(() => elapsedClock.stop());
 
+  // Refresh the active reconnect step, error/reload state and progress labels in the retained surface.
   const updatePresentation = (state) => {
     const activeIndex = Math.max(0, checkpointDefinitions.findIndex(({ id }) => id === state.checkpoint));
     checkpoints.update(state.checkpoint, { failed: state.phase === "failed" });
@@ -1310,11 +1357,11 @@ export function createReconnectBlocker(scope, {
     }
     const phaseProgress = state.progress ?? {};
     const parts = [];
-    const pct = Number(phaseProgress.pct);
+    const progressPercent = Number(phaseProgress.pct);
     const current = Number(phaseProgress.current);
     const total = Number(phaseProgress.total);
-    if (phaseProgress.pct !== null && phaseProgress.pct !== undefined && Number.isFinite(pct)) {
-      parts.push(`${Math.round(Math.max(0, Math.min(100, pct)))}%`);
+    if (phaseProgress.pct !== null && phaseProgress.pct !== undefined && Number.isFinite(progressPercent)) {
+      parts.push(`${Math.round(Math.max(0, Math.min(100, progressPercent)))}%`);
     }
     if (phaseProgress.current !== null && phaseProgress.current !== undefined
       && phaseProgress.total !== null && phaseProgress.total !== undefined
@@ -1329,6 +1376,7 @@ export function createReconnectBlocker(scope, {
 
   return Object.freeze({
     element,
+    // Reconcile this blocker's visible state and retire its delayed reveal/timer when the operation ends.
     update(state) {
       if (!state) {
         presentationScope?.dispose();
@@ -1370,6 +1418,7 @@ export function createReconnectBlocker(scope, {
   });
 }
 
+// Block conflicting interactions during a layout transition without flashing a dialog for very short changes.
 export function createModeTransitionBlocker(scope, { localize = null, delayMs = RECONNECT_BLOCKER_DELAY_MS } = {}) {
   const title = node("h2", { text: localizedText(localize, "VEMOBILE.Interface.AppFrame.ChangingPresentation", "Changing presentation"), attrs: { id: "ve-mode-transition-title" } });
   const message = node("p", { text: localizedText(localize, "VEMOBILE.Interface.AppFrame.ApplyingTheRequestedMobilePresentation", "Applying the requested mobile presentation."), attrs: { "aria-live": "polite", "aria-atomic": "true" } });
@@ -1386,10 +1435,12 @@ export function createModeTransitionBlocker(scope, { localize = null, delayMs = 
   });
   let generation = null;
   let presentationScope = null;
+  // Reveal the blocker only after its short delay has elapsed.
   const reveal = () => { element.dataset.visible = "true"; };
   scope.own(() => presentationScope?.dispose());
   return Object.freeze({
     element,
+    // Reconcile this blocker's visible state and retire its delayed reveal/timer when the operation ends.
     update(state) {
       if (!state) {
         presentationScope?.dispose();
@@ -1416,6 +1467,7 @@ export function createModeTransitionBlocker(scope, { localize = null, delayMs = 
   });
 }
 
+// Build the two vector swords whose CSS animation indicates an active encounter.
 function combatNavIcon() {
   const sword = "M16 1 18.5 5V20H22V22H17.5V27H18.5V30H13.5V27H14.5V22H10V20H13.5V5Z";
   return node("div", { className: "ve-combat-nav-icon", attrs: { "aria-hidden": "true" }, children: [
@@ -1435,6 +1487,7 @@ const CUSTOM_THEME_PROPERTIES = Object.freeze({
   "--ve-custom-border": "border", "--ve-custom-text": "text", "--ve-custom-subtle": "subtle"
 });
 
+// Apply or clear the explicit palette variables produced by kernel/custom-theme.mjs.
 function applyCustomThemePalette(element, palette) {
   for (const [property, key] of Object.entries(CUSTOM_THEME_PROPERTIES)) {
     if (palette) element.style.setProperty(property, palette[key]);
@@ -1442,6 +1495,7 @@ function applyCustomThemePalette(element, palette) {
   }
 }
 
+// Publish the resolved class/custom accent triplet used by the shared character theme.
 function applyThemeBlend(element, profile) {
   const [primary, secondary, tertiary] = profile.accents;
   element.style.setProperty("--ve-class-accent-primary", primary.bright);
@@ -1452,6 +1506,7 @@ function applyThemeBlend(element, profile) {
   element.style.setProperty("--ve-class-deep-tertiary", tertiary.deep);
 }
 
+// Remove the old accent triplet when the next presentation no longer uses that blend.
 function clearThemeBlend(element) {
   for (const property of [
     "--ve-class-accent-primary", "--ve-class-accent-secondary", "--ve-class-accent-tertiary",
@@ -1459,10 +1514,12 @@ function clearThemeBlend(element) {
   ]) element.style.removeProperty(property);
 }
 
+// Compare the Scene/combat presentation slice when deciding whether a retained map surface needs updating.
 export function scenePresentationKey(snapshot) {
   return JSON.stringify({ scene: snapshot?.scene ?? null, combat: snapshot?.combat ?? null });
 }
 
+// Detect a target-count-only change so the map's full input/presentation owner need not remount.
 export function sceneTargetsOnlyChanged(previous, current) {
   const previousCount = Number(previous?.scene?.movement?.targetCount ?? 0);
   const currentCount = Number(current?.scene?.movement?.targetCount ?? 0);
@@ -1470,6 +1527,7 @@ export function sceneTargetsOnlyChanged(previous, current) {
     && sceneTargetIndependentKey(previous) === sceneTargetIndependentKey(current);
 }
 
+// Compare the Scene snapshot with target count neutralized for the narrow update check.
 function sceneTargetIndependentKey(snapshot) {
   const movement = snapshot?.scene?.movement ?? null;
   const scene = snapshot?.scene ? {
@@ -1479,6 +1537,7 @@ function sceneTargetIndependentKey(snapshot) {
   return JSON.stringify({ scene, combat: snapshot?.combat ?? null });
 }
 
+// Limit rebuild decisions to the data consumed by the current route.
 export function snapshotPresentationChangedForRoute(previous, current) {
   if (!previous?.snapshot || !current?.snapshot) return previous?.snapshot !== current?.snapshot;
   if (current.route === "characters") {
@@ -1499,6 +1558,7 @@ export function snapshotPresentationChangedForRoute(previous, current) {
   return false;
 }
 
+// Compare only actor chooser fields rather than serializing each actor's full character record.
 function actorMenuSignature(actors = []) {
   return JSON.stringify(actors.map((actor) => ({
     id: actor.id,
@@ -1514,6 +1574,7 @@ function actorMenuSignature(actors = []) {
   })));
 }
 
+// Keep the same live native template interaction mounted during unrelated state publications.
 export function activeTemplatePresentationUnchanged(previous, current) {
   return Boolean(current?.templatePlacement && previous?.templatePlacement === current.templatePlacement);
 }
@@ -1525,6 +1586,7 @@ export function splitSceneActionSessionId(state, splitActive) {
   return String(state?.actionSession?.rootMessageId ?? "");
 }
 
+// Read a positive visible rectangle or return null while the element has no usable geometry.
 function elementViewport(element) {
   const rect = element?.getBoundingClientRect?.();
   if (!rect || !(rect.width > 0) || !(rect.height > 0)) return null;
@@ -1548,17 +1610,21 @@ export function waitForStableElementGeometry(element, {
     let stableFrames = 0;
     let sampledFrames = 0;
     let settled = false;
+    // Cancel the outstanding geometry sample and release its abort listener before settling.
     const cleanup = () => {
       if (frame !== null) cancelAnimationFrameFn(frame);
       signal?.removeEventListener?.("abort", onAbort);
     };
+    // Resolve or reject this geometry wait once through the shared cleanup path.
     const finish = (callback, value) => {
       if (settled) return;
       settled = true;
       cleanup();
       callback(value);
     };
+    // Reject the geometry wait when its caller's presentation ownership ends.
     const onAbort = () => finish(reject, signal.reason ?? new Error(localizedText(localize, "VEMOBILE.Errors.LayoutCanceled", "Scene layout transition was canceled.")));
+    // Recheck connection, visibility and geometry on the next frame instead of trusting pre-transition bounds.
     const sample = () => {
       frame = null;
       if (!isCurrent()) return finish(resolve, null);
@@ -1577,26 +1643,31 @@ export function waitForStableElementGeometry(element, {
   });
 }
 
+// Ignore subpixel noise below a quarter pixel when deciding that geometry has settled.
 function sameViewport(left, right) {
   return ["left", "top", "width", "height"].every((key) => Math.abs(left[key] - right[key]) < 0.25);
 }
 
+// Separate remembered positions by exact actor source and subtab.
 export function characterScrollContextKey(sourceUuid, tab) {
   const source = String(sourceUuid ?? "").trim();
   const page = String(tab ?? "").trim();
   return source && page ? `${source}\u0000${page}` : "";
 }
 
+// Clamp a requested position to the scroller's current reachable content range.
 export function clampCharacterScrollTop(scrollTop, scrollHeight, clientHeight) {
   const desired = Math.max(0, Number(scrollTop) || 0);
   const maximum = Math.max(0, (Number(scrollHeight) || 0) - (Number(clientHeight) || 0));
   return Math.min(desired, maximum);
 }
 
+// Restore logical scroll while accounting for the collapsing header and the minimum required tail filler.
 export function restoreCharacterScrollPosition(scroller, targetScrollTop, characterHeaderScroll = null, { preserveOrigin = false, clampContent = false } = {}) {
   // A pinned header needs only enough tail to finish contracting. Preserving a
   // long tab's entire offset on a short tab can hide all its content behind it.
   if (!preserveOrigin) characterHeaderScroll?.prepareScrollRestore?.(targetScrollTop);
+  // Translate the remembered logical position through the current header controller when one is mounted.
   const toNative = value => characterHeaderScroll?.toNativeScrollTop?.(value) ?? value;
   const fillerTarget = toNative(characterHeaderScroll
     ? Math.min(targetScrollTop, characterHeaderScroll.collapseDistance)
@@ -1626,6 +1697,7 @@ export function restoreCharacterScrollPosition(scroller, targetScrollTop, charac
   characterHeaderScroll?.update(scroller.scrollTop);
 }
 
+// Preserve the tab bar's screen position when switching tabs with different content geometry.
 export function characterTabScrollTarget(currentScrollTop, currentTabBarTop, desiredTabBarTop) {
   const currentScroll = Math.max(0, Number(currentScrollTop) || 0);
   const currentTop = Number(currentTabBarTop);
@@ -1634,22 +1706,26 @@ export function characterTabScrollTarget(currentScrollTop, currentTabBarTop, des
   return Math.max(0, currentScroll + currentTop - desiredTop);
 }
 
+// Calculate only the missing tail needed to make a requested scroll position reachable.
 export function requiredCharacterScrollFiller(scrollTop, scrollHeight, clientHeight) {
   const desired = Math.max(0, Number(scrollTop) || 0);
   const maximum = Math.max(0, (Number(scrollHeight) || 0) - (Number(clientHeight) || 0));
   return Math.max(0, desired - maximum);
 }
 
+// Extend an existing spacer only by the remaining missing scroll range.
 export function nextCharacterScrollFiller(scrollTop, scrollHeight, clientHeight, currentFiller = 0) {
   const filler = Math.max(0, Number(currentFiller) || 0);
   return filler + requiredCharacterScrollFiller(scrollTop, scrollHeight, clientHeight);
 }
 
+// Keep a frame-owned, bounded LRU of exact actor/tab positions, with no document or preference writes.
 export function createCharacterScrollMemory() {
   // Frame-owned, exact-source/subtab LRU; no durable preferences or documents.
   const limit = 128;
   const positions = new Map();
   return Object.freeze({
+    // Refresh the exact actor/tab's bounded LRU position rather than storing a world-wide preference.
     remember(sourceUuid, tab, scrollTop) {
       const key = characterScrollContextKey(sourceUuid, tab);
       if (!key) return 0;
@@ -1659,6 +1735,7 @@ export function createCharacterScrollMemory() {
       if (positions.size > limit) positions.delete(positions.keys().next().value);
       return value;
     },
+    // Read a remembered context position or use the caller's fallback for an unopened context.
     resolve({ sourceUuid, tab } = {}) {
       const key = characterScrollContextKey(sourceUuid, tab);
       if (!key) return 0;
@@ -1671,6 +1748,7 @@ export function createCharacterScrollMemory() {
   });
 }
 
+// Read the current actor/tab key only while the character route is actually open.
 function characterScrollContext(state) {
   if (state?.route !== "characters") return null;
   const sourceUuid = String(state.selectedActorSourceUuid ?? "").trim();
@@ -1679,6 +1757,7 @@ function characterScrollContext(state) {
   return key ? Object.freeze({ key, sourceUuid, tab }) : null;
 }
 
+// Compare map identity/readiness/layout separately from frequently changing token/target presentation.
 export function sceneStructureKey(snapshot, layoutKey = "", splitViewport = false) {
   return JSON.stringify({
     sceneId: snapshot?.scene?.id ?? "",
@@ -1688,11 +1767,13 @@ export function sceneStructureKey(snapshot, layoutKey = "", splitViewport = fals
   });
 }
 
+// Identify the controlled token that should guide automatic map focus.
 export function sceneFocusKey(snapshot) {
   const token = snapshot?.scene?.movement?.tokens?.find((entry) => entry.controlled);
   return token ? `${snapshot?.scene?.id ?? ""}:${token.id ?? ""}:${token.actorId ?? ""}` : "";
 }
 
+// Retain the presentation fields used to compare the next publication against the rendered route.
 function screenState(state, layoutKey = "") {
   return {
     route: state.route,
@@ -1732,6 +1813,7 @@ function screenState(state, layoutKey = "") {
   };
 }
 
+// Compare only reader/menu/page state when deciding whether the journal route needs refreshing.
 export function journalPresentationChanged(previous, current) {
   return previous?.journal !== current?.journal
     || previous?.journalLoading !== current?.journalLoading
@@ -1742,6 +1824,7 @@ export function journalPresentationChanged(previous, current) {
     || previous?.journalImage !== current?.journalImage;
 }
 
+// Build the split-pane chooser from a fresh narrow navigation snapshot and the shared transition owner.
 function renderSplitScenePicker({ commands, scope, expandedFolderIds, expandedLevelSceneIds, sceneChoiceTransition }) {
   let scenes = Object.freeze([]);
   try {
@@ -1760,6 +1843,7 @@ function renderSplitScenePicker({ commands, scope, expandedFolderIds, expandedLe
   });
 }
 
+// Keep history diagnostics bounded and plain without retaining arbitrary browser state objects.
 function plainHistoryState(state) {
   if (!state || typeof state !== "object" || Array.isArray(state)) return null;
   try {
@@ -1772,6 +1856,7 @@ function plainHistoryState(state) {
   }
 }
 
+// Render the decorative landscape hint shown when a tablet layout would benefit from rotation.
 function tabletRotateSuggestion(localize = null) {
   return node("div", {
     className: "ve-tablet-rotate-suggestion",

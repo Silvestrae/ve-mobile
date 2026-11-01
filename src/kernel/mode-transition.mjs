@@ -28,6 +28,7 @@ export function createModeTransitionCoordinator({
   let running = false;
   let disposed = false;
 
+  // Coalesce resize noise into one animation-frame job and avoid overlapping transition runs.
   const schedule = () => {
     if (disposed || running || scheduled !== null) return;
     scheduled = scheduleFrame(() => {
@@ -36,10 +37,12 @@ export function createModeTransitionCoordinator({
     });
   };
 
+  // Apply the newest policy, yielding after async stages so an obsolete transition cannot finish over a newer one.
   const runLatest = async () => {
     if (disposed || running) return;
     running = true;
     const generation = requestedGeneration;
+    // Let injected transition stages check whether they still own this generation.
     const isCurrent = () => !disposed && generation === requestedGeneration;
     const policy = readPolicy();
     const startedAt = now();
@@ -47,6 +50,7 @@ export function createModeTransitionCoordinator({
     let checkpointStartedAt = startedAt;
     let watchdog = null;
     const timings = {};
+    // Publish checkpoint progress and elapsed timings for the current transition's loading surface.
     const mark = (name, state = "complete", details = {}) => {
       checkpoint = name;
       const markedAt = now();
@@ -92,6 +96,7 @@ export function createModeTransitionCoordinator({
   };
 
   return Object.freeze({
+    // Invalidate the prior generation and schedule the latest responsive layout.
     request() {
       if (disposed) return 0;
       requestedGeneration += 1;
@@ -104,6 +109,7 @@ export function createModeTransitionCoordinator({
     get pending() {
       return !disposed && (running || scheduled !== null);
     },
+    // Cancel scheduled work and make all in-flight transition checks fail closed.
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -114,6 +120,7 @@ export function createModeTransitionCoordinator({
   });
 }
 
+// Name the destination layout in the user's language for transition progress.
 export function presentationLabel(policy = {}, localize = null) {
   if (policy.formFactor === "tablet") return policy.orientation === "portrait" ? localizedText(localize, "VEMOBILE.Presentation.TabletPortrait", "Tablet portrait") : localizedText(localize, "VEMOBILE.Presentation.Tablet", "Tablet");
   return policy.formFactor === "phone" ? localizedText(localize, "VEMOBILE.Presentation.Phone", "Phone") : localizedText(localize, "VEMOBILE.Presentation.Mobile", "mobile");

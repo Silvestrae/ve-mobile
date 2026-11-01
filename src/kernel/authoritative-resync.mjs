@@ -1,7 +1,9 @@
+// Pair the fetch and publication steps with the connection-generation.mjs guard.
 export function createAuthoritativeResynchronizer({ generation, fetchSnapshot, applySnapshot, onError = () => {} }) {
   let request = 0;
   let disposed = false;
   return Object.freeze({
+    // Fetch for this generation and apply only if no newer request or disposal superseded it.
     async run(remoteGeneration) {
       const requestedGeneration = Math.max(0, Number(remoteGeneration) || 0);
       const activeGeneration = generation.matches(requestedGeneration)

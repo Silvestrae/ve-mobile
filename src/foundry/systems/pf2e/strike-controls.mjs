@@ -5,6 +5,7 @@ export function auxiliaryActionKey(action) {
     equipped.carryType ?? null, equipped.handsHeld ?? null, equipped.inSlot ?? null]);
 }
 
+// Build plain strike action records from the Actor’s current prepared PF2e actions.
 export function strikeControlRecords(strike) {
   return {
     ...(Array.isArray(strike.auxiliaryActions) ? { auxiliaryActions: strike.handsAvailable === false || strike.handsAvailable === 0 ? [] : strike.auxiliaryActions.flatMap((action, index) =>

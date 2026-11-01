@@ -2,6 +2,7 @@ import { LONG_PRESS_DURATION_MS, LONG_PRESS_MOVEMENT_THRESHOLD } from "../../ui/
 
 const ENGAGE_THRESHOLD = 0.50;
 const RELEASE_THRESHOLD = 0.46;
+// Default interval between repeated movement commands while a direction is held.
 export const DEFAULT_JOYSTICK_REPEAT_MS = 500;
 const DIRECTION_HYSTERESIS = Math.PI / 18;
 
@@ -9,8 +10,10 @@ const OCTANTS = Object.freeze([
   Object.freeze([1, 0]), Object.freeze([1, 1]), Object.freeze([0, 1]), Object.freeze([-1, 1]),
   Object.freeze([-1, 0]), Object.freeze([-1, -1]), Object.freeze([0, -1]), Object.freeze([1, -1])
 ]);
+// Precompute the eight compass directions used to render and snap the joystick.
 const DEFAULT_DIRECTIONS = Object.freeze(OCTANTS.map(([dx, dy]) => Object.freeze({ dx, dy, angle: Math.atan2(dy, dx) })));
 
+// Convert a pointer vector into a direction while retaining a stable prior direction near boundaries.
 export function joystickDirection(x, y, radius, threshold = ENGAGE_THRESHOLD, directions, previousDirection = null) {
   const distance = Math.hypot(x, y);
   if (!(radius > 0) || distance < radius * threshold) return Object.freeze({ dx: 0, dy: 0, magnitude: 0 });
@@ -32,6 +35,7 @@ export function joystickDirection(x, y, radius, threshold = ENGAGE_THRESHOLD, di
   return Object.freeze(result);
 }
 
+// Place the knob on the selected direction's endpoint at the given travel limit.
 export function snappedJoystickOffset(direction, maximumTravel) {
   if (!direction?.dx && !direction?.dy) return Object.freeze({ x: 0, y: 0 });
   const travel = Math.max(0, Number(maximumTravel)) * Math.min(1, Math.max(0, Number(direction.magnitude) || 0));
@@ -43,6 +47,7 @@ export function snappedJoystickOffset(direction, maximumTravel) {
 }
 
 /** Own a centre-first serialized directional touch stream without knowing Foundry. */
+// Bind continuous joystick movement, repeat timing, and scoped pointer cleanup.
 export function createJoystickController({
   base,
   knob,
@@ -65,11 +70,13 @@ export function createJoystickController({
   let disposed = false;
   let gestureVersion = 0;
 
+  // Cancel any pending movement tick before resetting or scheduling another.
   const clearTimer = () => {
     if (timer !== null) clearTimeout(timer);
     timer = null;
   };
 
+  // Return the joystick to neutral and release capture for the active pointer.
   const reset = () => {
     const wasTouching = pointerId !== null;
     gestureVersion++;
@@ -84,11 +91,13 @@ export function createJoystickController({
     if (wasTouching) onTouchChange(false);
   };
 
+  // Queue the next movement tick only while this gesture remains active.
   const schedule = (delay = 0) => {
     if (timer !== null || stepping || disposed || stoppedByBlock || (!direction.dx && !direction.dy)) return;
     timer = setTimeout(tick, delay);
   };
 
+  // Send one movement step, then recheck session ownership before repeating.
   const tick = async () => {
     timer = null;
     if (disposed || (!direction.dx && !direction.dy)) return;
@@ -114,6 +123,7 @@ export function createJoystickController({
     else void tick();
   };
 
+  // Convert current pointer coordinates to a direction and visible knob offset.
   const update = (event) => {
     const rect = base.getBoundingClientRect();
     const radius = Math.min(rect.width, rect.height) / 2;
@@ -163,6 +173,7 @@ export function createJoystickController({
     event.preventDefault();
     update(event);
   }, { passive: false });
+  // Finish this pointer's gesture, including cancelled and lost-capture paths.
   const end = (event) => {
     if (event.pointerId === pointerId) reset();
   };
@@ -183,6 +194,7 @@ export function createJoystickController({
 }
 
 /** Bind directional buttons as release-origin taps; movement starts only on a valid release. */
+// Bind discrete directional presses with the same action-session guards as joystick movement.
 export function createDpadController({
   base,
   knob,
@@ -202,16 +214,19 @@ export function createDpadController({
   let pulse = false;
   knob?.style && (knob.style.transform = "translate(-50%, -50%)");
 
+  // Release the tracked contact's native touch scroll hold after the gesture ends.
   const releaseTouch = () => {
     if (!press) return;
     press.button.classList?.remove("is-pressed");
     press = null;
     onTouchChange(false);
   };
+  // Cancel movement and restore all d-pad buttons to their idle state.
   const cancel = () => {
     releaseTouch();
     for (const button of buttons) button.removeAttribute?.("data-press-pulse");
   };
+  // Send one directional step and report command failures without stale UI writes.
   const run = async (dx, dy, angle = Math.atan2(dy, dx), button) => {
     if (disposed || pending || (!dx && !dy)) return false;
     pending = true;
@@ -222,6 +237,7 @@ export function createDpadController({
     finally { pending = false; }
     return true;
   };
+  // Read the button's declared direction vector and reject malformed values.
   const parseDirection = (button) => {
     const values = String(button?.dataset?.direction ?? "").split(/[ ,]+/u).map(Number);
     const [dx, dy, dataAngle] = values;
@@ -229,6 +245,7 @@ export function createDpadController({
     const angle = Number(button?.dataset?.angle ?? dataAngle);
     return { dx, dy, angle: Number.isFinite(angle) ? angle : Math.atan2(dy, dx) };
   };
+  // Start repeat movement for a valid enabled direction control.
   const pointerDown = (button, event) => {
     if (disposed || pending || press || button.disabled || event.button !== 0 || event.isPrimary === false) return;
     const direction = parseDirection(button);
@@ -239,10 +256,12 @@ export function createDpadController({
     button.classList?.add("is-pressed");
     onTouchChange(true);
   };
+  // Stop a held direction if the pointer leaves its original button.
   const pointerMove = (event) => {
     if (!press || event.pointerId !== press.pointerId) return;
     if (Math.hypot(Number(event.clientX) - press.x, Number(event.clientY) - press.y) >= movementThreshold) cancel();
   };
+  // Stop repeat movement when its pointer is released.
   const pointerUp = (event) => {
     if (!press || event.pointerId !== press.pointerId) return;
     const pendingPress = press;
@@ -258,6 +277,7 @@ export function createDpadController({
     }
     void run(pendingPress.dx, pendingPress.dy, pendingPress.angle, pendingPress.button);
   };
+  // Preserve keyboard activation while suppressing duplicate pointer clicks.
   const click = (button, event) => {
     event.preventDefault?.();
     event.stopPropagation?.();
@@ -285,6 +305,7 @@ export function createDpadController({
 }
 
 /** Bind the joystick pill release button to an origin-bound intentional tap. */
+// Add an accessible release action for ending the currently held movement session.
 export function bindJoystickReleaseControl({
   control,
   scope,
@@ -298,13 +319,16 @@ export function bindJoystickReleaseControl({
   const eventWindow = getWindow() ?? control;
   let press = null;
 
+  // Clear this control's active pointer and its held presentation state.
   const cancel = () => {
     press = null;
   };
+  // Recheck the current action session before requesting its release command.
   const activate = () => {
     if (control.disabled || isJoystickActive()) return;
     onRelease();
   };
+  // Start the release gesture only for a primary press inside the visible control.
   const pointerDown = (event) => {
     event.preventDefault?.();
     event.stopPropagation?.();
@@ -317,10 +341,12 @@ export function bindJoystickReleaseControl({
       startedAt: now()
     };
   };
+  // Cancel activation when a press drifts outside the control boundary.
   const pointerMove = (event) => {
     if (!press || event.pointerId !== press.pointerId) return;
     if (Math.hypot(Number(event.clientX) - press.x, Number(event.clientY) - press.y) >= movementThreshold) cancel();
   };
+  // Activate on release only when the original pointer stayed within the control.
   const pointerUp = (event) => {
     if (!press || event.pointerId !== press.pointerId) return;
     const pending = press;
@@ -331,9 +357,11 @@ export function bindJoystickReleaseControl({
     if (isJoystickActive() || !containsClientPoint(control, event)) return;
     activate();
   };
+  // Drop state on browser cancellation without issuing a release action.
   const pointerCancel = (event) => {
     if (press?.pointerId === event.pointerId) cancel();
   };
+  // Support keyboard clicks and avoid repeating a pointer-triggered activation.
   const click = (event) => {
     event.preventDefault?.();
     event.stopPropagation?.();
@@ -355,6 +383,7 @@ export function bindJoystickReleaseControl({
   return Object.freeze({ cancel });
 }
 
+// Test client coordinates against the control's current bounding rectangle.
 function containsClientPoint(control, event) {
   const rect = control?.getBoundingClientRect?.();
   const x = Number(event.clientX);
@@ -365,6 +394,7 @@ function containsClientPoint(control, event) {
   return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
 
+// Determine whether a press began on the movable knob rather than its track.
 function insideKnob(knob, event) {
   const rect = knob?.getBoundingClientRect?.();
   const x = Number(event.clientX);
@@ -374,15 +404,18 @@ function insideKnob(knob, event) {
   return Math.hypot(x - (rect.left + rect.width / 2), y - (rect.top + rect.height / 2)) <= radius;
 }
 
+// Return the shortest circular distance between two direction angles.
 function angularDistance(first, second) {
   return Math.abs(Math.atan2(Math.sin(first - second), Math.cos(first - second)));
 }
 
+// Clamp the configured repeat interval to a safe positive timer delay.
 function normalizedRepeatDelay(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.min(1000, Math.max(0, Math.round(parsed))) : DEFAULT_JOYSTICK_REPEAT_MS;
 }
 
+// Use a monotonic clock where available for repeat and click suppression timing.
 function monotonicNow() {
   const value = globalThis.performance?.now?.();
   return Number.isFinite(value) ? value : Date.now();

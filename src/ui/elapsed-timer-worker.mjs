@@ -1,8 +1,10 @@
+// The worker side of elapsed-worker-clock.mjs; it draws only the loading timer.
 import { localizedNumber } from "./localized-text.mjs";
 let context = null;
 let clock = null;
 let interval = null;
 
+// Advance elapsed time from the monotonic worker clock and repaint its tiny offscreen surface.
 function draw() {
   if (!context || !clock) return;
   const elapsed = Math.max(0, clock.elapsedMs + performance.now() - clock.startedAt);

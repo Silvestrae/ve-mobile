@@ -11,23 +11,33 @@ import {
 import { memoryProfilePolicy, resolvedProfileSettings } from "../../kernel/memory-profile-model.mjs";
 import { localizedNumber, localizedText } from "../../ui/localized-text.mjs";
 
+// Resolve the shared VE settings UI text namespace.
 const uiText = (commands, key, fallback, data) => localizedText(commands?.localize, `VEMOBILE.Settings.UI.${key}`, fallback, data);
 
+// Describe the manual route only when the browser has no available install offer.
+const manualPwaInstallHint = (commands, state) => state.manualInstall === "share"
+  ? uiText(commands, "AppIos", "Tap Share in your browser, then Add to Home Screen, then Add. If this option is missing, open this page in Safari.")
+  : uiText(commands, "AppMenu", "To install, open your browser’s menu and choose Install app or Add to Home Screen.");
+
+// Render the install action from the browser's current PWA capability snapshot.
 export function renderPwaInstallSettings(commands, scope, namePrompt = null) {
   const title = node("strong", { text: uiText(commands, "InstallApp", "Install app") });
   const hint = node("small");
   const button = node("button", { className: "ve-settings-diagnostics-button", attrs: { type: "button" }, children: [icon("fa-download"), title] });
+  // Keep install availability, button text, and guidance aligned with browser state.
   const update = state => {
     if (scope.disposed || !state) return;
     button.disabled = !state.enabled || state.busy;
     title.textContent = state.installed ? uiText(commands, "AppName", "Installed app name") : uiText(commands, "InstallApp", "Install app");
-    hint.textContent = state.installed
+    hint.textContent = state.busy
+      ? uiText(commands, "AppInstalling", "Complete the installation in your browser.")
+      : state.installed
       ? uiText(commands, "AppInstalledHint", "App installed. Launch it from your home screen. A connection to Foundry is still required.")
       : !state.secure
         ? uiText(commands, "AppHttps", "App installation requires an HTTPS Foundry address. An ordinary HTTP LAN address cannot be installed.")
         : state.canInstall
-          ? uiText(commands, "AppReady", "Install this Foundry address on your home screen for a full-screen experience.")
-          : uiText(commands, "AppMenu", "Open your browser menu and look for Install app or Add to Home screen. Availability depends on your browser and device. Sign in to the world before installing.");
+          ? uiText(commands, "AppReady", "Tap Install app to choose a name and install.")
+          : manualPwaInstallHint(commands, state);
   };
   scope.listen(button, "click", async event => {
     try {
@@ -35,7 +45,7 @@ export function renderPwaInstallSettings(commands, scope, namePrompt = null) {
       else await commands.installPwa();
     }
     catch {
-      if (!scope.disposed) hint.textContent = uiText(commands, "AppFailed", "Installation could not open. Try Install app or Add to Home screen from your browser menu.");
+      if (!scope.disposed) hint.textContent = uiText(commands, "AppFailed", "Could not start installation. Try again.");
     }
   });
   update(commands.readPwaInstall());
@@ -45,9 +55,10 @@ export function renderPwaInstallSettings(commands, scope, namePrompt = null) {
   ] });
 }
 
+// Own the accessible name dialog, browser prompt generation, and focus restoration.
 export function createPwaNamePrompt(commands, scope) {
   const label = uiText(commands, "AppName", "Installed app name");
-  const input = node("input", { attrs: { id: "ve-pwa-name", type: "text", maxlength: "80", autocomplete: "off" } });
+  const input = node("input", { attrs: { id: "ve-pwa-name", type: "text", size: "16", maxlength: "80", autocomplete: "off", "aria-describedby": "ve-pwa-name-hint" } });
   const hint = node("p", { attrs: { role: "status", "aria-live": "polite" } });
   const cancel = node("button", { className: "ve-settings-reload-later", attrs: { type: "button" }, text: uiText(commands, "Cancel", "Cancel") });
   const install = node("button", { className: "ve-settings-reload-now", attrs: { type: "button" } });
@@ -56,12 +67,13 @@ export function createPwaNamePrompt(commands, scope) {
   }, children: [node("section", { className: "ve-settings-reload-card", children: [
     icon("fa-download"), node("h2", { attrs: { id: "ve-pwa-name-title" }, text: uiText(commands, "InstallApp", "Install app") }),
     node("label", { attrs: { for: "ve-pwa-name" }, text: label }), input,
-    node("p", { text: uiText(commands, "AppNameHint", "Use the world title or choose a name for this browser. Different server addresses can be installed separately.") }),
+    node("p", { attrs: { id: "ve-pwa-name-hint" }, text: uiText(commands, "AppNameHint", "Short names fit best beneath the app icon. Different server addresses can be installed separately.") }),
     hint, node("div", { className: "ve-settings-reload-actions", children: [cancel, install] })
   ] })] });
   let opener = null;
   let generation = 0;
   let preparing = false;
+  // Invalidate pending browser prompt results before hiding the dialog.
   const close = () => {
     generation++;
     preparing = false;
@@ -69,6 +81,7 @@ export function createPwaNamePrompt(commands, scope) {
     if (opener?.isConnected) opener.focus({ preventScroll: true });
     opener = null;
   };
+  // Keep controls and guidance aligned with the latest install/name state.
   const update = () => {
     if (scope.disposed || element.hidden) return;
     const state = commands.readPwaInstall();
@@ -77,21 +90,31 @@ export function createPwaNamePrompt(commands, scope) {
     input.disabled = preparing || state.busy || state.nameSupported === false;
     cancel.disabled = state.busy;
     install.disabled = preparing || state.busy || !input.value.trim() || (!changed && !state.canInstall);
+    // Manual installation happens outside VE; retain Continue for name edits,
+    // but do not leave an unusable Install button beside the manual steps.
+    install.hidden = !changed && !state.canInstall && !state.busy;
     install.textContent = changed ? uiText(commands, "AppContinue", "Continue") : uiText(commands, "InstallApp", "Install app");
-    hint.textContent = state.nameSupported === false
-      ? uiText(commands, "AppNameFailed", "The app name or installation could not be prepared. Try again, or use your browser menu.")
-      : changed ? "" : state.installed
+    const nextStep = preparing
+      ? uiText(commands, "AppNamePreparing", "Saving the app name…")
+      : state.busy
+      ? uiText(commands, "AppInstalling", "Complete the installation in your browser.")
+      : changed
+      ? uiText(commands, "AppNameSave", "Tap Continue to save this name, then install the app.")
+      : state.installed
       ? uiText(commands, "AppRenameHint", "Your browser controls installed app updates. If the name stays unchanged, uninstall the old app and install it again from your browser.")
       : state.canInstall
-      ? uiText(commands, "AppNameReady", "Tap Install app to continue in your browser.")
-      : uiText(commands, "AppNameWaiting", "Waiting for the browser to offer installation. You can also check Install app or Add to Home screen in its menu.");
+      ? uiText(commands, "AppNameReady", "Tap Install app, then confirm in your browser.")
+      : manualPwaInstallHint(commands, state);
+    hint.textContent = state.nameSupported === false
+      ? `${uiText(commands, "AppNameUnavailable", "This browser cannot change the app name.")} ${nextStep}`
+      : nextStep;
   };
   scope.listen(cancel, "click", close);
   scope.listen(input, "input", update);
   scope.listen(element, "keydown", event => {
     if (event.key === "Escape" && !cancel.disabled) { event.preventDefault(); close(); }
     if (event.key === "Tab") {
-      const controls = [input, cancel, install].filter(control => !control.disabled);
+      const controls = [input, cancel, install].filter(control => !control.disabled && !control.hidden);
       const index = controls.indexOf(element.ownerDocument.activeElement);
       const target = controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length];
       if (target) { event.preventDefault(); target.focus(); }
@@ -99,6 +122,7 @@ export function createPwaNamePrompt(commands, scope) {
   });
   scope.listen(install, "click", async () => {
     const current = generation;
+    // Reject late browser install results after this prompt closes or is replaced.
     const isCurrent = () => !scope.disposed && !element.hidden && generation === current;
     try {
       if (input.value.trim() !== commands.readPwaInstall().name) {
@@ -115,12 +139,12 @@ export function createPwaNamePrompt(commands, scope) {
       if (isCurrent()) {
         preparing = false;
         update();
-        hint.textContent = uiText(commands, "AppNameFailed", "The app name or installation could not be prepared. Try again, or use your browser menu.");
+        hint.textContent = uiText(commands, "AppNameFailed", "Could not save the name or start installation. Try again.");
       }
     }
   });
   commands.watchPwaInstall?.(scope, update);
-  return Object.freeze({ element, show(trigger) {
+  return Object.freeze({ element, /* Open the PWA name editor with the current saved/default name and reset its prior request generation. */ show(trigger) {
     generation++;
     preparing = false;
     opener = trigger;
@@ -133,12 +157,14 @@ export function createPwaNamePrompt(commands, scope) {
   } });
 }
 
+// Build the settings route and its scoped reload/overlay controllers.
 export function renderSettings({ commands, scope, overlayHost = null }) {
   const host = node("section", { attrs: { "data-ve-settings-presenter-builds": "1", "data-ve-settings-content-builds": "0" } });
   const accordionState = createSettingsAccordionState();
   let contentScope;
   let currentOverlayHost = overlayHost;
   let ownedOverlays = [];
+  // Move owned overlays when settings switch between inline and modal hosts.
   const syncOverlayHost = nextHost => {
     currentOverlayHost = nextHost;
     const destination = nextHost ?? host.querySelector(".ve-settings");
@@ -148,6 +174,7 @@ export function renderSettings({ commands, scope, overlayHost = null }) {
     if (restoreFocus && focused?.isConnected) focused.focus?.({ preventScroll: true });
   };
   host.syncOverlayHost = syncOverlayHost;
+  // Refresh settings and optionally mark that a full reload is required.
   const refresh = (requiresReload = false) => {
     if (scope.disposed) return;
     const scrollContainer = host.closest?.(".ve-viewport");
@@ -164,6 +191,7 @@ export function renderSettings({ commands, scope, overlayHost = null }) {
   return host;
 }
 
+// Compose native Foundry controls, VE preferences, diagnostics, and account actions.
 function settingsContent({ commands, scope, refresh, requiresReload, overlayHost, accordionState, captureOverlays }) {
   const preferences = commands.readSettings();
   const labels = preferences.labels ?? {};
@@ -185,6 +213,7 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
   let colourScheme = fieldsByKey.get("colorScheme")?.value;
   let thirdColourEnabled = fieldsByKey.get("customThemeThirdEnabled")?.value === true;
   const customColourRows = [];
+  // Show color controls only for the active custom theme selection.
   const syncCustomColourRows = () => {
     for (const [key, row] of customColourRows) row.hidden = colourScheme !== "custom" || (key === "customThemeThird" && !thirdColourEnabled);
   };
@@ -195,6 +224,7 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
   let currentLayout = preferences;
   let deviceIdentity = Object.freeze({ label: uiText(commands, "DesktopBrowser", "Desktop browser"), precision: "family" });
   const deviceValue = node("strong", { text: uiText(commands, "DeviceResolving", labels.deviceResolving ?? "Detecting…") });
+  // Hide width-only options when the selected presentation cannot use them.
   const updateNarrowDetails = (layout = commands.readPresentationPreferences()) => {
     currentLayout = Object.freeze({ ...currentLayout, ...layout });
     const followsLayout = currentLayout.joystickSide === "follow";
@@ -214,6 +244,7 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
     updateAutoPolicyDetail(graphicsDetail, currentLayout.graphicsSafety, currentLayout.graphicsPolicy?.effects, (value) => choiceLabel(fieldsByKey.get("graphicsSafety"), value), commands.localize);
     updateAutoPolicyDetail(diceDetail, currentLayout.diceRendering, currentLayout.graphicsPolicy?.dice, (value) => choiceLabel(fieldsByKey.get("diceRendering"), value), commands.localize);
   };
+  // Keep joystick options available only when the Scene controls can use them.
   const updateJoystickDetail = (layout = commands.readPresentationPreferences()) => {
     updateNarrowDetails(layout);
   };
@@ -263,9 +294,11 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
           defaults.button
         ] }),
         node("div", { className: "ve-settings-groups", children: groups.map((group) => {
+          // Render setting fields with shared status, reload handling, and color visibility.
           const rowsFor = (groupFields) => groupFields.flatMap((field) => {
             const row = settingField(field, commands, status, scope, reloadPrompt, {
               detail: field.key === "joystickSide" ? joystickDetail : field.key === "graphicsSafety" ? graphicsDetail : field.key === "diceRendering" ? diceDetail : null,
+              // Refresh dependent colour/layout controls only after the corresponding preference has saved.
               onSaved: result => {
                 if (field.key === "colorScheme") colourScheme = result.value;
                 if (field.key === "customThemeThirdEnabled") thirdColourEnabled = result.value === true;
@@ -282,6 +315,7 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
           let children = rowsFor(group.fields);
           if (group.id === "device" && pwaNamePrompt) children.push(renderPwaInstallSettings(commands, scope, pwaNamePrompt));
           if (group.id === "performance") {
+            // Select this category's fields for the requested settings subsection.
             const fieldsFor = (...keys) => group.fields.filter((field) => keys.includes(field.key));
             children = [
               settingsSubsection(uiText(commands, "MobileMemory", "Mobile memory"), [
@@ -311,6 +345,7 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
   });
 }
 
+// Group native Foundry settings with VE-mediated handling for supported controls.
 function foundrySettingsBlock(native, commands, status, scope) {
   const action = nativeSettingsAction({
     name: native.openFoundryLabel ?? uiText(commands, "OpenFoundryLabel", "Open Foundry Settings"),
@@ -331,6 +366,7 @@ function foundrySettingsBlock(native, commands, status, scope) {
   ] });
 }
 
+// Render one named native settings action and report failures in the shared status.
 function nativeSettingsAction({ name, hint, iconName, action }, status, scope, commands) {
   const button = node("button", {
     className: "ve-setting-menu-button ve-button-accent-outline",
@@ -353,6 +389,7 @@ function nativeSettingsAction({ name, hint, iconName, action }, status, scope, c
   return button;
 }
 
+// Build module overlay controls from watched settings snapshots.
 function moduleOverlaySettings(commands, scope, globalStatus, labels) {
   const explanation = node("p", {
     className: "ve-module-overlays-copy",
@@ -367,6 +404,7 @@ function moduleOverlaySettings(commands, scope, globalStatus, labels) {
   const scan = node("button", { className: "ve-module-overlays-scan", attrs: { type: "button" }, children: [icon("fa-magnifying-glass"), node("span")] });
   let listScope = null;
 
+  // Replace controls from the latest snapshot while retaining scope ownership.
   const render = (snapshot) => {
     scan.querySelector("span").textContent = snapshot.scanned
       ? (labels.moduleOverlayRescan ?? uiText(commands, "ModuleOverlayRescan", "Rescan module overlays"))
@@ -449,12 +487,13 @@ function moduleOverlaySettings(commands, scope, globalStatus, labels) {
   return node("div", { className: "ve-module-overlays", children: [explanation, warning, scan, result, list] });
 }
 
+// Present memory profile and graphics-conflict guidance beside related settings.
 function mobileMemorySettings(preferences, commands, scope, status, lowMemoryPrompt, optimizer, refresh) {
   const memory = preferences.mobileMemory ?? {};
   const low = memory.profile ?? memory.lowMemory ?? {};
   const assets = memory.assets ?? {};
   const recommendation = memory.recommendation ?? null;
-  const fcs = low.forceClientSettings ?? {};
+  const forceClientSettingsState = low.forceClientSettings ?? {};
   const currentProfile = low.profile ?? "normal";
   const profiles = memoryProfileDefinitions(low, preferences.graphicsPolicy, commands.localize, commands.readLocale?.() ?? "en").map(entry => ({
     ...entry,
@@ -545,7 +584,7 @@ function mobileMemorySettings(preferences, commands, scope, status, lowMemoryPro
     }
   });
 
-  const conflictList = (fcs.conflicts ?? []).map(conflict => node("li", { children: [
+  const conflictList = (forceClientSettingsState.conflicts ?? []).map(conflict => node("li", { children: [
     node("code", { text: conflict.key }),
     node("span", { text: `${commands.localize("VEMOBILE.Controls.Status.Forced")}: ${String(conflict.forcedValue)} · ${localizedText(commands.localize, "VEMOBILE.Controls.Status.Setting", "Setting")}: ${String(low.current?.[conflict.key])}` })
   ] }));
@@ -597,23 +636,24 @@ function mobileMemorySettings(preferences, commands, scope, status, lowMemoryPro
       behavior
     ] }),
     restore,
-    fcs.present ? node("details", { className: "ve-fcs-compatibility", children: [
+    forceClientSettingsState.present ? node("details", { className: "ve-fcs-compatibility", children: [
       node("summary", { text: commands.localize("VEMOBILE.Controls.Settings.compatibility") }),
       node("div", { className: "ve-fcs-heading", children: [
         node("strong", { text: uiText(commands, "ForceClientSettingsDetected", "Force Client Settings detected") }),
-        fcs.version ? node("small", { text: `v${fcs.version}` }) : null
+        forceClientSettingsState.version ? node("small", { text: `v${forceClientSettingsState.version}` }) : null
       ] }),
       conflictList.length ? node("ul", { children: conflictList }) : null,
       fcsToggle ? node("label", { className: "ve-fcs-unlock-row", children: [
         node("span", { text: fcsToggleLabel }), fcsToggle
       ] }) : null,
       node("p", { className: "ve-fcs-guidance", attrs: { id: "ve-fcs-guidance" }, text: uiText(commands, "FcsGuidance", "When a VE graphics profile is active, VE changes only the Foundry graphics settings that profile needs, even if Force Client Settings sets different values. Other forced settings stay as they are.") }),
-      node("p", { text: fcs.precedenceEnabled ? uiText(commands, "PrecedenceOn", "World graphics precedence: On") : uiText(commands, "PrecedenceOff", "World graphics precedence: Off") })
+      node("p", { text: forceClientSettingsState.precedenceEnabled ? uiText(commands, "PrecedenceOn", "World graphics precedence: On") : uiText(commands, "PrecedenceOff", "World graphics precedence: Off") })
     ] }) : null,
     optimizerButton
   ] });
 }
 
+// Ask before changing a preset that intentionally reduces graphics quality.
 function createLowMemoryPrompt(commands, scope, refresh) {
   const rows = node("dl", { className: "ve-low-memory-preview" });
   const feedback = node("p", { attrs: { role: "status", "aria-live": "polite" } });
@@ -631,6 +671,7 @@ function createLowMemoryPrompt(commands, scope, refresh) {
   });
   let trigger = null;
   let targetProfile = "balanced";
+  // Hide the low-memory prompt and return focus to its opening setting.
   const dismiss = () => { element.hidden = true; trigger?.focus?.({ preventScroll: true }); };
   scope.listen(cancel, "click", dismiss);
   scope.listen(apply, "click", async () => {
@@ -653,6 +694,7 @@ function createLowMemoryPrompt(commands, scope, refresh) {
   });
   return Object.freeze({
     element,
+    // Present the proposed graphics-setting differences and conflicts before the explicit apply/reload action.
     show({ profile, preview }, returnFocus) {
       trigger = returnFocus;
       targetProfile = profile;
@@ -674,6 +716,7 @@ function createLowMemoryPrompt(commands, scope, refresh) {
   });
 }
 
+// Create the asset optimization dialog and keep its preview separate from execution.
 export function createMobileAssetOptimizer(commands, scope) {
   const filter = node("select", { attrs: { "aria-label": uiText(commands, "AssetFilter", "Asset filter") }, children: [
     ["all", uiText(commands, "AssetAll", "All")], ["high", uiText(commands, "AssetHighRisk", "High Risk")], ["very-high", uiText(commands, "AssetVeryHighRisk", "Very High Risk")], ["missing", uiText(commands, "AssetMissingDerivative", "Missing Derivative")], ["stale", uiText(commands, "AssetStale", "Stale")]
@@ -732,16 +775,19 @@ export function createMobileAssetOptimizer(commands, scope) {
   let sceneFilterId = "";
   let visibleRows = Object.freeze([]);
   let rowsScope = scope.child("asset-optimizer-rows");
+  // Lock conflicting controls while the user generates or applies a profile.
   const busy = (value) => {
     scan.disabled = close.disabled = value;
     generate.disabled = value || selected.size === 0;
     cancelWork.hidden = !value;
   };
+  // Announce one progress entry without replacing the dialog's current selection.
   const updateProgress = (entry) => {
     const current = Math.min(entry.index + 1, entry.total);
     const locale = commands.readLocale?.() ?? "en";
     progress.textContent = uiText(commands, entry.phase === "scan" ? "InspectingProgress" : "GeneratingProgress", entry.phase === "scan" ? "Inspecting {current} of {total}: {source}" : "Generating {current} of {total}: {source}", { current: localizedNumber(current, locale), total: localizedNumber(entry.total, locale), source: entry.source ?? "" });
   };
+  // Read a fresh optimizer model after the command reports source changes.
   const refreshSnapshot = () => {
     snapshot = commands.readMobileAssetOptimizer();
     const eligible = new Set(buildOptimizerView(filteredAssets(), {
@@ -753,9 +799,11 @@ export function createMobileAssetOptimizer(commands, scope) {
     selected = new Set([...selected].filter((source) => eligible.has(source)));
     renderRows();
   };
+  // Derive the visible list from the current Scene filter and query state.
   const filteredAssets = () => sceneFilterId
     ? (snapshot?.assets ?? []).filter((asset) => (asset?.scenes ?? []).some((scene) => String(scene?.id ?? "") === sceneFilterId))
     : (snapshot?.assets ?? []);
+  // Explain the chosen profile and its visible effects in the dialog.
   const updateProfileHelp = () => {
     const details = OPTIMIZER_PROFILES[profile.value] ?? OPTIMIZER_PROFILES.balanced;
     profileHelp.replaceChildren(
@@ -764,6 +812,7 @@ export function createMobileAssetOptimizer(commands, scope) {
       node("small", { text: uiText(commands, "AssetProfileHint", "{target} · {edge}. Heuristic only; this does not guarantee Scene stability.", { target: localizedText(commands.localize, details.targetKey, details.target), edge: localizedText(commands.localize, details.longEdgeKey, details.longEdge) }) })
     );
   };
+  // Synchronize per-file selection, selected count, and the tri-state header.
   const updateSelection = (headerCheckbox = null) => {
     const state = visibleSelectionState(visibleRows, selected);
     if (headerCheckbox) {
@@ -777,6 +826,7 @@ export function createMobileAssetOptimizer(commands, scope) {
     selectionStatus.textContent = `${uiText(commands, "SelectedCount", "{count} selected", { count: localizedNumber(selected.size, locale) })}${visibleSuffix}`;
     generate.disabled = Boolean(controller) || selected.size === 0;
   };
+  // Rebuild the asset rows from the already prepared optimizer view.
   const renderRows = () => {
     rowsScope.dispose();
     rowsScope = scope.child("asset-optimizer-rows");
@@ -795,6 +845,7 @@ export function createMobileAssetOptimizer(commands, scope) {
       selected = applyVisibleSelection(visibleRows, selected, selectAll.checked);
       renderRows();
     });
+    // Build a sortable optimizer heading with the active direction marker.
     const header = (key, label, className = "") => {
       const active = sortKey === key;
       const button = node("button", { attrs: { type: "button" }, children: [node("span", { text: label }), active ? icon(sortOrder === "asc" ? "fa-arrow-up" : "fa-arrow-down") : null] });
@@ -866,6 +917,7 @@ export function createMobileAssetOptimizer(commands, scope) {
     progress.textContent = visibleRows.length ? uiText(commands, "AssetsShown", "{shown} of {total} cataloged assets shown{sceneSuffix}.", { shown: localizedNumber(visibleRows.length, locale), total: localizedNumber(filteredAssets().length, locale), sceneSuffix: sceneFilterId ? uiText(commands, "AssetsForScene", " for this Scene") : "" }) : uiText(commands, "NoMatchingAssets", "No matching assets.");
     updateSelection(selectAll);
   };
+  // Close only after clearing dialog-local selection and pending generation ownership.
   const closeModal = () => {
     if (controller) return;
     element.hidden = true;
@@ -879,6 +931,7 @@ export function createMobileAssetOptimizer(commands, scope) {
     selected.clear();
     returnFocus?.focus?.({ preventScroll: true });
   };
+  // Open with a fresh snapshot so stale preview rows cannot authorize an action.
   const openOptimizer = () => {
     warningCard.hidden = true;
     optimizerCard.hidden = false;
@@ -886,6 +939,7 @@ export function createMobileAssetOptimizer(commands, scope) {
     renderRows();
     scan.focus?.({ preventScroll: true });
   };
+  // Invoke the optimizer command and use its progress callbacks to update this dialog.
   const runGenerate = async (sources) => {
     const eligible = new Set(buildOptimizerView(filteredAssets(), { profile: profile.value, customLongEdge: Number(customEdge.value), localize: commands.localize, locale: commands.readLocale?.() ?? "en" }).filter((row) => row.eligible).map((row) => row.id));
     const safeSources = sources.filter((source) => eligible.has(source));
@@ -942,6 +996,7 @@ export function createMobileAssetOptimizer(commands, scope) {
   updateProfileHelp();
   return Object.freeze({
     element,
+    // Open the GM optimizer with fresh catalogue data and show its physical-mobile warning when applicable.
     show(trigger, { sceneId = "", sceneName = "" } = {}) {
       returnFocus = trigger;
       snapshot = commands.readMobileAssetOptimizer();
@@ -964,6 +1019,7 @@ export function createMobileAssetOptimizer(commands, scope) {
   });
 }
 
+// Resolve a graphics setting's localized human-readable label.
 function graphicsSettingLabel(key, localize = null) {
   const entries = {
     "core.performanceMode": ["Graphics.PerformanceMode", "Performance Mode"],
@@ -978,6 +1034,7 @@ function graphicsSettingLabel(key, localize = null) {
   return entry ? localizedText(localize, `VEMOBILE.Settings.UI.${entry[0]}`, entry[1]) : key;
 }
 
+// Format a graphics setting value for the profile comparison summary.
 function graphicsSettingValue(value, localize = null) {
   const simple = new Map([[true, ["Graphics.On", "On"]], [false, ["Graphics.Off", "Off"]], [0, ["Graphics.Low", "Low"]], [1, ["Graphics.Medium", "Medium"]], [2, ["Graphics.High", "High"]], [3, ["Graphics.Maximum", "Maximum"]]]);
   const string = { off: ["Graphics.Off", "Off"], balanced: ["Graphics.Balanced", "Balanced"], strict: ["Graphics.Minimum", "Minimum"], normal: ["Graphics.Normal", "Normal"], reduced: ["Graphics.Reduced", "Reduced"], static: ["Graphics.Static", "Static"] };
@@ -985,6 +1042,7 @@ function graphicsSettingValue(value, localize = null) {
   return entry ? localizedText(localize, `VEMOBILE.Settings.UI.${entry[0]}`, entry[1]) : String(value ?? localizedText(localize, "VEMOBILE.Settings.UI.Unknown", "Unknown"));
 }
 
+// Describe the supported memory presets and their effects under current graphics policy.
 export function memoryProfileDefinitions(low, graphicsPolicy = {}, localize = null, locale = "en") {
   const saved = low?.previous?.original ?? low?.current ?? {};
   const labels = { normal: ["Normal", "Normal"], balanced: ["Balanced", "Balanced"], strong: ["Strong", "Strong"], maximum: ["Maximum", "Maximum"] };
@@ -1011,11 +1069,13 @@ export function memoryProfileDefinitions(low, graphicsPolicy = {}, localize = nu
   }));
 }
 
+// Describe a saved setting value using the same labels as the presets.
 function presentSaved(settings, key, localize = null, locale = "en") {
   if (!Object.hasOwn(settings, key) || settings[key] === null || settings[key] === undefined) return localizedText(localize, "VEMOBILE.Settings.UI.Graphics.SavedNative", "Saved native");
   return key === "core.maxFPS" ? localizedNumber(settings[key], locale) : graphicsSettingValue(settings[key], localize);
 }
 
+// Translate optimizer statuses into concise user-facing labels.
 function mobileAssetStatusLabel(status, localize = null) {
   const values = {
     active: ["Active", "Active"], disabled: ["Off", "Off"], unavailable: ["Unavailable", "Unavailable"],
@@ -1026,14 +1086,17 @@ function mobileAssetStatusLabel(status, localize = null) {
   return localizedText(localize, `VEMOBILE.Settings.UI.AssetStatus.${key}`, fallback);
 }
 
+// Map internal optimizer profile IDs to their displayed names.
 function profileName(value) {
   const profile = String(value ?? "normal");
   return profile[0]?.toUpperCase() + profile.slice(1);
 }
 
+// Show connection, world, user, and current-session status from watched records.
 function sessionStatusPanel(commands, scope, labels) {
   const list = node("div", { className: "ve-session-status-list" });
   const rows = new Map();
+  // Update the status rows without retaining live Foundry objects.
   const update = (snapshot) => {
     const users = snapshot?.users ?? [];
     const ids = users.map((user) => String(user.id ?? user.name));
@@ -1067,10 +1130,12 @@ function sessionStatusPanel(commands, scope, labels) {
   ] });
 }
 
+// Format a numeric metric consistently with the user's locale.
 function metricText(value, suffix, locale = "en") {
   return Number.isFinite(value) ? `${localizedNumber(value, locale)} ${suffix}` : "—";
 }
 
+// Preserve native setting field order while grouping by namespace and category.
 export function groupSettings(fields) {
   const groups = [
     { id: "device", title: "Device & Power", keys: ["mode", "keepScreenAwake"] },
@@ -1089,6 +1154,7 @@ export function groupSettings(fields) {
   return result;
 }
 
+// Keep the user's open settings sections in a small reusable state object.
 export function createSettingsAccordionState(initiallyOpen = []) {
   const open = new Set(initiallyOpen);
   return Object.freeze({
@@ -1101,6 +1167,7 @@ export function createSettingsAccordionState(initiallyOpen = []) {
   });
 }
 
+// Render an uncollapsible group of related settings controls.
 function settingsSubsection(title, children) {
   return node("section", { className: "ve-settings-subsection", attrs: { "aria-label": title }, children: [
     node("h3", { text: title }),
@@ -1108,6 +1175,7 @@ function settingsSubsection(title, children) {
   ] });
 }
 
+// Render a collapsible settings category and update its saved open state.
 function settingsSection(id, title, children, scope, accordionState) {
   const headerId = `ve-settings-${safeId(id)}-header`;
   const bodyId = `ve-settings-${safeId(id)}-body`;
@@ -1129,6 +1197,7 @@ function settingsSection(id, title, children, scope, accordionState) {
   ] });
 }
 
+// Own the reload confirmation shown after settings that need a full page reload.
 function createReloadPrompt(commands, scope) {
   const title = node("h2", { text: uiText(commands, "ReloadTitle", "Reload VE Mobile?") });
   const message = node("p", { text: uiText(commands, "FoundryReloadNeeded", "Foundry needs to reload before this setting can take effect.") });
@@ -1153,6 +1222,7 @@ function createReloadPrompt(commands, scope) {
   });
   return Object.freeze({
     element,
+    // Explain that this already-saved setting needs a reload while retaining the option to defer it.
     show(field) {
       title.textContent = uiText(commands, "ReloadTitle", "Reload VE Mobile?");
       message.textContent = uiText(commands, "ReloadMessage", "{name} has been saved. Reload to apply it.", { name: field.name });
@@ -1164,6 +1234,7 @@ function createReloadPrompt(commands, scope) {
   });
 }
 
+// Provide diagnostic actions without exposing private session records in the UI.
 function diagnosticsButtons(commands, scope, reportModal) {
   const feedback = node("span", { className: "ve-settings-diagnostics-feedback", attrs: { role: "status", "aria-live": "polite" } });
   const copy = node("button", {
@@ -1200,6 +1271,7 @@ function diagnosticsButtons(commands, scope, reportModal) {
   return node("div", { className: "ve-settings-diagnostics", children: [show, copy, feedback] });
 }
 
+// Compose and manage the diagnostic report preview before the user copies it.
 function createDiagnosticReportModal(commands, scope) {
   let displayedReport = "";
   let returnFocus = null;
@@ -1218,6 +1290,7 @@ function createDiagnosticReportModal(commands, scope) {
       node("div", { className: "ve-settings-reload-actions", children: [close, copyButton] })
     ] })]
   });
+  // Return focus to the opener after closing the report preview.
   const dismiss = () => {
     element.hidden = true;
     returnFocus?.focus?.({ preventScroll: true });
@@ -1241,6 +1314,7 @@ function createDiagnosticReportModal(commands, scope) {
   });
   return Object.freeze({
     element,
+    // Show a plain-text report, retain the opener for focus restoration and reset prior copy feedback.
     show(value, trigger) {
       displayedReport = String(value);
       report.textContent = displayedReport;
@@ -1252,6 +1326,7 @@ function createDiagnosticReportModal(commands, scope) {
   });
 }
 
+// Render the sign-out action and report command failures in the settings status.
 function logoutButton(label, commands, status, scope) {
   const button = node("button", {
     className: "ve-settings-logout",
@@ -1278,6 +1353,7 @@ function logoutButton(label, commands, status, scope) {
   return button;
 }
 
+// Pair one setting record with its control, save feedback, and reload behavior.
 function settingField(field, commands, status, scope, reloadPrompt, { detail = null, onSaved = null } = {}) {
   const controlId = `ve-setting-${safeId(field.namespace)}-${safeId(field.key)}`;
   const hintId = `${controlId}-hint`;
@@ -1290,6 +1366,7 @@ function settingField(field, commands, status, scope, reloadPrompt, { detail = n
   if (hint) control.setAttribute("aria-describedby", hintId);
   let currentValue = field.value;
   let submittedValue = settingValueKey(currentValue);
+  // Persist through the named settings command and refresh only after success.
   const save = async (requestedValue) => {
     const value = requestedValue === undefined ? controlValue(control, field.type) : requestedValue;
     const valueKey = settingValueKey(value);
@@ -1345,6 +1422,7 @@ function settingField(field, commands, status, scope, reloadPrompt, { detail = n
   });
 }
 
+// Choose the localized label for a setting's reset value.
 function defaultLabel(field, commands) {
   if (field.type === "choice") return field.choices.find(choice => String(choice.value) === String(field.defaultValue))?.label ?? String(field.defaultValue);
   if (field.type === "boolean") return field.defaultValue ? uiText(commands, "On", "On") : uiText(commands, "Off", "Off");
@@ -1352,6 +1430,7 @@ function defaultLabel(field, commands) {
   return String(field.defaultValue);
 }
 
+// Confirm resetting user settings before issuing the defaults command.
 function createDefaultsPrompt(commands, scope, refresh) {
   const button = node("button", { className: "ve-settings-defaults", attrs: { type: "button" }, text: uiText(commands, "RestoreDefaults", "Restore Defaults") });
   const cancel = node("button", { className: "ve-settings-reload-later", attrs: { type: "button" }, text: uiText(commands, "Cancel", "Cancel") });
@@ -1385,6 +1464,7 @@ function createDefaultsPrompt(commands, scope, refresh) {
   return { button, element };
 }
 
+// Render a setting's title, current value, hint, and optional detail affordance.
 function settingCopy(entry, controlId, hintId, detail = null, commands) {
   return node("div", { className: "ve-setting-copy", children: [
     node(controlId ? "label" : "div", { className: "ve-setting-name", text: entry.name, attrs: { for: controlId } }),
@@ -1400,6 +1480,7 @@ function settingCopy(entry, controlId, hintId, detail = null, commands) {
   ] });
 }
 
+// Build the appropriate native input from the bounded field descriptor.
 function settingControl(field, id, commands) {
   if (field.type === "unsupported") {
     return node("span", { className: "ve-setting-unavailable", text: uiText(commands, "NotEditableHere", "Not editable here") });
@@ -1447,40 +1528,48 @@ function settingControl(field, id, commands) {
   });
 }
 
+// Create the accessible two-label switch used for boolean settings.
 function settingsToggle(attrs) {
   return node("input", { className: "ve-setting-toggle", attrs: { type: "checkbox", role: "switch", ...attrs } });
 }
 
+// Read a form control in the value shape expected by its setting type.
 function controlValue(control, type) {
   if (type === "boolean") return Boolean(control.checked);
   if (type === "range" || type === "number") return Number(control.value);
   return control.value;
 }
 
+// Restore a saved setting value into its matching native form control.
 function setControlValue(control, type, value) {
   if (type === "boolean") control.checked = Boolean(value);
   else control.value = String(value);
 }
 
+// Normalize values for comparing a requested setting with its current record.
 function settingValueKey(value) {
   return `${typeof value}:${String(value)}`;
 }
 
+// Format range values with the precision implied by the input step.
 function rangeLabel(value, suffix, step = 1, locale = "en") {
   if (suffix === "%") return `${localizedNumber(Math.round(Number(value) * 100), locale)}%`;
   const decimals = String(step).split(".")[1]?.length ?? 0;
   return `${localizedNumber(Number(value), locale, decimals)} ${suffix}`;
 }
 
+// Convert arbitrary setting keys to stable, DOM-safe control IDs.
 function safeId(value) {
   return String(value ?? "setting").replace(/[^a-z0-9_-]+/giu, "-");
 }
 
+// Turn a key or raw value into readable text when no localized label exists.
 function friendlyLabel(value, fallback) {
   const label = String(value ?? "").trim();
   return !label || /^[A-Z0-9_.-]+$/u.test(label) ? fallback : label;
 }
 
+// Explain the resolved device mode and whether the user selected it explicitly.
 export function deviceDetectedText({ deviceLabel, modePreference, resolvedMode, labels = {}, localize }) {
   const selected = modePreference !== "auto";
   const mode = selected ? modePreference : resolvedMode;
@@ -1491,19 +1580,23 @@ export function deviceDetectedText({ deviceLabel, modePreference, resolvedMode, 
   return `${device} · ${labels[suffixKey] ?? fallbackMode}`;
 }
 
+// Describe how platform policy resolves a requested presentation mode.
 export function autoResolvedPolicyText(requested, resolved, label = titleCase, localize) {
   return requested === "auto" && resolved ? localizedText(localize, "VEMOBILE.Settings.UI.AutoResolved", "Auto · {value}", { value: label(resolved) }) : "";
 }
 
+// Refresh the explanatory text shown beside an Auto mode selection.
 function updateAutoPolicyDetail(element, requested, resolved, label, localize) {
   element.textContent = autoResolvedPolicyText(requested, resolved, label, localize);
   element.hidden = requested !== "auto" || !resolved;
 }
 
+// Prefer an option's supplied label before falling back to a readable raw value.
 function choiceLabel(field, value) {
   return field?.choices?.find((choice) => String(choice.value) === String(value))?.label ?? titleCase(value);
 }
 
+// Apply the project's simple display casing to an internal choice value.
 function titleCase(value) {
   const text = String(value ?? "");
   return text ? `${text[0].toUpperCase()}${text.slice(1)}` : "";

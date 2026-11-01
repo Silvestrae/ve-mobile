@@ -1,16 +1,23 @@
 import { CommandError } from "../../command-support.mjs";
 import { localizeFoundry } from "../../localization.mjs";
 
+// Raise the localized validation or capability error for a PF2e inventory control.
 const fail = (code = "INVALID_INPUT") => {
   const key = code === "STALE_VALUE" ? "VEMOBILE.PF2E.InventoryEffect.Changed" : "VEMOBILE.PF2E.InvalidInput";
   const fallback = code === "STALE_VALUE" ? "This item changed. Refresh and try again." : "This PF2e action is invalid or has changed. Refresh and try again.";
   throw new CommandError(code, localizeFoundry(key, fallback));
 };
+// Resolve the current inventory collection from the Actor.
 const inventoryOf = actor => Array.from(actor?.inventory?.contents ?? actor?.inventory ?? actor?.items ?? []);
+// Check exact embedded Item identity rather than matching only its ID.
 const sameItem = (actor, item) => Boolean(item?.id && item.actor === actor && actor.items?.get?.(item.id) === item);
+// Read the current containing Item ID from PF2e inventory data.
 const containerId = item => item?.system?.containerId ?? null;
+// Normalize the Item’s current quantity.
 const quantityOf = item => Number(item?.quantity ?? item?.system?.quantity);
+// Identify physical PF2e Items that can participate in inventory controls.
 const isPhysical = item => item?.isOfType?.("physical") === true || ["weapon", "armor", "shield", "equipment", "consumable", "treasure", "backpack", "ammo"].includes(item?.type);
+// Find current owned container Items that can accept the selected physical Item.
 function eligibleContainers(actor, item) {
   const items = inventoryOf(actor);
   return items.filter(container => {
@@ -52,6 +59,8 @@ export function inventoryControlRecord(actor, item) {
 
 /** Update quantity or move an exact Item into/out of a PF2e backpack. */
 export async function editInventory(actor, payload, context) {
+  // Route inventory actions through PF2e's item/Actor methods after checking
+  // exact embedded-item identity and the values the UI originally displayed.
   const item = actor.items?.get?.(payload?.itemId);
   if (!sameItem(actor, item) || !isPhysical(item)) fail();
   const currentQuantity = quantityOf(item);
@@ -76,6 +85,7 @@ export async function editInventory(actor, payload, context) {
   return actor.stowOrUnstow(item, target);
 }
 
+// Read finite bounds for the inventory control badge used by touch targeting.
 function badgeBounds(badge) {
   const min = Number.isSafeInteger(badge?.min) ? badge.min : 1;
   const declaredMax = Number.isSafeInteger(badge?.max) ? badge.max : null;
@@ -108,6 +118,8 @@ export function effectControlRecord(actor, item) {
 
 /** Adjust a counter through PF2e's native methods, or explicitly delete an effect. */
 export async function editEffect(actor, payload, context) {
+  // Effects are edited on the exact owned item and only through supported PF2e
+  // APIs; permission and current-value checks are repeated at execution time.
   const item = actor.items?.get?.(payload?.itemId);
   if (!sameItem(actor, item) || item.type !== "effect") fail();
   const badge = item.system?.badge ?? null;
