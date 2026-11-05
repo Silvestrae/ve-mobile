@@ -7,6 +7,7 @@ import { createFoundryTemplatePlacementGateway } from "../../native-template-pla
 import { createNativeTokenPlacementGateway } from "../../native-token-placement-gateway.mjs";
 import { createPf2eBiographyGateway } from "./biography-gateway.mjs";
 import { createPf2eItemDetailsGateway } from "./item-details-gateway.mjs";
+import { createPf2eCraftingGateway } from "./crafting-gateway.mjs";
 import { createPf2eQuickbarGateway } from "./quickbar-gateway.mjs";
 import { createPf2eHotbarGateway } from "./hotbar-gateway.mjs";
 import { CommandError } from "../../command-support.mjs";
@@ -46,6 +47,7 @@ export const pf2eIntegration = Object.freeze({
     actionSession: createPf2eActionSessionGateway,
     biography: createPf2eBiographyGateway,
     itemDetails: createPf2eItemDetailsGateway,
+    crafting: createPf2eCraftingGateway,
     quickbar: createPf2eQuickbarGateway,
     hotbar: createPf2eHotbarGateway,
     templates: /* Supply the PF2e Region-template signature and its native Shift-confirm rotation semantics. */ options => createFoundryTemplatePlacementGateway({ ...options,

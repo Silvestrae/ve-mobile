@@ -28,6 +28,16 @@ export function createFoundryCommandGateway({
   const revealMessage = message => messages.canReveal ? messages.canReveal(message, getGame()) : canRevealMessage(message);
 
   return Object.freeze({
+    // Native toasts own dismissal and accessibility. Treat sheet feedback as
+    // plain text so item names and errors cannot introduce notification markup.
+    notifyCharacterStatus({ message, type = "info" } = {}) {
+      if (typeof message !== "string" || !message.trim() || !["info", "warn", "error"].includes(type)) return false;
+      const notifications = getNotifications();
+      if (typeof notifications?.[type] !== "function") return false;
+      const escaped = message.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+      notifications[type](escaped, { console: false });
+      return true;
+    },
     notifyError(error) {
       const message = error?.message ?? localizeFoundry("VEMOBILE.Character.CommandGateway.TheFoundryActionFailed", "The Foundry action failed.");
       getNotifications()?.error?.(message);
@@ -168,7 +178,8 @@ export function createFoundryCommandGateway({
           })
           : null;
         if (actionItem) templateUsage = messages.watchItemUsage(getHooks(), actor, actionItem, announceActionSession);
-        const output = await handler(actor, payload, { /* Reject result handling once the command's captured session no longer owns the action. */ assertCurrent() {
+        const output = await handler(actor, payload, { signal: observer?.signal, /* Reject result handling once the command's captured session no longer owns the action. */ assertCurrent() {
+          if (observer?.signal?.aborted) throw observer.signal.reason ?? new CommandError("STALE_VALUE", localizeFoundry("VEMOBILE.Interface.AppKernel.ThisActorActionIsNoLongerActive", "This Actor action is no longer active."));
           const currentGame = getGame();
           assertSession(currentGame, expectedSession, getConnectionGeneration);
           assertSystemIntegration(systemIntegration, currentGame);

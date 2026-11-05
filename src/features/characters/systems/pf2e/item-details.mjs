@@ -1,5 +1,6 @@
 import { node, icon } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
+import { notifyCharacter, characterErrorMessage } from "../../notifications.mjs";
 
 // Verify item use permission against the Actor's current item list.
 const allowed = (actor, itemId) => actor?.capabilities?.useItem === true
@@ -33,10 +34,9 @@ export async function openItemDetails(shell, { actorSourceUuid, itemId, fullPage
   const description = node("div", { className: "ve-pf2e-item-description", attrs: { "aria-busy": "true" } });
   const traits = node("div", { className: "ve-pf2e-item-traits" });
   const image = node("img", { attrs: { alt: "", hidden: true } });
-  const status = node("p", { className: "ve-pf2e-item-error", attrs: { role: "alert" } });
   const dialog = node("section", { className: "ve-pf2e-item-dialog", attrs: { role: "dialog", "aria-modal": "true", "aria-label": title.textContent }, children: [
     node("header", { children: [image, title, close] }),
-    node("div", { className: "ve-pf2e-item-body", children: [traits, description, status] })
+    node("div", { className: "ve-pf2e-item-body", children: [traits, description] })
   ] });
   layer = node("div", { className: `ve-pf2e-conditions-layer ve-pf2e-item-layer${fullPage ? " is-full-page" : ""}`, children: [dialog], on: { click: event => { if (event.target === layer) modal.close(); } } }, scope);
   (shell.screen.closest?.(".ve-mobile-app") ?? overlayHost ?? shell.screen).append(layer);
@@ -58,7 +58,7 @@ export async function openItemDetails(shell, { actorSourceUuid, itemId, fullPage
     traits.replaceChildren(...result.traits.map(trait => node("span", { text: trait.label })));
     description.innerHTML = result.html;
   } catch (error) {
-    if (!scope.disposed) status.textContent = error.message;
+    if (!scope.disposed) notifyCharacter(commands, actorSourceUuid, characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Errors.LoadFailed", "Could not load {label}.", { label: title.textContent }), { readOnly: true }), "error");
   } finally {
     if (!scope.disposed) description.removeAttribute("aria-busy");
   }

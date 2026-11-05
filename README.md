@@ -222,7 +222,7 @@ VE Mobile does not provide an editor for every field. See the
 
 ## Pathfinder Second Edition
 
-> **PF2e in 1.1.0 is a community test build — constructive feedback welcome.**
+> **PF2e support is a community test integration — constructive feedback welcome.**
 >
 > I'm primarily a D&D player. I can test the controls in Foundry, but need
 > experienced PF2e players to explain the expected results and help fine-tune
@@ -262,6 +262,7 @@ Tap the portrait to view it full-screen.
 | **Character** | Fortitude, Reflex, Will, attributes, defenses, background, deity, languages, senses, and Rest overnight. Background/deity cells open item details. |
 | **Actions** | Encounter, Exploration, and Downtime views; Attacks with MAP variants, damage and critical damage; abilities, reactions, and supported resources. |
 | **Inventory** | Currency/wealth, Bulk, investment, equipment, quantity, containers, carry state, and supported charges. |
+| **Crafting** | Formula book, formula learning/removal/order, native preparation and daily/reset controls, crafting checks, free crafting, and supported native crafting abilities. |
 | **Spellcasting** | Casting entries, spell attacks/DCs, spells by rank, Focus, preparation, rituals, and item activations. |
 | **Proficiencies** | Core/lore skills, attack and defense proficiencies, and class DC entries. |
 | **Feats** | Grouped class features and feats with expandable descriptions. |
@@ -300,10 +301,25 @@ Unavailable or expended options cannot be used.
 
 ### Current boundaries
 
-Character creation, advancement/feat acquisition, crafting/formula management,
-and Pathfinder Society administration are outside the mobile sheet's current
+The tenth tab, **Pathfinder Society**, shows Organised Play and character numbers,
+faction, reputation and Society boons. Owners can edit the native fields, toggle
+Level Bump and browse, add, read, post, edit or remove boon items. Add only boons
+the character has earned or purchased; the tab does not certify Society legality.
+
+Character creation, advancement/feat acquisition, Paizo account reporting
+and Chronicle administration are outside the mobile sheet's current
 scope. Staff preparation/charges remain deferred pending a supported native or
 module-specific path. Ritual casting does not automate the entire procedure.
+
+The Crafting tab follows PF2e's native eligibility, batch and resource rules.
+Normal crafting continues through the native roll and result-card controls;
+free crafting creates inventory items, with a spell choice for blank spell
+consumables. Both remastered and legacy alchemy are supported. Legacy workflows
+include Infused Reagents, signature items, native field-discovery preparation
+costs, daily/reset and legacy Quick Alchemy. That mode creates one item for one
+reagent; PF2e marks eligible alchemical consumables as temporary and infused.
+Mixed entries use PF2e's combined daily resource checks. Ability-based snare
+creation is unavailable where PF2e itself cannot create the item.
 
 Not every specialist class or module mechanic has a dedicated control; coverage
 needs representative class-by-class testing. Mythic resource display also needs
@@ -415,8 +431,10 @@ and Monk's TokenBar patterns, on an opt-in, best-effort basis.
 </details>
 
 VE's interface supports **US English, Australian English, Spanish, German,
-French, and Italian**. Foundry, systems, modules, and campaign content use their
-own translations.
+French, Italian, and Russian**. Foundry, systems, modules, and campaign content
+use their own translations.
+
+Original Russian translation provided and verified by [Mokudgo](https://github.com/Mokudgo).
 
 ## Troubleshooting
 

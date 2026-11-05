@@ -1,6 +1,7 @@
 import { ACTOR_COMMANDS } from "../../../../kernel/command-names.mjs";
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
+import { characterErrorMessage } from "../../notifications.mjs";
 import { editor } from "./document-editors.mjs";
 
 /** A scoped, touch-first editor for one exact spellcasting entry. */
@@ -139,7 +140,7 @@ export function openSpellPreparation(shell, entryId, ownerScope, overlayHost) {
           }), ...(catalog?.nextCursor !== null && catalog?.nextCursor !== undefined ? [node("button", { text: translate("VEMOBILE.PF2E.Spells.More", "More results"), attrs: { type: "button" }, on: { click: () => doSearch(catalog.nextCursor) } }, rowsScope)] : []));
           if (!results.length) resultArea.append(node("p", { text: translate("VEMOBILE.PF2E.Spells.NoResults", "No eligible spells found.") }));
         } catch (failure) {
-          if (generation === searchGeneration && !searchScope.disposed && !ownerScope.disposed) resultArea.replaceChildren(node("p", { text: failure?.message ?? translate("VEMOBILE.PF2E.Spells.SearchFailed", "Spell search could not be completed.") }));
+          if (generation === searchGeneration && !searchScope.disposed && !ownerScope.disposed) resultArea.replaceChildren(node("p", { text: characterErrorMessage(shell.commands, failure, translate("VEMOBILE.PF2E.Spells.SearchFailed", "Spell search could not be completed."), { readOnly: true }) }));
         } finally { if (generation === searchGeneration && !searchScope.disposed && !ownerScope.disposed) {searchButton.disabled = false;resultArea.removeAttribute("aria-busy");} }
       };
       rowsScope.listen(searchButton, "click", () => doSearch(0));

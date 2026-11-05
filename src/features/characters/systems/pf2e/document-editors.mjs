@@ -1,9 +1,10 @@
 import { ACTOR_COMMANDS } from "../../../../kernel/command-names.mjs";
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
+import { notifyCharacter, characterErrorMessage } from "../../notifications.mjs";
 
 // Map each editor kind to the capability bit that permits its action.
-const allowed = (actor, kind) => actor?.capabilities?.[kind === "spellManagement" ? "manageSpells" : kind === "preparation" ? "prepareSpells" : kind === "currency" ? "currency" : kind === "biography" ? "editBiography" : kind === "defenses" ? "editDefenses" : "editArmorClass"] === true;
+const allowed = (actor, kind) => actor?.capabilities?.[kind === "society" ? "editSociety" : kind === "spellManagement" ? "manageSpells" : kind === "preparation" ? "prepareSpells" : kind === "currency" ? "currency" : kind === "biography" ? "editBiography" : kind === "defenses" ? "editDefenses" : "editArmorClass"] === true;
 // Resolve localized copy for a PF2e document editor.
 const local = (commands, key, fallback, values) => localizedText(commands.localize, key, fallback, values);
 
@@ -31,10 +32,9 @@ export function editor(shell, kind, label, glyph, ownerScope, overlayHost) {
   const close = () => { if (!modal.pending) modal.close(); };
   const closeButton = node("button", { className: "ve-pf2e-editor-close", attrs: { type: "button", "aria-label": translate("VEMOBILE.Controls.Close", "Close") }, children: [icon("fa-xmark")], on: { click: close } }, scope);
   const body = node("div", { className: "ve-pf2e-editor-body" });
-  const error = node("p", { className: "ve-pf2e-editor-error", attrs: { role: "alert" } });
   const footer = node("footer", { children: [node("button", { attrs: { type: "button" }, text: translate("VEMOBILE.Scene.Template.Cancel", "Cancel"), on: { click: close } }, scope)] });
   const form = node("form", { className: "ve-pf2e-document-dialog", attrs: { role: "dialog", "aria-modal": "true", "aria-label": title }, children: [
-    node("header", { children: [icon(glyph), node("div", { children: [node("small", { text: actor.name }), node("h2", { text: title })] }), closeButton] }), body, error, footer
+    node("header", { children: [icon(glyph), node("div", { children: [node("small", { text: actor.name }), node("h2", { text: title })] }), closeButton] }), body, footer
   ] });
   const layer = node("div", { className: "ve-pf2e-document-layer", children: [form] });
   modal.close = (restoreFocus = true) => {
@@ -69,7 +69,6 @@ export function editor(shell, kind, label, glyph, ownerScope, overlayHost) {
   const run = async (command, payload, closeAfter = true) => {
     if (modal.pending || scope.disposed || shell.actor?.sourceUuid !== actor.sourceUuid || !allowed(shell.actor, kind)) return;
     modal.pending = true;
-    error.textContent = "";
     const controls = [...form.querySelectorAll("button,input,textarea,select,[contenteditable='true']")];
     const disabled = controls.map(control => ({ disabled: control.disabled, contenteditable: control.getAttribute?.("contenteditable") }));
     controls.forEach(control => { control.disabled = true; if (control.getAttribute?.("contenteditable") === "true") control.setAttribute("contenteditable", "false"); });
@@ -78,7 +77,7 @@ export function editor(shell, kind, label, glyph, ownerScope, overlayHost) {
       await shell.commands.execute(command, { ...payload, actorSourceUuid: actor.sourceUuid });
       if (!scope.disposed && closeAfter) modal.close();
     } catch (failure) {
-      if (!scope.disposed) error.textContent = failure?.message ?? translate("VEMOBILE.PF2E.Character.ActionFailed", "That action could not be completed.");
+      if (!scope.disposed) notifyCharacter(commands, actor.sourceUuid, characterErrorMessage(commands, failure, translate("VEMOBILE.Character.Errors.UpdateFailed", "Could not update {label}.", { label })), "error");
     } finally {
       modal.pending = false;
       if (!scope.disposed) { controls.forEach((control, index) => {
@@ -355,7 +354,7 @@ export function openDefenseEditor(shell, category, ownerScope, overlayHost) {
 
   let source;
   try { source = shell.commands.readCharacterDefenseEditor(actor.sourceUuid); }
-  catch (error) { context.body.textContent = error?.message ?? label; return; }
+  catch (error) { context.body.textContent = characterErrorMessage(shell.commands, error, local(shell.commands, "VEMOBILE.Character.Errors.LoadFailed", "Could not load {label}.", { label }), { readOnly: true }); return; }
   const typeOptions = Array.isArray(source?.types?.[category]) ? source.types[category] : [];
   const tagOptions = typeOptions;
   const originalEntries = Array.isArray(source?.entries?.[category]) ? source.entries[category] : [];

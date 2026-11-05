@@ -1,6 +1,7 @@
 import { localizedNumber, localizedText } from "../../ui/localized-text.mjs";
 import { ACTOR_COMMANDS } from "../../kernel/command-names.mjs";
 import { icon, node } from "../../ui/dom.mjs";
+import { characterErrorMessage, notifyCharacter } from "./notifications.mjs";
 
 // Shared presentation only: the supplied command boundary owns system semantics.
 const characterRecordSourceUuid = actor => String(actor?.sourceUuid ?? (actor?.id ? `Actor.${actor.id}` : ""));
@@ -13,7 +14,6 @@ export function experienceEditor(actor, open, commands, scope) {
   const locale = actor.header?.locale ?? commands.readLocale?.() ?? "en";
   // Use the injected localizer consistently for editor labels and status copy.
   const localize = (key, fallback, data) => commands.localize?.(key, fallback, data) ?? fallback;
-  const status = node("p", { className: "ve-hp-editor-status", attrs: { role: "status", "aria-live": "polite" } });
   const input = node("input", { className: "ve-hp-editor-amount", attrs: { type: "number", inputmode: "numeric", pattern: "[0-9]*", min: "0", max: "1000000000", step: "1", autocomplete: "off", required: true, placeholder: "0", "aria-label": localize("VEMOBILE.Character.ExperienceAmount", "Experience to add") } });
   const close = node("button", { className: "ve-hp-editor-close", attrs: { type: "button", "aria-label": localize("VEMOBILE.Character.CloseExperience", "Close experience editor") }, on: { click: () => { if (!pending) commands.closeExperienceEditor(); } }, children: [icon("fa-xmark")] }, scope);
   const submit = node("button", { className: "ve-hp-editor-submit", attrs: { type: "submit" }, children: [icon("fa-plus"), node("span", { text: localize("VEMOBILE.Character.AddXp", "Add XP") })] });
@@ -25,15 +25,12 @@ export function experienceEditor(actor, open, commands, scope) {
       if (pending || !input.reportValidity()) return;
       const amount = Number(input.value);
       if (!Number.isSafeInteger(amount) || amount < 0) {
-        status.classList.add("is-error");
-        status.textContent = localize("VEMOBILE.Character.ValidExperience", "Enter a whole, non-negative XP amount.");
+        notifyCharacter(commands, characterRecordSourceUuid(actor), localize("VEMOBILE.Character.ValidExperience", "Enter a whole, non-negative XP amount."), "error");
         return;
       }
       pending = true;
       form.setAttribute("aria-busy", "true");
       input.disabled = submit.disabled = close.disabled = true;
-      status.classList.remove("is-error");
-      status.textContent = commands.silentValueEditorStatus ? "" : localize("VEMOBILE.Character.AddingExperience", "Adding experience…");
       try {
         await commands.execute(ACTOR_COMMANDS.ADD_EXPERIENCE, { actorSourceUuid: characterRecordSourceUuid(actor), amount });
         if (!scope.disposed) commands.closeExperienceEditor();
@@ -42,8 +39,7 @@ export function experienceEditor(actor, open, commands, scope) {
           pending = false;
           form.removeAttribute("aria-busy");
           input.disabled = submit.disabled = close.disabled = false;
-          status.classList.add("is-error");
-          status.textContent = error?.message ?? localize("VEMOBILE.Character.ExperienceFailed", "Foundry could not add that experience.");
+          notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localize("VEMOBILE.Character.ExperienceFailed", "Foundry could not add that experience.")), "error");
         }
       }
     } },
@@ -51,7 +47,6 @@ export function experienceEditor(actor, open, commands, scope) {
       node("header", { children: [node("span", { className: "ve-hp-editor-heading-icon", children: [icon("fa-star")] }), node("div", { children: [node("small", { text: actor.name }), node("h2", { attrs: { id: "ve-xp-editor-title" }, text: localize("VEMOBILE.Character.AddExperience", "Add experience") })] }), close] }),
       node("div", { className: "ve-hp-editor-summary", children: [node("span", { children: [node("small", { text: localize("VEMOBILE.Character.CurrentXp", "Current XP") }), node("strong", { text: localizedNumber(current, locale) })] })] }),
       node("label", { className: "ve-hp-editor-amount-label", children: [node("span", { text: localize("VEMOBILE.Character.ExperienceAmount", "Experience to add") }), input] }),
-      status,
       submit
     ]
   }, scope);
@@ -69,7 +64,6 @@ export function hitPointEditor(actor, requestedEditor, commands, scope) {
   };
   let operation = requestedEditor === "temp" ? "set-temp" : "damage";
   let pending = false;
-  const modalStatus = node("p", { className: "ve-hp-editor-status", attrs: { role: "status", "aria-live": "polite" } });
   const amountInput = node("input", {
     className: "ve-hp-editor-amount",
     attrs: { type: "number", inputmode: "numeric", pattern: "[0-9]*", step: "1", autocomplete: "off", "aria-label": localizedText(commands.localize, "VEMOBILE.Character.Presenter.Amount", "Amount") },
@@ -125,15 +119,12 @@ export function hitPointEditor(actor, requestedEditor, commands, scope) {
       form.setAttribute("aria-busy", "true");
       for (const control of editableControls) control.disabled = true;
       closeButton.disabled = true;
-      modalStatus.classList.remove("is-error");
-      modalStatus.textContent = commands.silentValueEditorStatus ? "" : operationStatus(operation, amount, commands.localize);
       try {
         await commands.execute(ACTOR_COMMANDS.EDIT_HIT_POINTS, { actorSourceUuid: characterRecordSourceUuid(actor), operation, amount });
         if (!scope.disposed) commands.closeHitPointEditor();
       } catch (error) {
         if (!scope.disposed) {
-          modalStatus.classList.add("is-error");
-          modalStatus.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotUpdateTheseHitPoints", "Foundry could not update these hit points.");
+          notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotUpdateTheseHitPoints", "Foundry could not update these hit points.")), "error");
         }
       } finally {
         if (!scope.disposed) {
@@ -158,7 +149,6 @@ export function hitPointEditor(actor, requestedEditor, commands, scope) {
       operationPicker,
       node("label", { className: "ve-hp-editor-amount-label", children: [node("span", { text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.Amount", "Amount") }), node("div", { children: [decrement, amountInput, increment] })] }),
       quickAmounts,
-      modalStatus,
       submit
     ]
   }, scope);
@@ -180,8 +170,6 @@ export function hitPointEditor(actor, requestedEditor, commands, scope) {
     amountInput.max = String(maximum);
     if (reset) setAmount(operation === "set-hp" ? hp.value : operation === "set-temp" ? hp.temp : 1);
     else updateSubmitLabel();
-    modalStatus.textContent = "";
-    modalStatus.classList.remove("is-error");
   }
 
   // Normalize user input to a non-negative integer within the selected operation's bounds.
@@ -210,12 +198,4 @@ function operationSubmitLabel(operation, amount, localize) {
   if (operation === "heal") return localizedText(localize, "VEMOBILE.Character.Presenter.HealHitPoints", "Heal {amount} HP", { amount });
   if (operation === "set-temp") return localizedText(localize, "VEMOBILE.Character.Presenter.SetTemporaryHitPoints", "Set Temp HP to {amount}", { amount });
   return localizedText(localize, "VEMOBILE.Character.Presenter.SetHitPoints", "Set HP to {amount}", { amount });
-}
-
-// Report the completed HP operation using localized status text.
-function operationStatus(operation, amount, localize) {
-  if (operation === "damage") return localizedText(localize, "VEMOBILE.Character.Presenter.ApplyingDamage", "Applying {amount} damage…", { amount });
-  if (operation === "heal") return localizedText(localize, "VEMOBILE.Character.Presenter.ApplyingHealing", "Applying {amount} healing…", { amount });
-  if (operation === "set-temp") return localizedText(localize, "VEMOBILE.Character.Presenter.UpdatingTemporaryHitPoints", "Updating temporary hit points…");
-  return localizedText(localize, "VEMOBILE.Character.Presenter.UpdatingHitPoints", "Updating hit points…");
 }

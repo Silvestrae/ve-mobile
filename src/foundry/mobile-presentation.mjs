@@ -114,6 +114,10 @@ export function enableMobileApplications(scope, {
 } = {}) {
   const admissions = createMobileApplicationAdmissions(document?.body);
   const pendingApplications = new Map();
+  // DOM-only prompts can remain mounted while hidden (for example Vue's
+  // v-show). This scope retains their roots, not an active modal claim, so a
+  // later visibility change can admit them without a Foundry render hook.
+  const domDialogs = new Set();
   const existingApplications = new Set(getExistingApplications().filter(application => applicationElement(application)?.isConnected !== false && applicationElement(application)));
   const baselineElements = new WeakSet();
   for (const application of existingApplications) {
@@ -125,9 +129,10 @@ export function enableMobileApplications(scope, {
   // Capture application ancestry before classifying a native application’s presentation role.
   const beginLineage = (event) => lineage.begin(event);
   const admit = (application, rendered, { preExisting = false } = {}) => {
-    // A native app is admitted only when its live role and a recent user action
-    // support it; retained identity does not bypass reclassification.
+    // The live role decides native admission; interaction lineage is diagnostic.
+    // Retained identity does not bypass reclassification.
     const element = applicationElement(application, rendered);
+    if (application && element && domDialogs.delete(element) && admissions.has(element)) admissions.release(element, element);
     const key = application ?? element;
     if (application && (!element || element.isConnected === false)) pendingApplications.set(application, rendered);
     else if (application) pendingApplications.delete(application);
@@ -175,8 +180,29 @@ export function enableMobileApplications(scope, {
   scope.hook?.("closeItemSheet", release);
   scope.hook?.("closeApplicationV2", release);
   for (const application of existingApplications) admit(application, null, { preExisting: true });
+  // Reconcile only DOM-owned prompts. Native Application identities continue
+  // to use their render/close hooks and must never be replaced by DOM fallback.
+  const reconcileDomDialog = (element) => {
+    if (element.isConnected === false) {
+      domDialogs.delete(element);
+      if (admissions.has(element)) admissions.release(element, element);
+      return;
+    }
+    if (!domDialogIsDisplayed(element)) {
+      if (admissions.has(element)) admissions.release(element, element);
+    } else if (!admissions.hasElement(element) && !element.closest?.(".ve-mobile-admitted-app, .ve-mobile-settings-app")) {
+      admit(null, element, { preExisting: baselineElements.has(element) });
+    }
+  };
+  // Retain eligible DOM roots even when hidden, while excluding VE's own UI
+  // and nested controls already owned by an admitted native application.
+  const discoverDomDialog = (element) => {
+    if (admissions.hasElement(element) || element.closest?.(".ve-mobile-app, .ve-mobile-bootstrap, .ve-mobile-admitted-app, .ve-mobile-settings-app")) return;
+    domDialogs.add(element);
+    reconcileDomDialog(element);
+  };
   for (const element of mobileDialogElements(document.body)) {
-    if (!admissions.hasElement(element) && !element.closest?.(".ve-mobile-admitted-app, .ve-mobile-settings-app")) admit(null, element, { preExisting: baselineElements.has(element) });
+    discoverDomDialog(element);
   }
   // Foundry's registries can retain an already-closed Application while a
   // presentation switch is starting. Enforce the backdrop invariant before
@@ -195,8 +221,15 @@ export function enableMobileApplications(scope, {
     }
     for (const mutation of mutations) for (const node of mutation.addedNodes ?? []) {
       for (const element of mobileDialogElements(node)) {
-        if (!admissions.hasElement(element) && !element.closest?.(".ve-mobile-admitted-app, .ve-mobile-settings-app")) admit(null, element);
+        discoverDomDialog(element);
       }
+    }
+    // Attribute changes matter only on a tracked prompt or one of its
+    // ancestors. Unrelated VE renders perform no style reads; idempotent
+    // reconciliation also avoids observer loops from our own class/layer writes.
+    for (const element of domDialogs) {
+      if (element.isConnected === false || mutations.some(mutation => mutation.type === "attributes"
+        && (mutation.target === element || mutation.target?.contains?.(element)))) reconcileDomDialog(element);
     }
     if (pruneQueued || !admissions.size) return;
     pruneQueued = true;
@@ -206,7 +239,8 @@ export function enableMobileApplications(scope, {
       if (removed) trace({ type: "application-admission-pruned", removed });
     });
   }) : null;
-  observer?.observe(document.body, { childList: true, subtree: true });
+  observer?.observe(document.body, { childList: true, subtree: true,
+    attributes: true, attributeFilter: ["open", "hidden", "style", "class"] });
   scope.own(() => observer?.disconnect?.());
   scope.listen(document, "pointerdown", (event) => {
     const top = event?.target?.closest?.(".ve-mobile-admitted-app");
@@ -230,6 +264,7 @@ export function enableMobileApplications(scope, {
   scope.own(() => {
     lineage.dispose();
     pendingApplications.clear();
+    domDialogs.clear();
     admissions.clear();
     for (const [name, value, priority] of previousViewport) {
       if (value) document.body.style.setProperty(name, value, priority);
@@ -241,6 +276,18 @@ export function enableMobileApplications(scope, {
     retained: true, isPersistentOverlay, isSettingsApplication, isActorEditor
   }).admitted);
   return Object.freeze({ admissions, lineage, reconcileApplications });
+}
+
+/** A mounted prompt owns no mobile backdrop while it or an ancestor is
+ * display:none/hidden, or its native dialog is closed. Do not use inherited
+ * visibility: VE intentionally hides desktop shells before native admission. */
+function domDialogIsDisplayed(element) {
+  if (element.matches?.("dialog") && !element.hasAttribute?.("open")) return false;
+  const browser = element.ownerDocument?.defaultView;
+  for (let current = element; current; current = current.parentElement) {
+    if (current.hidden || browser?.getComputedStyle?.(current)?.display === "none") return false;
+  }
+  return true;
 }
 
 /** Track admission by Application identity so a rerendered or already-closed
@@ -266,7 +313,7 @@ export function createMobileApplicationAdmissions(body) {
     for (const record of records.values()) record.element?.style?.setProperty?.(NATIVE_APPLICATION_LAYER_PROPERTY, String(NATIVE_APPLICATION_LAYER + index++));
     publish();
   };
-  // Show or restore the Foundry canvas backdrop only for Scene presentation with the map enabled.
+  // Prune stale admissions and retain the mobile backdrop only for owned modals.
   const reconcileBackdrop = (forceLayers = false, retain = null) => {
     let removed = false;
     for (const [key, record] of records) {

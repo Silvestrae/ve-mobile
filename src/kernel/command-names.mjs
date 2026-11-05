@@ -17,6 +17,8 @@ export const ACTOR_COMMANDS = Object.freeze({
   EDIT_PF2E_INVENTORY: "actor.edit-pf2e-inventory",
   EDIT_PF2E_EFFECT: "actor.edit-pf2e-effect",
   EDIT_PF2E_SPELLS: "actor.edit-pf2e-spells",
+  EDIT_PF2E_CRAFTING: "actor.edit-pf2e-crafting",
+  EDIT_PF2E_SOCIETY: "actor.edit-pf2e-society",
   ROLL_TOOL: "actor.roll-tool",
   ROLL_INITIATIVE: "actor.roll-initiative",
   ROLL_DEATH_SAVE: "actor.roll-death-save",

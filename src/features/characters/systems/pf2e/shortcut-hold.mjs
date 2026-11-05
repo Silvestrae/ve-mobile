@@ -1,3 +1,4 @@
+import { characterErrorMessage } from "../../notifications.mjs";
 import { bindLongPress } from "../../../../ui/long-press.mjs";
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
@@ -74,7 +75,7 @@ export function bindPf2eShortcutIcons(root, actor, commands, scope) {
           if (prompt === currentPrompt) dismiss();
         } catch (error) {
           if (prompt !== currentPrompt || scope.disposed || !isCurrent(commands, actor, scope)) return;
-          showError(currentPrompt, error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.CouldNotAdd", "Could not add"));
+          showError(currentPrompt, characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Errors.ShortcutFailed", "The shortcut could not be added.")));
         }
       } },
       children: [icon(full ? "fa-lock" : "fa-plus"), node("span", { text: full ? fullLabel : preferences.quickbarSource === "foundry"

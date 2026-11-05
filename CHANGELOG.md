@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 1.1.3 — 2026-11-05
+
+- **Added Russian language support:** VE Mobile now includes Russian alongside its six existing languages. Original Russian translation provided and verified by [Mokudgo](https://github.com/Mokudgo).
+- **Added PF2e Crafting:** Manage formulas, prepare and reset crafting entries, roll native Craft checks, and use free crafting, remastered alchemy and legacy alchemy.
+- **Added Pathfinder Society:** A tenth character tab for Organized Play and character numbers, faction, Reputation, Level Bump and Society boons. Search and add boons, read descriptions, post them to chat, edit them and confirm removal.
+- **Improved character-sheet feedback:** Native notifications and clearer error messages explain failed actions and how to retry, while retaining technical details in VE Diagnostics.
+- **Fixed blocked mobile interactions:** Hidden or inactive native dialogs, including Moulinette's inactive quick search, no longer claim a blocking backdrop.
+- **Improved PF2e navigation:** Returning from Chat keeps the selected tab visible. Short landscape screens retain access to character tabs and content.
+- **Improved Scene targeting performance:** Avoided redundant comparisons when target selections have not changed.
+
+PF2e remains a community test integration for existing character actors on Foundry v14+ with PF2e 8.6.1 or later. Pathfinder Society support covers character-sheet fields and boons; Paizo reporting and Chronicle administration are not included.
 
 ## 1.1.2 — 2026-11-02
 

@@ -4658,21 +4658,6 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
   font-weight: 800;
 }
 
-.ve-action-status {
-  min-height: 0;
-  margin: -6px 4px;
-  color: var(--ve-subtle);
-  font-size: 0.75rem;
-  text-align: center;
-}
-
-.ve-action-status:empty {
-  display: none;
-}
-
-.ve-action-status.is-success { color: var(--ve-good); }
-.ve-action-status.is-error { color: #e67777; }
-
 .ve-hp-editor-layer {
   position: fixed;
   z-index: var(--ve-layer-modal);

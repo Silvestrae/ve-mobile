@@ -8,6 +8,7 @@ import { playControlRecord, ammunitionRecord } from "./play-controls.mjs";
 import { ritualAction, spellReferenceAction } from "./spell-reference-actions.mjs";
 import { pf2eResourceRecords, pf2eLimitedUseRecords } from "./resource-controls.mjs";
 import { persistentDamageRecord } from "./persistent-damage.mjs";
+import { societyRecord } from "./society-controls.mjs";
 
 const SPELL_SLOT_GROUPS = Object.freeze(Array.from({ length: 11 }, (_, rank) => `slot${rank}`));
 const MOVEMENT_SPEED_TYPES = Object.freeze(["land", "swim", "climb", "fly", "burrow"]);
@@ -48,7 +49,8 @@ export function createActorViewRecord(actor, user, capabilitiesForActor = () => 
   const items = Array.from(actor?.items ?? []);
   const classes = actor?.type === "character" ? items.filter((item) => item?.type === "class") : [];
   const physicalItems = items.filter((item) => item && isPhysical(item));
-  const features = items.filter((item) => item && ["feat", "action", "campaignFeature"].includes(item.type));
+  const features = items.filter((item) => item && ["feat", "action", "campaignFeature"].includes(item.type)
+    && !(item.type === "feat" && item.system?.category === "pfsboon"));
   const hpRecord = [hp.value, hp.max, hp.temp].some((value) => typeof value === "number" && Number.isFinite(value))
     ? { value: finite(hp.value), max: finite(hp.max), temp: finite(hp.temp) }
     : null;
@@ -88,7 +90,8 @@ export function createActorViewRecord(actor, user, capabilitiesForActor = () => 
     })) : null,
     availableConditions: availableConditionRecords(),
     resources: typeof actor.getResource === "function" ? pf2eResourceRecords(actor).filter(resource => resource.max > 0 || resource.slug === "hero-points").map(resource => ({ ...resource, id: resource.slug === "hero-points" ? "heroPoints" : resource.slug, label: localizeFoundry(resource.label, resource.label) })) : resourceRecords(system),
-    limitedUses: pf2eLimitedUseRecords(actor)
+    limitedUses: pf2eLimitedUseRecords(actor),
+    society: societyRecord(actor)
   };
   const record = {
     id: string(actor?.id),

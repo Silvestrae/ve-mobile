@@ -1,6 +1,7 @@
 import { ACTOR_COMMANDS } from "../../../../kernel/command-names.mjs";
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
+import { notifyCharacter, characterErrorMessage } from "../../notifications.mjs";
 
 // Read the explicit permission used by persistent-damage edit controls.
 const canEdit = actor => actor?.capabilities?.editPersistentDamage === true;
@@ -42,7 +43,6 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
     type: "button", "aria-label": translate("VEMOBILE.Controls.Close", "Close")
   }, children: [icon("fa-xmark")], on: { click: () => modal.close() } }, scope);
   const body = node("div", { className: "ve-pf2e-editor-body ve-pf2e-persistent-damage-body" });
-  const error = node("p", { className: "ve-pf2e-editor-error", attrs: { role: "alert" } });
   const footer = node("footer", { children: [node("button", { attrs: { type: "button" },
     text: translate("VEMOBILE.Controls.Close", "Close"), on: { click: () => modal.close() } }, scope)] });
   const form = node("form", { className: "ve-pf2e-document-dialog ve-pf2e-persistent-damage-dialog", attrs: {
@@ -50,7 +50,7 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
   }, children: [
     node("header", { children: [icon("fa-droplet"), node("div", { children: [
       node("small", { text: actor.name }), node("h2", { text: title })
-    ] }), closeButton] }), body, error, footer
+    ] }), closeButton] }), body, footer
   ] });
   const layer = node("div", { className: "ve-pf2e-document-layer", children: [form] });
   const drafts = new Map();
@@ -110,7 +110,6 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
   const run = async (operation, payload, draftAfterSuccess) => {
     if (modal.pending || scope.disposed || !writable()) return;
     setBusy(true);
-    error.textContent = "";
     try {
       await commands.execute(ACTOR_COMMANDS.EDIT_PF2E_PERSISTENT_DAMAGE, {
         actorSourceUuid: actor.sourceUuid, operation, ...payload
@@ -127,7 +126,7 @@ export function openPersistentDamageDialog(shell, ownerScope, overlayHost) {
       }
       if (operation === "add") { createFormula.value = ""; createDc.value = "15"; }
     } catch (failure) {
-      if (!scope.disposed) error.textContent = failure?.message ?? translate("VEMOBILE.PF2E.Character.ActionFailed", "That action could not be completed.");
+      if (!scope.disposed) notifyCharacter(commands, actor.sourceUuid, characterErrorMessage(commands, failure, translate("VEMOBILE.Character.Errors.UpdateFailed", "Could not update {label}.", { label: translate("VEMOBILE.PF2E.PersistentDamage.Title", "Persistent damage") })), "error");
     } finally {
       if (!scope.disposed) { setBusy(false); modal.refresh(); }
     }

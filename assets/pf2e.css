@@ -1,5 +1,17 @@
 @import url("./pf2e-list-refinements.css");
 
+/* Short landscape phones retain a scrollable header, visible tabs and a usable
+   content pane. Portrait keeps the normal expanding header composition. */
+@layer ve-mobile-style-authority {
+  @media (orientation: landscape) and (max-height: 500px) {
+    .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-character-screen.ve-pf2e-character-screen .ve-pf2e-character-selector {
+      max-height: min(100px, 25dvh) !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain !important;
+    }
+  }
+}
+
 /* PF2e visual composition. Scoped to its retained sheet and supporting surfaces. */
 @layer ve-mobile-style-authority {
   .ve-mobile-app[data-ve-style-authority][data-form-factor][data-theme][data-character-theme="custom"] :is(.ve-pf2e-character-screen,.ve-pf2e-conditions-layer,.ve-pf2e-header-editor-layer,.ve-pf2e-document-layer) {
@@ -31,7 +43,6 @@
   & .ve-character-content-scroller { scrollbar-width: thin !important; padding: 0 0 12px !important; }
   & .ve-character-content-scroller, & .ve-sheet-tabs { scrollbar-color: var(--ve-character-accent) transparent !important; }
   & [hidden] { display: none !important; }
-  & > .ve-action-status:not(:empty) { position:absolute !important; inset:auto 12px 12px !important; z-index:var(--ve-layer-modal) !important; margin:0 !important; padding:8px 10px !important; border:1px solid var(--ve-border) !important; border-radius:7px !important; background:var(--ve-surface) !important; box-shadow:0 3px 12px #0006 !important; pointer-events:none !important; }
   & .ve-pf2e-character-heading { display: grid !important; gap: 6px !important; min-height: 0 !important; height: auto !important; grid-template-rows: min-content min-content !important; }
   & .ve-pf2e-selection-heading { display:flex !important; align-items:center !important; gap:9px !important; padding:12px !important; border:1px solid var(--ve-border) !important; border-radius:8px !important; background:var(--ve-surface) !important; color:var(--ve-text) !important; }
   & .ve-pf2e-selection-heading h2 { margin:0 !important; font:700 22px/1.2 Georgia,serif !important; color:var(--ve-text) !important; }
@@ -414,7 +425,6 @@
   position:fixed !important; inset:0 !important; z-index:var(--ve-layer-modal,1000) !important; display:grid !important; place-items:center !important; padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)) !important; box-sizing:border-box !important; background:rgb(0 0 0 / .72) !important; pointer-events:auto !important;
   & .ve-pf2e-conditions-dialog { width:min(100%,560px) !important; max-height:100% !important; min-height:0 !important; display:flex !important; flex-direction:column !important; overflow:hidden !important; color:var(--ve-text) !important; border:1px solid var(--ve-character-accent) !important; border-radius:12px !important; background:var(--ve-bg) !important; box-shadow:0 10px 50px #0009 !important; }
   & .ve-pf2e-conditions-dialog { position:relative !important; }
-  & .ve-action-status:not(:empty) { position:absolute !important; inset:auto 12px 12px !important; z-index:1 !important; margin:0 !important; padding:8px 10px !important; border:1px solid var(--ve-border) !important; border-radius:7px !important; background:var(--ve-surface) !important; box-shadow:0 3px 12px #0006 !important; pointer-events:none !important; }
   & header { display:flex !important; align-items:center !important; gap:9px !important; flex:none !important; min-height:52px !important; padding:5px 9px !important; border-bottom:1px solid var(--ve-border) !important; background:var(--ve-surface) !important; }
   & h2 { flex:1 !important; margin:0 !important; border:0 !important; font:600 23px/1.2 Georgia,serif !important; color:var(--ve-text) !important; }
   & button { display:inline-flex !important; align-items:center !important; justify-content:center !important; flex:none !important; width:44px !important; min-width:44px !important; height:44px !important; margin:0 !important; padding:4px !important; border:1px solid var(--ve-border) !important; border-radius:7px !important; background:var(--ve-surface-up) !important; color:var(--ve-text) !important; font-size:16px !important; box-sizing:border-box !important; }
@@ -1144,4 +1154,176 @@
 body.ve-mobile-running[data-ve-mobile-character-theme^="pf2e-"] {
   --ve-red: var(--ve-class-deep-primary);
   --ve-red-bright: var(--ve-class-accent-primary);
+}
+
+/* Crafting follows the native sheet's header / item row / detail rhythm, using
+   VE's theme tokens and touch sizing. The container is the actual pane width. */
+.ve-pf2e-crafting {
+  container-type: inline-size;
+  min-width: 0;
+  & .ve-pf2e-crafting-content, & .ve-pf2e-crafting-preparation { display: grid; gap: 6px; }
+  & .ve-pf2e-crafting-columns { display: grid; gap: 12px; min-width: 0; align-items: start; }
+  & .ve-sheet-card { min-width: 0; padding: 6px; border-radius: 5px; }
+  & :is(.ve-pf2e-crafting-summary,.ve-pf2e-crafting-overview) { display: grid; gap: 6px; }
+  & :is(h3,h4,p) { margin: 0 !important; }
+  & h3, & .ve-pf2e-crafting-formulas > h4 { font: 600 12px/1.2 "Signika","Segoe UI",sans-serif !important; text-transform: uppercase; letter-spacing: .2px; }
+  & p { font-size: 12px !important; line-height: 1.4 !important; }
+  & :is(h3,p,strong,button,summary) { overflow-wrap: anywhere; }
+  & :is(button,input,select) { min-height: 32px; max-width: 100%; }
+  & button { white-space: normal; height: auto; padding: 4px 8px; line-height: 1.25; }
+  & :is(input,select) { width: 100%; min-width: 0; color: var(--ve-text) !important; background: var(--ve-surface-up) !important; border: 1px solid var(--ve-border); border-radius: 5px; padding: 4px 6px; }
+  /* A single accented bar distinguishes each section; rows use separators instead
+     of nested rounded cards. Actions stay inside the bar or the expanded row. */
+  & .ve-pf2e-crafting-header { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 6px; box-sizing: border-box; border-left: 3px solid var(--ve-character-accent); background: color-mix(in srgb,var(--ve-character-accent) 16%,var(--ve-surface-up)); }
+  & .ve-pf2e-crafting-header h3 { flex: 1; min-width: 0; color: var(--ve-text); }
+  & .ve-pf2e-crafting-header button { flex: 0 1 auto; max-width: 48%; font-size: 12px; }
+  /* Header tools match Inventory: keep the visible mode beside one compact icon,
+     allowing the whole group to wrap if a translated heading needs more room. */
+  & .ve-pf2e-crafting-header:has(.ve-pf2e-crafting-header-tools) { flex-wrap: wrap; }
+  & .ve-pf2e-crafting-header-tools { display: flex; flex: 0 1 auto; gap: 6px; align-items: center; min-width: 0; max-width: 100%; }
+  & .ve-pf2e-crafting-header-tools button { max-width: 100%; }
+  & .ve-pf2e-crafting-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  & .ve-pf2e-crafting-actions > button { flex: 0 1 auto; }
+  & :is(.ve-pf2e-crafting-ability,.ve-pf2e-crafting-book) { display: grid; gap: 6px; padding: 0; overflow: hidden; }
+  & .ve-pf2e-crafting-ability > p { padding-inline: 6px; color: var(--ve-subtle); }
+  & .ve-pf2e-crafting-formulas { display: grid; gap: 0; }
+  & .ve-pf2e-crafting-formulas > h4 { padding: 4px 6px; color: var(--ve-character-accent); background: color-mix(in srgb,var(--ve-character-accent) 7%,var(--ve-surface)); border-bottom: 1px solid var(--ve-border); }
+  & .ve-pf2e-crafting-item { min-width: 0; padding: 0; border: 0; border-bottom: 1px solid var(--ve-border); border-radius: 0; }
+  & .ve-pf2e-crafting-item > summary { display: grid; grid-template-columns: 28px minmax(0,1fr) 14px; gap: 6px; align-items: center; min-height: 36px; padding: 4px 6px; box-sizing: border-box; cursor: pointer; list-style: none; background: color-mix(in srgb,var(--ve-character-accent) 3%,var(--ve-surface)); }
+  & .ve-pf2e-crafting-prepared > summary { grid-template-columns: 28px minmax(0,1fr) auto 14px; }
+  & .ve-pf2e-crafting-item > summary strong { font-size: 14px; line-height: 1.25; }
+  & .ve-pf2e-crafting-item > summary img { width: 28px; height: 28px; object-fit: contain; border-radius: 3px; }
+  & .ve-pf2e-crafting-item > summary > i:last-child { color: var(--ve-subtle); font-size: 11px; }
+  & .ve-pf2e-crafting-item[open] > summary > i:last-child { transform: rotate(180deg); }
+  & .ve-pf2e-crafting-item[open] > summary { background: color-mix(in srgb,var(--ve-character-accent) 12%,var(--ve-surface)); }
+  & .ve-pf2e-crafting-row-quantity { display: flex; align-items: center; gap: 4px; color: var(--ve-character-accent); font-size: 13px; }
+  & .ve-pf2e-crafting-row-quantity i { font-size: 11px; }
+  & .ve-pf2e-crafting-detail { display: grid; gap: 8px; padding: 6px; border-top: 1px solid var(--ve-border); background: var(--ve-surface-up); }
+  & .ve-pf2e-crafting-meta { color: var(--ve-subtle); }
+  & .ve-pf2e-crafting-row-controls { display: flex; flex-wrap: wrap; justify-content: start; gap: 6px; align-items: end; }
+  & .ve-pf2e-crafting-row-controls > label { display: grid; gap: 3px; min-width: 0; width: 142px; max-width: 100%; font-size: 12px; }
+  & .ve-pf2e-crafting-quantity-stepper { display: grid; grid-template-columns: 32px minmax(0,1fr) 32px; gap: 6px; align-items: center; }
+  & .ve-pf2e-crafting-prepared-stepper { display: inline-flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
+  & .ve-pf2e-crafting-prepared-stepper > strong { min-width: 24px; text-align: center; font-size: 14px; }
+  & .ve-pf2e-crafting-cost { flex-basis: 100%; color: var(--ve-subtle); }
+  & .ve-pf2e-crafting-cost:empty { display: none; }
+  & .ve-pf2e-crafting-tools { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; align-items: center; }
+  & .ve-pf2e-crafting-order { display: inline-flex; flex-wrap: nowrap; gap: 6px; }
+  & .ve-pf2e-crafting-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--ve-subtle); font-size: 12px; }
+  & .ve-pf2e-crafting-traits { display: flex; flex-wrap: wrap; gap: 5px; }
+  & .ve-pf2e-crafting-trait { padding: 3px 6px; border: 1px solid var(--ve-border); border-radius: 3px; font-size: 11px; }
+  & .ve-pf2e-crafting-local-notice { flex-basis: 100%; color: var(--ve-subtle); padding: 6px; }
+  & .ve-pf2e-crafting-item.is-expended > summary { color: var(--ve-subtle); }
+  & .ve-pf2e-crafting-item.is-expended > summary strong { text-decoration: line-through; }
+  & .ve-pf2e-crafting-item.is-expended .ve-pf2e-crafting-row-quantity { color: var(--ve-subtle); }
+  & .ve-pf2e-crafting-row-controls > button { min-width: 0; height: auto; justify-self: start; }
+  & .ve-pf2e-crafting-filters { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 6px; padding-inline: 6px; }
+  & .ve-pf2e-crafting-filters select { width: auto; min-width: 96px; padding-right: 24px; }
+  & .ve-pf2e-crafting-book > .ve-pf2e-crafting-actions { padding: 0 6px 6px; justify-content: space-between; }
+  & .ve-pf2e-crafting-book > .ve-pf2e-crafting-actions > span { font-size: 12px; }
+  & .ve-pf2e-crafting-mode { display: inline-flex; gap: 6px; align-items: center; justify-content: flex-start; justify-self: start; }
+  & .ve-pf2e-crafting-mode[aria-pressed="true"] { border-color: var(--ve-character-accent); }
+  & .ve-pf2e-crafting-resource { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+  & .ve-pf2e-crafting-resource > span { font-size: 13px; }
+  /* Pair the mode with its labelled resource widget instead of a separate row.
+     The text may wrap, while the resource stepper stays one familiar group. */
+  & .ve-pf2e-crafting-overview-controls { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; }
+  & .ve-pf2e-crafting-overview-controls > .ve-pf2e-crafting-resource { flex-direction: column; align-items: flex-end; gap: 3px; }
+  & .ve-pf2e-crafting-overview-controls > .ve-pf2e-crafting-resource:only-child { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+  & .ve-pf2e-crafting-reagent-controls { display: flex; gap: 6px; align-items: center; }
+  & .ve-pf2e-crafting-reagent-controls button { min-width: 32px; font-size: 18px; padding: 3px; }
+  & .ve-pf2e-crafting-reagent-controls strong { font-size: 14px; }
+  & .ve-pf2e-crafting-unavailable { display: grid; gap: 6px; padding: 6px; border-top: 1px solid var(--ve-border); }
+  & .ve-pf2e-crafting-formulas > h4, & .ve-pf2e-crafting-row-quantity { color: color-mix(in srgb,var(--ve-character-accent) 32%,var(--ve-text)); }
+  & .ve-pf2e-row-description { min-width: 0; overflow-wrap: anywhere; }
+  & .ve-pf2e-row-description :is(img,video,table) { max-width: 100%; }
+}
+
+@container (min-width: 760px) {
+  .ve-pf2e-crafting-columns:not(.is-book-only) { grid-template-columns: minmax(300px,.9fr) minmax(360px,1.1fr); }
+}
+
+/* Match the established PF2e action-button authority, retaining theme-resolved
+   text contrast and making the main craft/preparation actions easy to identify. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-character-screen.ve-pf2e-character-screen .ve-pf2e-crafting {
+    /* Use the compact control scale already established by PF2e Inventory
+       management and Spellcasting: 32px tools, 36px consuming actions. Widths
+       follow labels instead of stretching every action across its container. */
+    & button.ve-pf2e-action-button { flex: 0 1 auto !important; width: fit-content !important; max-width: 100% !important; min-width: 32px !important; min-height: 32px !important; height: auto !important; padding: 3px 7px !important; border-radius: 5px !important; font-size: 12px !important; line-height: 1.2 !important; }
+    & button.ve-pf2e-action-button { display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 5px !important; }
+    & [hidden] { display: none !important; }
+    & :is(input,select) { min-height: 32px !important; height: 32px !important; padding-block: 3px !important; font-size: 12px !important; }
+    & button.ve-pf2e-crafting-primary { min-height: 36px !important; padding: 4px 8px !important; }
+    & .ve-pf2e-crafting-header button { min-height: 32px !important; padding: 3px 7px !important; }
+    & .ve-pf2e-crafting-reagent-controls button { flex: 0 0 32px !important; width: 32px !important; height: 32px !important; padding: 3px !important; font-size: 18px !important; }
+    & .ve-pf2e-crafting-primary { background: color-mix(in srgb,var(--ve-character-accent) 24%,var(--ve-surface)) !important; border-color: var(--ve-character-accent) !important; color: var(--ve-text) !important; }
+    & .ve-sheet-card { border-radius: 5px !important; }
+    & .ve-pf2e-crafting-mode[aria-pressed="true"] { background: color-mix(in srgb,var(--ve-character-accent) 16%,var(--ve-surface)) !important; border-color: var(--ve-character-accent) !important; }
+  }
+}
+
+/* Crafting pickers now live in the existing document dialog. Keep its 40px
+   editor controls and footer sizing; only arrange Crafting's selectable list. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-document-dialog.ve-pf2e-crafting-modal {
+    & :is(.ve-pf2e-crafting-picker,.ve-pf2e-crafting-confirm) { min-width: 0 !important; }
+    & .ve-pf2e-editor-body > p { margin: 0 !important; }
+    /* Use the same readable accent wash as Cast/Craft actions in the sheet. */
+    & button.is-primary { background: color-mix(in srgb,var(--ve-character-accent) 24%,var(--ve-surface)) !important; border-color: var(--ve-character-accent) !important; color: var(--ve-text) !important; }
+    & .ve-pf2e-crafting-actions { display: flex !important; flex-wrap: wrap !important; align-items: center !important; gap: 6px !important; }
+    & .ve-pf2e-crafting-actions > button { flex: 0 1 auto !important; width: auto !important; }
+    /* Search shares one compact row: the field yields space to its action. */
+    & .ve-pf2e-crafting-search { display: grid !important; grid-template-columns: minmax(0,1fr) auto !important; gap: 6px !important; align-items: center !important; min-width: 0 !important; }
+    & .ve-pf2e-crafting-search > input { width: 100% !important; min-width: 0 !important; }
+    & .ve-pf2e-crafting-picker-results { display: grid !important; gap: 4px !important; min-width: 0 !important; }
+    & .ve-pf2e-crafting-picker-results > button { width: 100% !important; min-height: 40px !important; height: auto !important; justify-content: flex-start !important; text-align: left !important; white-space: normal !important; overflow-wrap: anywhere !important; }
+    /* Match the sheet's 28px item artwork without growing compact choice rows. */
+    & .ve-pf2e-crafting-picker-results > .ve-pf2e-crafting-choice { display: flex !important; align-items: center !important; gap: 8px !important; padding: 4px 8px !important; }
+    & .ve-pf2e-crafting-choice-art { display: grid !important; place-items: center !important; flex: 0 0 28px !important; width: 28px !important; height: 28px !important; }
+    & .ve-pf2e-crafting-choice-art img { width: 28px !important; height: 28px !important; object-fit: contain !important; border-radius: 3px !important; }
+    & .ve-pf2e-crafting-choice-label { min-width: 0 !important; flex: 1 !important; }
+    & .ve-pf2e-crafting-choice-label > span { display: block !important; }
+    & .ve-pf2e-crafting-choice-label > small { display: block !important; color: var(--ve-subtle) !important; font-size: 11px !important; font-weight: normal !important; }
+    & .ve-pf2e-crafting-spell-choice { display: flex !important; gap: 8px !important; align-items: center !important; min-width: 0 !important; }
+    & .ve-pf2e-crafting-spell-choice select { min-width: 0 !important; flex: 1 !important; }
+    & .ve-pf2e-crafting-picker-results > .ve-pf2e-crafting-actions { margin-top: 4px !important; }
+  }
+}
+/* Society keeps the same bounded cards, disclosures and modal layer as the
+   other PF2e tabs. Labels wrap without pushing numeric values off the phone. */
+@layer ve-mobile-style-authority {
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-viewport > .ve-character-screen.ve-pf2e-character-screen .ve-pf2e-society {
+    display:grid !important; gap:10px !important; min-width:0 !important;
+    & .ve-sheet-card { min-width:0 !important; margin:0 !important; }
+    & .ve-sheet-card-heading { display:flex !important; align-items:center !important; gap:8px !important; }
+    & .ve-sheet-card-heading h3 { flex:1 !important; min-width:0 !important; overflow-wrap:anywhere !important; }
+    & .ve-sheet-card-heading > button { flex:0 0 auto !important; min-height:38px !important; min-width:38px !important; }
+    & dl { margin:0 !important; padding:0 10px !important; }
+    & dl > div { display:grid !important; grid-template-columns:minmax(0,1fr) minmax(0,.75fr) !important; align-items:center !important; gap:10px !important; min-height:38px !important; padding:5px 0 !important; border-bottom:1px solid var(--ve-border) !important; }
+    & dl > div:last-child { border-bottom:0 !important; }
+    & dt { min-width:0 !important; color:var(--ve-subtle) !important; overflow-wrap:anywhere !important; }
+    & dd { min-width:0 !important; margin:0 !important; text-align:right !important; font-variant-numeric:tabular-nums !important; overflow-wrap:anywhere !important; }
+    & .ve-pf2e-society-reputation > div { grid-template-columns:minmax(0,1fr) auto !important; }
+    & .ve-pf2e-society-level-bump { display:flex !important; align-items:center !important; justify-content:space-between !important; gap:10px !important; width:calc(100% - 20px) !important; min-height:42px !important; margin:4px 10px 10px !important; padding:7px 10px !important; border:1px solid var(--ve-border) !important; border-radius:6px !important; background:var(--ve-surface-up) !important; color:var(--ve-text) !important; text-align:left !important; }
+    & .ve-pf2e-society-level-bump i { font-size:24px !important; color:var(--ve-character-accent) !important; }
+    & .ve-pf2e-society-boon { margin:0 6px 6px !important; }
+    & .ve-pf2e-society-boon .ve-pf2e-item-heading { grid-template-columns:28px minmax(0,1fr) 14px !important; }
+    & .ve-pf2e-society-boon .ve-pf2e-row-controls { display:flex !important; flex-wrap:wrap !important; gap:6px !important; }
+    & .ve-pf2e-society-boon .ve-pf2e-row-controls button { min-height:40px !important; }
+  }
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-society-fields {
+    & > label { display:grid !important; grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important; align-items:center !important; gap:8px !important; }
+    & input, & select { font-size:16px !important; }
+    & > h3 { margin:6px 0 0 !important; font:600 16px/1.3 Signika,sans-serif !important; color:var(--ve-text) !important; }
+  }
+  .ve-mobile-app[data-ve-style-authority][data-form-factor] .ve-pf2e-society-picker {
+    & .ve-pf2e-society-search { display:grid !important; grid-template-columns:minmax(0,1fr) 42px !important; gap:6px !important; }
+    & .ve-pf2e-society-search input { font-size:16px !important; }
+    & .ve-pf2e-society-hint { margin:0 !important; color:var(--ve-subtle) !important; font-size:12px !important; }
+    & .ve-pf2e-society-catalog { display:grid !important; gap:6px !important; min-width:0 !important; }
+    & .ve-pf2e-society-catalog-row { display:grid !important; grid-template-columns:28px minmax(0,1fr) 40px !important; align-items:center !important; gap:8px !important; padding:4px 0 !important; border-bottom:1px solid var(--ve-border) !important; min-width:0 !important; }
+    & .ve-pf2e-society-catalog-row > img { width:28px !important; height:28px !important; object-fit:contain !important; border-radius:4px !important; }
+    & .ve-pf2e-society-catalog-row > strong { min-width:0 !important; overflow-wrap:anywhere !important; }
+  }
 }

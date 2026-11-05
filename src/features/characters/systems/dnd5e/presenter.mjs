@@ -7,6 +7,7 @@ import { countInventoryContents, favouriteItemMetadata, filterSpellsByAvailabili
 import { sheetTabIcon } from "../../sheet-icons.mjs";
 import { resolveCharacterTheme } from "../../../../kernel/character-theme.mjs";
 import { bindLongPress } from "../../../../ui/long-press.mjs";
+import { characterErrorMessage, notifyCharacter } from "../../notifications.mjs";
 import { actionResultsDeferred, renderActionSessionModal } from "../../../../ui/action-session-modal.mjs";
 import { bindDetailsDisclosure } from "../../../../ui/disclosure.mjs";
 import { hasCharacterDisclosure } from "../../../../kernel/app-state.mjs";
@@ -69,7 +70,6 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
     });
     return true;
   } };
-  const status = shell.status ??= node("p", { className: "ve-action-status", attrs: { role: "status", "aria-live": "polite" } });
   const selectedItem = actorItemById(actor, state.characterItemId);
   // Keep item opening on the named command boundary rather than passing documents.
   const openItem = (item) => commands.openCharacterItem(item.id);
@@ -122,23 +122,23 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-selected", String(active));
   }
-  updateCharacterSharedHeader(shell, { actors, actor, state, commands, status, settings, ownerScope, overlayHost });
-  const panel = node("div", { className: "ve-sheet-panel", children: [collectiveTabs ? renderCollectivePanel(actor, activePage, { commands, status, scope, state }, {
-      inventory: () => inventoryPanel(actor, commands, status, openItem, state.expandedCharacterItemId, state.characterOpenSections, scope, settings),
-      biography: () => biographyPanel(actor, commands, status, scope),
+  updateCharacterSharedHeader(shell, { actors, actor, state, commands, settings, ownerScope, overlayHost });
+  const panel = node("div", { className: "ve-sheet-panel", children: [collectiveTabs ? renderCollectivePanel(actor, activePage, { commands, scope, state }, {
+      inventory: () => inventoryPanel(actor, commands, openItem, state.expandedCharacterItemId, state.characterOpenSections, scope, settings),
+      biography: () => biographyPanel(actor, commands, scope),
       features: excluded => {
         const features = actor.features.filter(item => !excluded.has(item.id));
-        return features.length ? featuresPanel({ ...actor, features }, commands, status, openItem, state.expandedCharacterItemId, state.characterOpenSections, scope, settings) : null;
+        return features.length ? featuresPanel({ ...actor, features }, commands, openItem, state.expandedCharacterItemId, state.characterOpenSections, scope, settings) : null;
       },
-      item: item => itemRow(item, actor, commands, status, openItem, state.expandedCharacterItemId, scope),
-      abilities: () => compactAbilitiesPanel(actor, commands, status, scope),
+      item: item => itemRow(item, actor, commands, openItem, state.expandedCharacterItemId, scope),
+      abilities: () => compactAbilitiesPanel(actor, commands, scope),
       traits: () => traitsPanel(actor, commands.localize),
-      effects: owner => effectsPanel(actor, commands, status, state.characterOpenSections, owner, settings)
-    }) : renderSheetPanel(activePage, actor, commands, status, openItem, state.expandedCharacterItemId, state.characterOpenSections, scope, settings, shell.spellcastingSelection)] });
+      effects: owner => effectsPanel(actor, commands, state.characterOpenSections, owner, settings)
+    }) : renderSheetPanel(activePage, actor, commands, openItem, state.expandedCharacterItemId, state.characterOpenSections, scope, settings, shell.spellcastingSelection)] });
   const screen = shell.screen ??= node("section", {
     className: "ve-character-screen ve-character-shared-shell",
     dataset: { characterTheme, actorType: actor.type },
-    children: [actorOriginBack(state, commands, ownerScope), node("div", { className: "ve-character-heading", children: [shell.selector, tabBar] }), status,
+    children: [actorOriginBack(state, commands, ownerScope), node("div", { className: "ve-character-heading", children: [shell.selector, tabBar] }),
       node("div", { className: "ve-character-content-scroller", attrs: { tabindex: "0" } })]
   });
   screen.classList.toggle("has-roll-result", Boolean(state.rollResult));
@@ -155,7 +155,7 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
       ? nextState.snapshot.selectedActor : nextActors.find(entry => entry.id === nextState.selectedActorId);
     if (!nextActor) return false;
     return updateCharacterSharedHeader(shell, { actors: nextActors, actor: nextActor, state: nextState,
-      commands: nextCommands, status, settings: nextCommands.readCharacterPreferences(), ownerScope, overlayHost });
+      commands: nextCommands, settings: nextCommands.readCharacterPreferences(), ownerScope, overlayHost });
   };
   screen.__veUpdateCharacter = next => renderCharacters({ ...next, scope: ownerScope, overlayHost, retained: shell });
 
@@ -165,7 +165,7 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
 }
 
 // Rebuild the shared header only when its Actor, directory, or presentation preferences change.
-function updateCharacterSharedHeader(shell, { actors, actor, state, commands, status, settings, ownerScope, overlayHost }) {
+function updateCharacterSharedHeader(shell, { actors, actor, state, commands, settings, ownerScope, overlayHost }) {
   // Snapshot identity is the invalidation boundary. A tab tap reuses the
   // authoritative Actor record and never constructs a selector or menu.
   const headerPreferences = { artwork: settings.headerArtwork, colorScheme: settings.colorScheme };
@@ -175,7 +175,7 @@ function updateCharacterSharedHeader(shell, { actors, actor, state, commands, st
   if (!shell.selector || shell.actor !== actor || headerPreferencesChanged || shell.actors !== actors) {
     shell.headerScope?.dispose();
     shell.headerScope = ownerScope.child("character-header");
-    const selector = characterSelector(actors, actor, state, commands, status, shell.headerScope, settings, overlayHost);
+    const selector = characterSelector(actors, actor, state, commands, shell.headerScope, settings, overlayHost);
     shell.selector?.replaceWith(selector);
     shell.selector = selector;
     shell.actor = actor;
@@ -191,7 +191,7 @@ function updateCharacterSharedHeader(shell, { actors, actor, state, commands, st
 }
 
 // Compose the identity header, Actor chooser, and the controls appropriate to this Actor type.
-function characterSelector(actors, actor, state, commands, status, scope, settings, overlayHost = null) {
+function characterSelector(actors, actor, state, commands, scope, settings, overlayHost = null) {
   let open = false;
   let placementHold = null;
   const arrow = icon("fa-chevron-down");
@@ -209,11 +209,11 @@ function characterSelector(actors, actor, state, commands, status, scope, settin
   if (!actor.collective) bindCharacterNameLines(characterName, actor.name, scope);
   const portraitTitle = localizedText(commands.localize, "VEMOBILE.Character.PortraitOf", "{name}'s portrait", { name: (actor.name) });
   const portraitButton = node("button", { className: "ve-character-portrait-button", attrs: { type: "button", "aria-label": localizedText(commands.localize, "VEMOBILE.Character.ViewPortrait", "View {name} portrait", { name: (actor.name) }) }, on: { click: () => commands.openCharacterPortrait({ src: actor.img, name: portraitTitle }) }, children: [node("img", { attrs: { src: actor.img, alt: portraitTitle } })] }, scope);
-  const deathSave = actor.collective ? null : deathSaveControl(actor, commands, status, scope);
+  const deathSave = actor.collective ? null : deathSaveControl(actor, commands, scope);
   const header = node("article", {
     className: actor.collective ? "ve-sheet-identity ve-collective-header" : "ve-sheet-identity ve-compact-header",
     dataset: { classArt: "fallback" },
-    children: actor.collective ? collectiveHeaderContent(actor, { portraitButton, characterName, trigger, commands, scope, status }) : [
+    children: actor.collective ? collectiveHeaderContent(actor, { portraitButton, characterName, trigger, commands, scope }) : [
       node("div", { className: "ve-character-identity-band", children: [
         node("div", { className: `ve-sheet-portrait-frame${shouldRenderDeathSaves(actor) ? " is-downed" : ""}`, children: [
           portraitButton,
@@ -226,16 +226,16 @@ function characterSelector(actors, actor, state, commands, status, scope, settin
           node("p", { className: "ve-character-compact-summary", attrs: { "aria-hidden": "true" }, children: [node("span", { className: "ve-character-compact-level", text: `${actor.type === "npc" ? `${localizedText(commands.localize, "DND5E.AbbreviationCR", "CR")} ${actor.npc?.challengeRatingLabel ?? "—"}` : characterClassLine(actor)}${Number.isFinite(actor.proficiency) ? ` · ${headerLabel(actor, "proficiencyAbbr", "PB")} ${formatModifier(actor.proficiency)}` : ""}` }), actor.type === "npc" ? node("span", { className: "ve-character-compact-npc", text: npcIdentityLines(actor, commands).join(" · ") }) : null] })
         ] }),
         node("div", { className: "ve-character-identity-controls", children: [trigger,
-          node("div", { className: "ve-character-badge-group", children: [characterLevelBadge(actor), heroicInspirationControl(actor, commands, status, scope)] })
+          node("div", { className: "ve-character-badge-group", children: [characterLevelBadge(actor), heroicInspirationControl(actor, commands, scope)] })
         ] }),
         deathSave?.row
       ] }),
       node("div", { className: "ve-character-vitals-group", children: [
-        characterHitPoints(actor, commands, status, scope),
+        characterHitPoints(actor, commands, scope),
         characterHealthTrack(actor, commands.localize)
       ] }),
       characterExperience(actor, commands, scope),
-      characterHeaderVitals(actor, commands, status, scope)
+      characterHeaderVitals(actor, commands, scope)
     ]
   });
   loadBannerArtwork(header, bannerResolution.candidates, scope);
@@ -373,7 +373,7 @@ function bindCharacterNameLines(heading, name, scope) {
 }
 
 // Bind death-save rolling and display current success/failure state for this Actor.
-function deathSaveControl(actor, commands, status, scope) {
+function deathSaveControl(actor, commands, scope) {
   // Recovery also clears the retained final result before this UI disappears.
   const presentation = deathSavePresentation(actor);
   if (!shouldRenderDeathSaves(actor)) return null;
@@ -384,7 +384,7 @@ function deathSaveControl(actor, commands, status, scope) {
     roll: node("button", {
       className: "ve-death-save-roll",
       attrs: { type: "button", disabled: !enabled, "aria-label": outcome ? localizedText(commands.localize, "VEMOBILE.Character.Presenter.DeathSavingThrowsConcluded", "{outcomeLabel}; death saving throws concluded", { outcomeLabel: (outcomeLabel) }) : enabled ? localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollDeathSavingThrow", "Roll death saving throw") : localizedText(commands.localize, "VEMOBILE.Character.Presenter.DeathSavingThrowUnavailable", "Death saving throw unavailable") },
-      on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_DEATH_SAVE, actor, {}, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingDeathSave", "Rolling death save…"), localizedText(commands.localize, "VEMOBILE.Character.Presenter.DeathSave", "Death save"), scope) },
+      on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_DEATH_SAVE, actor, {}, commands, localizedText(commands.localize, "VEMOBILE.Character.Presenter.DeathSave", "Death save")) },
       children: [node("span", { className: "ve-death-save-d20", attrs: { "aria-hidden": "true" } })]
     }, scope),
     row: node("section", { className: `ve-death-saves${outcome ? ` is-concluded is-${outcome}` : ""}`, attrs: { "aria-label": localizedText(commands.localize, "VEMOBILE.Character.Presenter.DeathSavesSuccessesAndFailures", "Death saves: {successes} successes and {failures} failures{outcome}", { successes, failures, outcome: outcome ? `; ${outcomeLabel}` : "" }) }, children: [
@@ -596,7 +596,7 @@ function characterBackgroundIcon(actor) {
 }
 
 // Render the HP control and open its editor only when the snapshot grants that capability.
-function characterHitPoints(actor, commands, status, scope) {
+function characterHitPoints(actor, commands, scope) {
   const maximum = healthValue(actor.hp?.max);
   const value = healthValue(actor.hp?.value);
   const temporary = healthValue(actor.hp?.temp);
@@ -654,7 +654,7 @@ export function characterLevelBadge(actor) {
 }
 
 // Present the inspiration toggle only when its capability and resource are available.
-function heroicInspirationControl(actor, commands, status, scope) {
+function heroicInspirationControl(actor, commands, scope) {
   if (actor.type !== "character") return null;
   const active = Boolean(actor.inspiration);
   const editable = Boolean(actor.capabilities?.editInspiration);
@@ -683,7 +683,7 @@ async function setHeroicInspiration(button, actor, active, commands) {
       active
     });
   } catch (error) {
-    commands.reportCharacterMutationError?.(error);
+    if (button.isConnected !== false) notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Errors.InspirationFailed", "Heroic Inspiration could not be updated.")), "error");
   } finally {
     if (button.isConnected) {
       button.disabled = false;
@@ -726,7 +726,6 @@ function hitDiceRestEditor(actor, open, commands, scope) {
   let selected = pools[0]?.denomination ?? "";
   let pending = false;
   const canAdjust = Boolean(actor.capabilities?.adjustHitDice && pools.length);
-  const modalStatus = node("p", { className: "ve-rest-editor-status", attrs: { role: "status", "aria-live": "polite" } });
   const value = node("strong");
   const select = node("select", {
     className: "ve-rest-editor-select",
@@ -769,8 +768,7 @@ function hitDiceRestEditor(actor, open, commands, scope) {
         node("div", { className: "ve-rest-editor-adjust", children: [decrease, value, increase] }),
         node("small", { text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.UseOrToCorrectTheAvailableTotalManually", "Use − or + to correct the available total manually.") })
       ] }) : node("p", { className: "ve-rest-editor-empty", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.ThisCharacterHasNoHitDiePoolsAvailableTo", "This character has no hit-die pools available to edit.") }),
-      node("div", { className: "ve-rest-editor-actions", children: [shortRest, longRest] }),
-      modalStatus
+      node("div", { className: "ve-rest-editor-actions", children: [shortRest, longRest] })
     ]
   });
   refreshPool();
@@ -802,20 +800,17 @@ function hitDiceRestEditor(actor, open, commands, scope) {
     const pool = pools.find(entry => entry.denomination === selected);
     if (pending || !pool) return;
     pending = true;
-    modalStatus.classList.remove("is-error");
-    modalStatus.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.UpdatingHitDice", "Updating hit dice…");
     refreshPool();
     try {
       const outcome = await commands.execute(ACTOR_COMMANDS.ADJUST_HIT_DICE, { actorSourceUuid: characterRecordSourceUuid(actor), denomination: selected, direction });
       const updated = outcome?.hitDice;
       if (updated && !scope.disposed) {
         pool.value = Math.max(0, Math.min(pool.max, Number(updated.value) || 0));
-        modalStatus.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.HitDiceUpdated", "Hit dice updated.");
+        notifyCharacter(commands, characterRecordSourceUuid(actor), localizedText(commands.localize, "VEMOBILE.Character.Presenter.HitDiceUpdated", "Hit dice updated."));
       }
     } catch (error) {
       if (!scope.disposed) {
-        modalStatus.classList.add("is-error");
-        modalStatus.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotUpdateThoseHitDice", "Foundry could not update those hit dice.");
+        notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotUpdateThoseHitDice", "Foundry could not update those hit dice.")), "error");
       }
     } finally {
       if (!scope.disposed) {
@@ -832,8 +827,6 @@ function hitDiceRestEditor(actor, open, commands, scope) {
       on: { /* Start the native rest workflow once, keeping a failed request visible and retryable in the same modal. */ click: async event => {
         if (pending) return;
         pending = true;
-        modalStatus.classList.remove("is-error");
-        modalStatus.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.OpeningOptions", "Opening {label} options…", { label: label.toLowerCase() });
         refreshPool();
         try {
           await commands.execute(ACTOR_COMMANDS.TAKE_REST, { actorSourceUuid: characterRecordSourceUuid(actor), type });
@@ -841,8 +834,7 @@ function hitDiceRestEditor(actor, open, commands, scope) {
         } catch (error) {
           if (!scope.disposed) {
             pending = false;
-            modalStatus.classList.add("is-error");
-            modalStatus.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotStartTheWorkflow", "Foundry could not start the {label} workflow.", { label: label.toLowerCase() });
+            notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotStartTheWorkflow", "Foundry could not start the {label} workflow.", { label: label.toLowerCase() })), "error");
             refreshPool();
           }
         }
@@ -853,13 +845,13 @@ function hitDiceRestEditor(actor, open, commands, scope) {
 }
 
 // Compose the quick AC, speed, initiative, and rest values beside the character header.
-function characterHeaderVitals(actor, commands, status, scope) {
+function characterHeaderVitals(actor, commands, scope) {
   const hitDice = actor.resources?.find((resource) => resource.kind === "hit-dice");
   const hitDiceAvailable = hitDice ? `${hitDice.value} / ${hitDice.max}` : "—";
   return node("div", { className: "ve-character-header-vitals", attrs: { "aria-label": localizedText(commands.localize, "VEMOBILE.Character.Presenter.CharacterVitals", "Character vitals") }, children: [
-    headerArmorClass(actor, commands, status, scope),
+    headerArmorClass(actor, commands, scope),
     headerSpeedVital(actor, commands, scope),
-    headerInitiative(actor, commands, status, scope),
+    headerInitiative(actor, commands, scope),
     headerRestVital(actor, hitDiceAvailable, commands, scope)
   ] });
 }
@@ -963,7 +955,7 @@ function movementIcon(key) {
 }
 
 // Show the current armor class and expose editing only when allowed.
-function headerArmorClass(actor, commands, status, scope) {
+function headerArmorClass(actor, commands, scope) {
   const enabled = Boolean(actor.capabilities?.configureArmorClass);
   const actionLabel = commands.localize?.("VEMOBILE.Character.ConfigureArmourClass", "Configure Armor Class") ?? localizedText(commands.localize, "VEMOBILE.Character.ConfigureArmourClass", "Configure Armor Class");
   const unavailableLabel = commands.localize?.("VEMOBILE.Character.ArmourClassUnavailable", "Unavailable") ?? localizedText(commands.localize, "VEMOBILE.Character.ArmourClassUnavailable", "Unavailable");
@@ -978,7 +970,7 @@ function headerArmorClass(actor, commands, status, scope) {
       if (button.disabled) return;
       button.disabled = true;
       try { await commands.openArmorClass(characterRecordSourceUuid(actor)); }
-      catch (error) { status.textContent = error?.message ?? (commands.localize?.("VEMOBILE.Character.ArmourClassFailed", "Armor Class configuration could not open.") ?? localizedText(commands.localize, "VEMOBILE.Character.ArmourClassFailed", "Armor Class configuration could not open.")); }
+      catch (error) { if (!scope.disposed) notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.ArmourClassFailed", "Armor Class configuration could not open."), { readOnly: true }), "error"); }
       finally { if (!scope.disposed) button.disabled = false; }
     } },
     children: [node("small", { text: headerLabel(actor, "armourClass", localizedText(commands.localize, "VEMOBILE.Character.Header.armourClass", "Armor Class")) }), headerVitalValue(icon("fa-shield-halved", "sharp fa-solid"), actor.ac ?? "—")]
@@ -1022,30 +1014,30 @@ export function characterHitDieIcon(actor, scope) {
 }
 
 // Display initiative and expose a roll action when the Actor may roll it.
-function headerInitiative(actor, commands, status, scope) {
+function headerInitiative(actor, commands, scope) {
   const enabled = Boolean(actor.capabilities?.rollInitiative);
   return node("button", {
     className: "ve-character-header-vital is-initiative",
     attrs: { type: "button", disabled: !enabled, title: enabled ? localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollInitiative", "Roll initiative") : localizedText(commands.localize, "VEMOBILE.Character.Presenter.InitiativeRollUnavailable", "Initiative roll unavailable") },
-    on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_INITIATIVE, actor, {}, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingInitiative", "Rolling initiative…"), localizedText(commands.localize, "VEMOBILE.Character.Presenter.Initiative", "Initiative")) },
+    on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_INITIATIVE, actor, {}, commands, localizedText(commands.localize, "VEMOBILE.Character.Presenter.Initiative", "Initiative")) },
     children: [node("small", { text: headerLabel(actor, "initiative", localizedText(commands.localize, "VEMOBILE.Character.Header.initiative", "Initiative")) }), headerVitalValue(icon("fa-bolt", "sharp fa-solid"), formatModifier(actor.initiative))]
   }, scope);
 }
 
 // Dispatch one sheet tab to its panel renderer using shared row commands and state.
-function renderSheetPanel(tab, actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings, spellcastingSelection) {
-  if (tab === "effects") return effectsPanel(actor, commands, status, openSectionIds, scope, settings);
-  if (tab === "abilities") return abilitiesFullPanel(actor, commands, status, scope);
-  if (tab === "favourites") return favouritesPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings);
-  if (tab === "inventory") return inventoryPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings);
-  if (tab === "spells") return spellsPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings, spellcastingSelection);
-  if (tab === "features") return featuresPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings);
-  if (tab === "biography") return biographyPanel(actor, commands, status, scope);
-  return overviewPanel(actor, commands, status, scope);
+function renderSheetPanel(tab, actor, commands, openItem, expandedItemId, openSectionIds, scope, settings, spellcastingSelection) {
+  if (tab === "effects") return effectsPanel(actor, commands, openSectionIds, scope, settings);
+  if (tab === "abilities") return abilitiesFullPanel(actor, commands, scope);
+  if (tab === "favourites") return favouritesPanel(actor, commands, openItem, expandedItemId, openSectionIds, scope, settings);
+  if (tab === "inventory") return inventoryPanel(actor, commands, openItem, expandedItemId, openSectionIds, scope, settings);
+  if (tab === "spells") return spellsPanel(actor, commands, openItem, expandedItemId, openSectionIds, scope, settings, spellcastingSelection);
+  if (tab === "features") return featuresPanel(actor, commands, openItem, expandedItemId, openSectionIds, scope, settings);
+  if (tab === "biography") return biographyPanel(actor, commands, scope);
+  return overviewPanel(actor, commands, scope);
 }
 
 // Render selected favorite items and their source-aware spell/action summaries.
-function favouritesPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings) {
+function favouritesPanel(actor, commands, openItem, expandedItemId, openSectionIds, scope, settings) {
   const sourceMode = settings.characterFavouritesSource === "tidy" ? "tidy" : settings.characterFavouritesSource === "both" ? "both" : "core";
   let sortMode = settings.characterCollections?.favouritesSort ?? "manual";
   let renderScope = null;
@@ -1053,7 +1045,7 @@ function favouritesPanel(actor, commands, status, openItem, expandedItemId, open
   const body = node("div", { className: "ve-sheet-collection-body ve-favourites-body" });
   const controls = collectionControls(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Favourites", "Favorites"), sortMode, () => {
     sortMode = sortMode === "alphabetical" ? "manual" : "alphabetical";
-    persistCollectionPreference(commands, "favouritesSort", sortMode, status);
+    persistCollectionPreference(commands, "favouritesSort", sortMode, actor, scope);
     draw();
   }, () => body.querySelectorAll("details.ve-sheet-collection-section"), (sectionIds, expanded) => {
     openSections.clear();
@@ -1079,8 +1071,8 @@ function favouritesPanel(actor, commands, status, openItem, expandedItemId, open
       return collectionSection(key, heading, section.items.length, section.items.map((item) => {
         const containerEntry = ["backpack", "container"].includes(item.type) ? findInventoryEntry(inventoryGroups, item.id) : null;
         return containerEntry
-          ? inventoryNode(containerEntry, actor, commands, status, openItem, expandedItemId, renderScope, 0, openContainers)
-          : favouriteRow(item, actor, commands, status, openItem, expandedItemId, sourceMode, renderScope);
+          ? inventoryNode(containerEntry, actor, commands, openItem, expandedItemId, renderScope, 0, openContainers)
+          : favouriteRow(item, actor, commands, openItem, expandedItemId, sourceMode, renderScope);
       }), openSections.has(key) || section.items.some((item) => item.id === expandedItemId), (open) => {
         if (open) openSections.add(key);
         else openSections.delete(key);
@@ -1128,7 +1120,7 @@ function favouriteSpellSlotIndicator(resource, localize) {
 }
 
 // Render a favorite item or spell with its source-specific primary action.
-function favouriteRow(item, actor, commands, status, openItem, expandedItemId, sourceMode, scope) {
+function favouriteRow(item, actor, commands, openItem, expandedItemId, sourceMode, scope) {
   let detail;
   const metadata = favouriteItemMetadata(item, commands.localize);
   const copy = node("span", { className: "ve-sheet-item-copy", children: [node("strong", { text: characterItemDisplayName(item) })] });
@@ -1150,7 +1142,7 @@ function favouriteRow(item, actor, commands, status, openItem, expandedItemId, s
     on: { click: (event) => {
       event.preventDefault();
       event.stopPropagation();
-      showCharacterItemActionMenu(event.currentTarget, event, item, actor, commands, status, scope);
+      showCharacterItemActionMenu(event.currentTarget, event, item, actor, commands, scope);
     } },
     children: [icon("fa-ellipsis-vertical")]
   }, scope);
@@ -1171,74 +1163,74 @@ function favouriteRow(item, actor, commands, status, openItem, expandedItemId, s
       summary.setAttribute("aria-label", `${willOpen ? "Collapse" : "Expand"} ${item.name}`);
       commands.setExpandedCharacterItem(willOpen ? item.id : "");
     } },
-    children: [itemActionButton(item, actor, commands, status, scope), middle, overflow]
+    children: [itemActionButton(item, actor, commands, scope), middle, overflow]
   }, scope);
-  bindCharacterItemMenu(summary, item, actor, commands, status, scope);
+  bindCharacterItemMenu(summary, item, actor, commands, scope);
   detail = node("details", {
     className: "ve-sheet-item-detail ve-favourite-detail",
     attrs: { open: expandedItemId === item.id },
     dataset: { itemId: item.id, favouriteSource: sourceMode },
-    children: [summary, itemInlineSummary(item, actor, commands, status, openItem, scope)]
+    children: [summary, itemInlineSummary(item, actor, commands, openItem, scope)]
   });
   return detail;
 }
 
 // Present the summary cards and actions most often used from the character sheet.
-function overviewPanel(actor, commands, status, scope) {
+function overviewPanel(actor, commands, scope) {
   return node("div", { className: "ve-sheet-stack", children: [
     activeEffectsPreview(actor, () => commands.selectCharacterTab("effects"), commands, scope),
-    abilitiesSavesPreview(actor, () => commands.selectCharacterTab("abilities"), commands, status, scope),
+    abilitiesSavesPreview(actor, () => commands.selectCharacterTab("abilities"), commands, scope),
     traitsPanel(actor, commands.localize)
   ] });
 }
 
 // Collect common native actions for the character overview card.
-function overviewActions(actor, commands, status, scope) {
+function overviewActions(actor, commands, scope) {
   const proficient = actor.skills?.filter((skill) => skill.proficiency > 0).sort((first, second) => second.modifier - first.modifier).slice(0, 3) ?? [];
-  return node("section", { className: "ve-sheet-card", children: [sectionHeading(localizedText(commands.localize, "VEMOBILE.Character.Presenter.QuickRolls", "Quick rolls"), "fa-bolt"), proficient.length ? node("div", { className: "ve-quick-rolls", children: proficient.map((skill) => rollButton({ label: skill.label, meta: `${skill.ability} ${localizedText(commands.localize, "VEMOBILE.Character.Presenter.Skill", "skill")}`, value: formatModifier(skill.modifier), enabled: actor.capabilities?.rollSkill?.includes(skill.key), onClick: (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SKILL, actor, { skill: skill.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingSkill", "Rolling {label}…", { label: skill.label }), skill.label), scope })) }) : node("p", { className: "ve-sheet-empty", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.NoProficientSkillsAreVisible", "No proficient skills are visible.") })] });
+  return node("section", { className: "ve-sheet-card", children: [sectionHeading(localizedText(commands.localize, "VEMOBILE.Character.Presenter.QuickRolls", "Quick rolls"), "fa-bolt"), proficient.length ? node("div", { className: "ve-quick-rolls", children: proficient.map((skill) => rollButton({ label: skill.label, meta: `${skill.ability} ${localizedText(commands.localize, "VEMOBILE.Character.Presenter.Skill", "skill")}`, value: formatModifier(skill.modifier), enabled: actor.capabilities?.rollSkill?.includes(skill.key), onClick: (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SKILL, actor, { skill: skill.key }, commands, skill.label), scope })) }) : node("p", { className: "ve-sheet-empty", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.NoProficientSkillsAreVisible", "No proficient skills are visible.") })] });
 }
 
 // Compose ability scores, saving throws, skills, and proficiency details.
-function abilitiesPanel(actor, commands, status, scope) {
+function abilitiesPanel(actor, commands, scope) {
   return node("section", { className: "ve-sheet-card", children: [sectionHeading(localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitiesAndSaves", "Abilities and saves"), "fa-dumbbell"), node("p", { className: "ve-section-intro", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.TapCheckOrSaveToSubmitANativeD", "Tap Check or Save to submit a native D&D5e roll to Foundry.") }), node("div", { className: "ve-ability-grid", children: (actor.abilities ?? []).map((ability) => {
     const canCheck = actor.capabilities?.rollAbility?.includes(ability.key);
     const canSave = actor.capabilities?.rollSave?.includes(ability.key);
     return node("article", { className: "ve-ability-card", children: [
       node("div", { className: "ve-ability-heading", children: [node("span", { text: ability.short }), node("small", { text: ability.label })] }),
       node("div", { className: "ve-ability-numbers", children: [node("strong", { text: ability.score }), node("b", { text: formatModifier(ability.modifier) })] }),
-      node("div", { className: "ve-ability-actions", children: [compactAction(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Check", "Check"), formatModifier(ability.checkModifier ?? ability.modifier), canCheck, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_ABILITY, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilityCheck", "Rolling {label} check…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilityCheck", "{label} check", { label: ability.label })), scope, false, commands.localize), compactAction(localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrowShort", "Save"), formatModifier(ability.saveModifier), canSave, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SAVE, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilitySave", "Rolling {label} save…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitySave", "{label} save", { label: ability.label })), scope, Number(ability.proficiency) > 0, commands.localize, localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrow", "Saving throw"))] })
+      node("div", { className: "ve-ability-actions", children: [compactAction(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Check", "Check"), formatModifier(ability.checkModifier ?? ability.modifier), canCheck, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_ABILITY, actor, { ability: ability.key }, commands, localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilityCheck", "{label} check", { label: ability.label })), scope, false, commands.localize), compactAction(localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrowShort", "Save"), formatModifier(ability.saveModifier), canSave, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SAVE, actor, { ability: ability.key }, commands, localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitySave", "{label} save", { label: ability.label })), scope, Number(ability.proficiency) > 0, commands.localize, localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrow", "Saving throw"))] })
     ] });
   }) })] });
 }
 
 // Present skill totals and action buttons, optionally in compact overview form.
-function skillsPanel(actor, commands, status, scope, compact = false) {
+function skillsPanel(actor, commands, scope, compact = false) {
   return node("section", { className: "ve-sheet-card", children: [sectionHeading(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Skills", "Skills"), "fa-list-check"), node("div", { className: `ve-skill-list${compact ? " ve-skill-list-compact" : ""}`, children: (actor.skills ?? []).map((skill) => {
     const enabled = actor.capabilities?.rollSkill?.includes(skill.key);
     const proficiency = skillProficiencyLabel(skill.proficiency, commands.localize);
     return node("button", {
           className: `ve-skill-row is-${proficiency.key}`,
       attrs: { type: "button", disabled: !enabled, title: proficiency.label, "aria-label": localizedText(commands.localize, "VEMOBILE.Character.Presenter.Roll", "Roll {label} {modifier}; {proficiency}", { label: skill.label, modifier: formatModifier(skill.modifier), proficiency: proficiency.label }), ...quickbarSkillAttrs(skill) },
-      on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_SKILL, actor, { skill: skill.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingSkill", "Rolling {label}…", { label: skill.label }), skill.label) },
+      on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_SKILL, actor, { skill: skill.key }, commands, skill.label) },
       children: [node("span", { className: "ve-proficiency-mark" }), compact ? node("span", { text: skill.label }) : node("span", { children: [node("strong", { text: skill.label }), node("small", { text: [skill.ability, skill.passive === null ? "" : localizedText(commands.localize, "VEMOBILE.Character.Presenter.Passive", "Passive {passive}", { passive: (skill.passive) })].filter(Boolean).join(" · ") })] }), node("b", { text: formatModifier(skill.modifier) }), icon("fa-dice-d20")]
     }, scope);
   }) })] });
 }
 
 // Show the ability-score summary used by the overview and collective header.
-function compactAbilitiesPanel(actor, commands, status, scope) {
+function compactAbilitiesPanel(actor, commands, scope) {
   return node("section", { className: "ve-sheet-card ve-abilities-saves-preview", children: [
     sectionHeading(localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitiesAndSaves", "Abilities and saves"), "fa-dumbbell"),
-    abilityScoresPreview(actor, commands, status, scope)
+    abilityScoresPreview(actor, commands, scope)
   ] });
 }
 
 // Render detailed ability modifiers, saves, and supported roll actions.
-function abilitiesFullPanel(actor, commands, status, scope) {
+function abilitiesFullPanel(actor, commands, scope) {
   return node("div", { className: "ve-sheet-stack", children: [
     node("button", { className: "ve-sheet-back", attrs: { type: "button" }, on: { click: () => commands.selectCharacterTab("overview") }, children: [icon("fa-chevron-left"), node("span", { text: localizedText(commands.localize, "VEMOBILE.Character.Tabs.Overview", "Overview") })] }, scope),
-    compactAbilitiesPanel(actor, commands, status, scope),
-    skillsPanel(actor, commands, status, scope, true)
+    compactAbilitiesPanel(actor, commands, scope),
+    skillsPanel(actor, commands, scope, true)
   ] });
 }
 
@@ -1256,14 +1248,14 @@ function traitsPanel(actor, localize = null) {
 }
 
 // Build a grouped inventory view and preserve its open-section state across refreshes.
-function inventoryPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings) {
+function inventoryPanel(actor, commands, openItem, expandedItemId, openSectionIds, scope, settings) {
   let sortMode = settings.characterCollections?.inventorySort ?? "manual";
   let renderScope = null;
   const openSections = new Set(openSectionIds ?? []);
   const body = node("div", { className: "ve-sheet-collection-body" });
   const controls = collectionControls(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Inventory", "Inventory"), sortMode, () => {
     sortMode = sortMode === "alphabetical" ? "manual" : "alphabetical";
-    persistCollectionPreference(commands, "inventorySort", sortMode, status);
+    persistCollectionPreference(commands, "inventorySort", sortMode, actor, scope);
     draw();
   }, () => body.querySelectorAll("details.ve-sheet-collection-section, details.ve-sheet-container"), (sectionIds, expanded) => {
     openSections.clear();
@@ -1272,7 +1264,7 @@ function inventoryPanel(actor, commands, status, openItem, expandedItemId, openS
     commands.setCharacterSectionsExpanded(sectionIds);
   }, scope, { localize: commands.localize });
   const card = collectionCard(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Inventory", "Inventory"), sheetTabIcon("inventory"), [
-    currencyStrip(actor, commands, status, scope),
+    currencyStrip(actor, commands, scope),
     encumbranceMeter(actor.encumbrance, commands.readLocale?.() ?? "en", commands.localize),
     body
   ], controls.element);
@@ -1285,7 +1277,7 @@ function inventoryPanel(actor, commands, status, openItem, expandedItemId, openS
     const groups = groupInventory(actor.inventory, sortMode, commands.localize);
     if (commands.claimDefaultCharacterSection?.(groups[0]?.key)) openSections.add(groups[0].key);
     body.replaceChildren(...(groups.length
-      ? groups.map((group) => collectionSection(group.key, group.label, group.nodes.length, group.nodes.map((entry) => inventoryNode(entry, actor, commands, status, openItem, expandedItemId, renderScope, 0, openContainers)), openSections.has(group.key) || group.nodes.some((entry) => inventoryEntryContains(entry, expandedItemId)), (open) => {
+      ? groups.map((group) => collectionSection(group.key, group.label, group.nodes.length, group.nodes.map((entry) => inventoryNode(entry, actor, commands, openItem, expandedItemId, renderScope, 0, openContainers)), openSections.has(group.key) || group.nodes.some((entry) => inventoryEntryContains(entry, expandedItemId)), (open) => {
         if (open) openSections.add(group.key);
         else openSections.delete(group.key);
         commands.setCharacterSectionExpanded(group.key, open);
@@ -1300,9 +1292,9 @@ function inventoryPanel(actor, commands, status, openItem, expandedItemId, openS
 }
 
 // Render one item or container recursively, keeping exact item actions on named commands.
-function inventoryNode(entry, actor, commands, status, openItem, expandedItemId, scope, depth = 0, openContainers = new Set()) {
+function inventoryNode(entry, actor, commands, openItem, expandedItemId, scope, depth = 0, openContainers = new Set()) {
   const item = entry.item;
-  if (!["backpack", "container"].includes(item.type)) return itemRow(item, actor, commands, status, openItem, expandedItemId, scope, depth);
+  if (!["backpack", "container"].includes(item.type)) return itemRow(item, actor, commands, openItem, expandedItemId, scope, depth);
   const locale = commands.readLocale?.() ?? "en";
   const contents = countInventoryContents(entry);
   const capacity = item.containerCapacity;
@@ -1340,12 +1332,12 @@ function inventoryNode(entry, actor, commands, status, openItem, expandedItemId,
           event.preventDefault();
           setContainerOpen(!container.open);
         } },
-        children: [itemActionButton(item, actor, commands, status, scope), itemMiddle(item, actor, commands, status, scope, contents ? localizedCount(commands.localize, "VEMOBILE.Character.Copy.ItemCount", { one: "{count} item", other: "{count} items" }, contents, commands.readLocale?.() ?? "en") : localizedText(commands.localize, "VEMOBILE.Character.Copy.Emptycontainer", "Empty container")), capacityText ? node("b", { text: capacityText }) : null, toggle]
+        children: [itemActionButton(item, actor, commands, scope), itemMiddle(item, actor, commands, scope, contents ? localizedCount(commands.localize, "VEMOBILE.Character.Copy.ItemCount", { one: "{count} item", other: "{count} items" }, contents, commands.readLocale?.() ?? "en") : localizedText(commands.localize, "VEMOBILE.Character.Copy.Emptycontainer", "Empty container")), capacityText ? node("b", { text: capacityText }) : null, toggle]
       }, scope),
-      node("div", { className: "ve-sheet-container-contents", children: entry.children.map((child) => inventoryNode(child, actor, commands, status, openItem, expandedItemId, scope, depth + 1, openContainers)) })
+      node("div", { className: "ve-sheet-container-contents", children: entry.children.map((child) => inventoryNode(child, actor, commands, openItem, expandedItemId, scope, depth + 1, openContainers)) })
     ]
   });
-  bindCharacterItemMenu(container.querySelector(":scope > summary"), item, actor, commands, status, scope);
+  bindCharacterItemMenu(container.querySelector(":scope > summary"), item, actor, commands, scope);
   scope.listen(container, "toggle", () => {
     toggle.setAttribute("aria-expanded", String(container.open));
     toggle.setAttribute("aria-label", `${container.open ? "Collapse" : "Expand"} ${item.name}`);
@@ -1354,7 +1346,7 @@ function inventoryNode(entry, actor, commands, status, openItem, expandedItemId,
 }
 
 // Render prepared and known spells grouped by spellcasting entry and availability.
-function spellsPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings, selection) {
+function spellsPanel(actor, commands, openItem, expandedItemId, openSectionIds, scope, settings, selection) {
   const preferences = settings.characterCollections ?? {};
   let sortMode = preferences.spellSort ?? "manual";
   let filterMode = preferences.spellFilter ?? "all";
@@ -1363,7 +1355,7 @@ function spellsPanel(actor, commands, status, openItem, expandedItemId, openSect
   const body = node("div", { className: "ve-sheet-collection-body" });
   const controls = collectionControls(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Spells", "Spells"), sortMode, () => {
     sortMode = sortMode === "alphabetical" ? "manual" : "alphabetical";
-    persistCollectionPreference(commands, "spellSort", sortMode, status);
+    persistCollectionPreference(commands, "spellSort", sortMode, actor, scope);
     draw();
   }, () => body.querySelectorAll("details.ve-sheet-collection-section"), (sectionIds, expanded) => {
     openSections.clear();
@@ -1373,7 +1365,7 @@ function spellsPanel(actor, commands, status, openItem, expandedItemId, openSect
   }, scope, { localize: commands.localize });
   const filterButton = collectionFilterButton(filterMode, () => {
     filterMode = filterMode === "prepared" ? "all" : "prepared";
-    persistCollectionPreference(commands, "spellFilter", filterMode, status);
+    persistCollectionPreference(commands, "spellFilter", filterMode, actor, scope);
     draw();
   }, scope, commands.localize);
   controls.element.prepend(filterButton.element);
@@ -1403,7 +1395,7 @@ function spellsPanel(actor, commands, status, openItem, expandedItemId, openSect
           node("span", { text: section.label }),
           spellSlotTrigger(slots, actor, commands, renderScope)
         ] }) : section.label;
-        children.push(collectionSection(section.key, heading, section.spells.length, section.spells.map((spell) => itemRow(spell, actor, commands, status, openItem, expandedItemId, renderScope, 0, isSpellUnprepared(spell))), openSections.has(section.key) || section.spells.some((spell) => spell.id === expandedItemId), (open) => {
+        children.push(collectionSection(section.key, heading, section.spells.length, section.spells.map((spell) => itemRow(spell, actor, commands, openItem, expandedItemId, renderScope, 0, isSpellUnprepared(spell))), openSections.has(section.key) || section.spells.some((spell) => spell.id === expandedItemId), (open) => {
           if (open) openSections.add(section.key);
           else openSections.delete(section.key);
           commands.setCharacterSectionExpanded(section.key, open);
@@ -1421,14 +1413,14 @@ function spellsPanel(actor, commands, status, openItem, expandedItemId, openSect
 }
 
 // Render class and actor features with their supported actions and expanded details.
-function featuresPanel(actor, commands, status, openItem, expandedItemId, openSectionIds, scope, settings) {
+function featuresPanel(actor, commands, openItem, expandedItemId, openSectionIds, scope, settings) {
   let sortMode = settings.characterCollections?.featureSort ?? "manual";
   let renderScope = null;
   const openSections = new Set(openSectionIds ?? []);
   const body = node("div", { className: "ve-sheet-collection-body" });
   const controls = collectionControls(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Features", "Features"), sortMode, () => {
     sortMode = sortMode === "alphabetical" ? "manual" : "alphabetical";
-    persistCollectionPreference(commands, "featureSort", sortMode, status);
+    persistCollectionPreference(commands, "featureSort", sortMode, actor, scope);
     draw();
   }, () => body.querySelectorAll("details.ve-sheet-collection-section"), (sectionIds, expanded) => {
     openSections.clear();
@@ -1446,7 +1438,7 @@ function featuresPanel(actor, commands, status, openItem, expandedItemId, openSe
     const sections = actor.type === "npc" ? groupNpcFeatures(actor.features, sortMode, commands.localize) : groupFeatures(actor.features, sortMode, commands.localize);
     if (commands.claimDefaultCharacterSection?.(sections[0]?.key)) openSections.add(sections[0].key);
     body.replaceChildren(...(sections.length
-      ? sections.map((section) => collectionSection(section.key, section.label, section.features.length, section.features.map((feature) => itemRow(feature, actor, commands, status, openItem, expandedItemId, renderScope)), openSections.has(section.key) || section.features.some((feature) => feature.id === expandedItemId), (open) => {
+      ? sections.map((section) => collectionSection(section.key, section.label, section.features.length, section.features.map((feature) => itemRow(feature, actor, commands, openItem, expandedItemId, renderScope)), openSections.has(section.key) || section.features.some((feature) => feature.id === expandedItemId), (open) => {
         if (open) openSections.add(section.key);
         else openSections.delete(section.key);
         commands.setCharacterSectionExpanded(section.key, open);
@@ -1482,7 +1474,7 @@ function npcResourceStrip(actor, commands) {
 }
 
 // Display biography records and open scoped editors for fields the Actor can change.
-function biographyPanel(actor, commands, status, scope) {
+function biographyPanel(actor, commands, scope) {
   const biography = actor.biography ?? {};
   const sourceUuid = characterRecordSourceUuid(actor);
   const canEdit = Boolean(actor.capabilities?.editBiography);
@@ -1498,7 +1490,7 @@ function biographyPanel(actor, commands, status, scope) {
       originalValue: storyEditor.originalSource,
       biographyField: storyEditor.editField,
       richText: true
-    }, commands, status, scope);
+    }, commands, scope);
   }, scope, commands.localize);
   const description = node("div", {
     className: "ve-character-biography-prose is-loading",
@@ -1511,8 +1503,7 @@ function biographyPanel(actor, commands, status, scope) {
     event.preventDefault();
     event.stopImmediatePropagation();
     if (roll.getAttribute("aria-disabled") === "true") {
-      status.classList.add("is-error");
-      status.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.InlineRollsRequireCurrentOWNERPermissionForThisExact", "Inline rolls require current OWNER permission for this exact actor.");
+      notifyCharacter(commands, sourceUuid, localizedText(commands.localize, "VEMOBILE.Character.Presenter.InlineRollsRequireCurrentOWNERPermissionForThisExact", "Inline rolls require current OWNER permission for this exact actor."), "error");
       return;
     }
     void commands.rollCharacterBiographyInline({
@@ -1522,8 +1513,7 @@ function biographyPanel(actor, commands, status, scope) {
       flavor: roll.dataset.flavor
     }).catch((error) => {
       if (scope.disposed) return;
-      status.classList.add("is-error");
-      status.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotCompleteThatInlineRoll", "Foundry could not complete that inline roll.");
+      notifyCharacter(commands, sourceUuid, characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotCompleteThatInlineRoll", "Foundry could not complete that inline roll.")), "error");
     });
   }, { capture: true });
   void commands.readCharacterBiography(sourceUuid).then((result) => {
@@ -1547,7 +1537,7 @@ function biographyPanel(actor, commands, status, scope) {
     if (scope.disposed || description.dataset.actorSourceUuid !== sourceUuid) return;
     description.classList.remove("is-loading");
     description.removeAttribute("aria-busy");
-    description.replaceChildren(node("p", { className: "ve-sheet-empty", text: error?.message ?? "Biography could not be loaded." }));
+    description.replaceChildren(node("p", { className: "ve-sheet-empty", text: characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.BiographyCouldNotLoad", "Biography could not be loaded."), { readOnly: true }) }));
   });
   if (["npc", "group", "vehicle"].includes(actor.type)) {
     return node("div", { className: "ve-sheet-stack ve-character-biography", children: [
@@ -1572,7 +1562,7 @@ function biographyPanel(actor, commands, status, scope) {
     fields: characteristics,
     values: characteristicValues,
     originalValues: characteristicValues
-  }, commands, status, scope), scope, commands.localize);
+  }, commands, scope), scope, commands.localize);
   return node("div", { className: "ve-sheet-stack ve-character-biography", children: [
     node("section", { className: "ve-sheet-card", children: [
       sectionHeading(characteristicsLabel, "fa-address-card", characteristicsEdit),
@@ -1591,7 +1581,7 @@ function biographyPanel(actor, commands, status, scope) {
         iconName,
         value: value ?? "",
         originalValue: value ?? ""
-      }, commands, status, scope), scope, commands.localize)), node("p", { text: value || localizedText(commands.localize, "VEMOBILE.Character.Presenter.NotRecorded", "Not recorded.") })]
+      }, commands, scope), scope, commands.localize)), node("p", { text: value || localizedText(commands.localize, "VEMOBILE.Character.Presenter.NotRecorded", "Not recorded.") })]
     }); }) }),
     node("section", { className: "ve-sheet-card ve-character-biography-story", children: [sectionHeading(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Biography", "Biography"), "fa-feather-pointed", storyEdit), description] })
   ] });
@@ -1608,13 +1598,12 @@ function biographyEditAction(label, enabled, onEdit, scope, localize) {
 }
 
 // Open a focused field editor and keep its save/error work owned by the page scope.
-function openBiographyEditor(anchor, config, commands, pageStatus, scope) {
+function openBiographyEditor(anchor, config, commands, scope) {
   const screen = anchor.closest(".ve-character-screen");
   const host = screen?.__veCharacterOverlayHost ?? screen ?? anchor.ownerDocument?.body;
   if (!host) return;
   host.querySelector?.(".ve-biography-editor-layer")?.dispatchEvent(new Event("ve-close"));
   const editorScope = scope.child(`biography-editor:${config.section}`);
-  const editorStatus = node("p", { className: "ve-biography-editor-status", attrs: { role: "status", "aria-live": "polite" } });
   let pending = false;
   let layer;
   // Reserve the close callback until the surface is built, so early-created handlers can share its eventual cleanup path.
@@ -1661,8 +1650,6 @@ function openBiographyEditor(anchor, config, commands, pageStatus, scope) {
       form.classList.add("is-pending");
       form.setAttribute("aria-busy", "true");
       for (const control of controls) control.disabled = true;
-      editorStatus.classList.remove("is-error");
-      editorStatus.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.Saving", "Saving…");
       const payload = config.section === "characteristics"
         ? {
             actorSourceUuid: characterRecordSourceUuid(config.actor),
@@ -1683,9 +1670,7 @@ function openBiographyEditor(anchor, config, commands, pageStatus, scope) {
       try {
         await commands.execute(ACTOR_COMMANDS.UPDATE_BIOGRAPHY_SECTION, payload);
         if (editorScope.disposed) return;
-        pageStatus.classList.remove("is-error");
-        pageStatus.classList.add("is-success");
-        pageStatus.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.Saved", "{label} saved.", { label: (config.label) });
+        notifyCharacter(commands, characterRecordSourceUuid(config.actor), localizedText(commands.localize, "VEMOBILE.Character.Presenter.Saved", "{label} saved.", { label: (config.label) }));
         close();
       } catch (error) {
         if (editorScope.disposed) return;
@@ -1693,8 +1678,7 @@ function openBiographyEditor(anchor, config, commands, pageStatus, scope) {
         form.classList.remove("is-pending");
         form.removeAttribute("aria-busy");
         for (const control of controls) control.disabled = false;
-        editorStatus.classList.add("is-error");
-        editorStatus.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.CouldNotBeSaved", "{label} could not be saved.", { label: (config.label) });
+        notifyCharacter(commands, characterRecordSourceUuid(config.actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.CouldNotBeSaved", "{label} could not be saved.", { label: (config.label) })), "error");
       }
     } },
     children: [
@@ -1706,7 +1690,6 @@ function openBiographyEditor(anchor, config, commands, pageStatus, scope) {
       config.section === "characteristics"
         ? node("div", { className: "ve-biography-editor-fields", children: fields })
         : node("label", { className: "ve-biography-editor-composer", children: [node("span", { text: config.richText ? localizedText(commands.localize, "VEMOBILE.Character.Presenter.TextAndFoundryRichHTML", "Text and Foundry-rich HTML") : config.label }), composer] }),
-      editorStatus,
       node("div", { className: "ve-modal-actions", children: [cancel, save] })
     ]
   }, editorScope);
@@ -1725,7 +1708,7 @@ function openBiographyEditor(anchor, config, commands, pageStatus, scope) {
 }
 
 // Separate active effects and conditions into expandable groups with permitted actions.
-function effectsPanel(actor, commands, status, openSectionIds, scope, settings) {
+function effectsPanel(actor, commands, openSectionIds, scope, settings) {
   const definitions = [
     ["temporary", localizedText(commands.localize, "VEMOBILE.Character.Copy.TemporaryEffects", "Temporary Effects"), (effect) => !effect.isCondition && effect.isTemporary && !effect.disabled && !effect.isSuppressed],
     ["passive", localizedText(commands.localize, "VEMOBILE.Character.Copy.PassiveEffects", "Passive Effects"), (effect) => !effect.isCondition && !effect.isTemporary && !effect.disabled && !effect.isSuppressed],
@@ -1739,7 +1722,7 @@ function effectsPanel(actor, commands, status, openSectionIds, scope, settings) 
   const body = node("div", { className: "ve-sheet-collection-body ve-effects-body" });
   const controls = collectionControls(localizedText(commands.localize, "VEMOBILE.Character.Copy.Effects", "Effects"), sortMode, () => {
     sortMode = sortMode === "alphabetical" ? "manual" : "alphabetical";
-    persistCollectionPreference(commands, "effectsSort", sortMode, status);
+    persistCollectionPreference(commands, "effectsSort", sortMode, actor, scope);
     draw();
   }, () => body.querySelectorAll("details.ve-sheet-collection-section"), (sectionIds) => {
     openSections.clear();
@@ -1767,7 +1750,7 @@ function effectsPanel(actor, commands, status, openSectionIds, scope, settings) 
         else openSections.delete(section.key);
         commands.setCharacterSectionExpanded(section.key, open);
       }, renderScope)),
-      conditionsSection(actor, commands, status, openSections, renderScope)
+      conditionsSection(actor, commands, openSections, renderScope)
     );
     controls.updateSort(sortMode);
     controls.updateExpansion();
@@ -1781,11 +1764,11 @@ function effectsPanel(actor, commands, status, openSectionIds, scope, settings) 
 }
 
 // Group active conditions and bind only the adjustments this Actor can perform.
-function conditionsSection(actor, commands, status, openSections, scope) {
+function conditionsSection(actor, commands, openSections, scope) {
   const conditions = actor.conditions ?? [];
   const activeCount = conditions.filter((condition) => condition.active).length;
   const label = node("span", { className: "ve-condition-section-label", children: [icon("fa-heart-pulse"), node("span", { text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.Conditions", "Conditions") }), node("small", { className: "ve-condition-count", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.Active", "{activeCount} Active", { activeCount: (activeCount) }) })] });
-  const details = collectionSection("conditions", label, conditions.length, [conditions.length ? node("div", { className: "ve-condition-grid", children: conditions.map((condition) => conditionControl(condition, actor, commands, status, scope)) }) : emptyCollection(localizedText(commands.localize, "VEMOBILE.Character.Presenter.NoNativeDDEConditionsAreAvailable", "No native D&D5e conditions are available."))], openSections.has("conditions"), (open) => {
+  const details = collectionSection("conditions", label, conditions.length, [conditions.length ? node("div", { className: "ve-condition-grid", children: conditions.map((condition) => conditionControl(condition, actor, commands, scope)) }) : emptyCollection(localizedText(commands.localize, "VEMOBILE.Character.Presenter.NoNativeDDEConditionsAreAvailable", "No native D&D5e conditions are available."))], openSections.has("conditions"), (open) => {
     if (open) openSections.add("conditions");
     else openSections.delete("conditions");
     commands.setCharacterSectionExpanded("conditions", open);
@@ -1796,8 +1779,8 @@ function conditionsSection(actor, commands, status, openSections, scope) {
 }
 
 // Render condition controls only when the current record supports that change.
-function conditionControl(condition, actor, commands, status, scope) {
-  if (condition.id === "exhaustion" && condition.maximumLevel) return exhaustionControl(condition, actor, commands, status, scope);
+function conditionControl(condition, actor, commands, scope) {
+  if (condition.id === "exhaustion" && condition.maximumLevel) return exhaustionControl(condition, actor, commands, scope);
   const editable = Boolean(actor.capabilities?.toggleConditions);
   const label = condition.active && condition.level ? localizedText(commands.localize, "VEMOBILE.Character.Presenter.Level", "{label} · Level {level}", { label: (condition.label), level: (condition.level) }) : condition.label;
   return node("button", {
@@ -1809,7 +1792,7 @@ function conditionControl(condition, actor, commands, status, scope) {
       "aria-label": `${condition.active ? "Remove" : "Apply"} ${label}`,
       title: condition.maximumLevel ? localizedText(commands.localize, "VEMOBILE.Character.Presenter.LevelledConditionLevels", "{label}; leveled condition ({maximumLevel} levels)", { label: (label), maximumLevel: (condition.maximumLevel) }) : label
     },
-    on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.TOGGLE_CONDITION, actor, { conditionId: condition.id, active: !condition.active }, commands, status, localizedText(commands.localize, condition.active ? "VEMOBILE.Character.Presenter.RemovingCondition" : "VEMOBILE.Character.Presenter.ApplyingCondition", condition.active ? "Removing {label}…" : "Applying {label}…", { label: condition.label }), "") },
+    on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.TOGGLE_CONDITION, actor, { conditionId: condition.id, active: !condition.active }, commands, "") },
     children: [
       node("span", { className: "ve-condition-art", children: condition.img ? [node("img", { attrs: { src: condition.img, alt: "", draggable: "false" } })] : [icon("fa-circle-exclamation")] }),
       node("span", { className: "ve-condition-label", text: label }),
@@ -1853,7 +1836,7 @@ function collectionSection(key, label, count, children, expanded = false, onChan
 }
 
 // Expose the bounded exhaustion level control when its condition can be edited.
-function exhaustionControl(condition, actor, commands, status, scope) {
+function exhaustionControl(condition, actor, commands, scope) {
   const level = condition.level ?? 0;
   const editable = Boolean(actor.capabilities?.editExhaustion);
   let pending = false;
@@ -1868,7 +1851,7 @@ function exhaustionControl(condition, actor, commands, status, scope) {
       on: { /* Send one bounded exhaustion step and restore both step buttons after the command settles. */ click: async () => {
         if (pending || scope.disposed || button.disabled) return;
         pending = true;
-        const action = runActorCommand(button, ACTOR_COMMANDS.SET_EXHAUSTION_LEVEL, actor, { originalLevel: level, level: level + direction }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.UpdatingExhaustion", "Updating exhaustion…"), "");
+        const action = runActorCommand(button, ACTOR_COMMANDS.SET_EXHAUSTION_LEVEL, actor, { originalLevel: level, level: level + direction }, commands, "");
         for (const entry of buttons) entry.disabled = true;
         try { await action; }
         finally {
@@ -1931,7 +1914,7 @@ function spellcastingStats(spellcasting, localize) {
 }
 
 // Present item identity, current statuses, details, and explicit item actions.
-function itemRow(item, actor, commands, status, openItem, expandedItemId, scope, depth = 0, muted = false) {
+function itemRow(item, actor, commands, openItem, expandedItemId, scope, depth = 0, muted = false) {
   let detail;
   const chevron = icon("fa-chevron-right");
   const summary = node("summary", {
@@ -1952,24 +1935,24 @@ function itemRow(item, actor, commands, status, openItem, expandedItemId, scope,
       commands.setExpandedCharacterItem(willOpen ? item.id : "");
     } },
     children: [
-      itemActionButton(item, actor, commands, status, scope),
-      itemMiddle(item, actor, commands, status, scope),
+      itemActionButton(item, actor, commands, scope),
+      itemMiddle(item, actor, commands, scope),
       chevron
     ]
   }, scope);
   if (depth) summary.style.paddingLeft = `${12 + depth * 18}px`;
-  bindCharacterItemMenu(summary, item, actor, commands, status, scope);
+  bindCharacterItemMenu(summary, item, actor, commands, scope);
   detail = node("details", {
     className: "ve-sheet-item-detail",
     attrs: { open: expandedItemId === item.id },
     dataset: { itemId: item.id },
-    children: [summary, itemInlineSummary(item, actor, commands, status, openItem, scope)]
+    children: [summary, itemInlineSummary(item, actor, commands, openItem, scope)]
   });
   return detail;
 }
 
 // Render item metadata and details between its identity and action controls.
-function itemMiddle(item, actor, commands, status, scope, subtitle = itemSubtitle(item) || localizedText(commands.localize, "VEMOBILE.Character.Labels.Noadditionaldetails", "No additional details")) {
+function itemMiddle(item, actor, commands, scope, subtitle = itemSubtitle(item) || localizedText(commands.localize, "VEMOBILE.Character.Labels.Noadditionaldetails", "No additional details")) {
   if (actor.type === "npc" && item.npcGroup && item.activation) subtitle = [subtitle, item.activation].filter(Boolean).join(" · ");
   const displayName = characterItemDisplayName(item);
   const copy = node("span", { className: "ve-sheet-item-copy", children: [node("strong", { text: displayName }), node("small", { text: subtitle })] });
@@ -2046,10 +2029,10 @@ export function resolveCharacterItemMenu(item, actor, commands) {
 }
 
 // Bind context-menu and long-press entry points to the same scoped item menu.
-function bindCharacterItemMenu(target, item, actor, commands, status, scope) {
+function bindCharacterItemMenu(target, item, actor, commands, scope) {
   target.dataset.veItemActions = "true";
   // Share the same contextual menu behavior for pointer and keyboard invocation.
-  const open = event => showCharacterItemActionMenu(target, event, item, actor, commands, status, scope);
+  const open = event => showCharacterItemActionMenu(target, event, item, actor, commands, scope);
   bindLongPress(target, scope, open);
   scope.listen(target, "keydown", event => {
     if (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return;
@@ -2059,13 +2042,12 @@ function bindCharacterItemMenu(target, item, actor, commands, status, scope) {
 }
 
 // Create and position the contextual item menu under the current row's scope.
-function showCharacterItemActionMenu(anchor, event, item, actor, commands, status, scope) {
+function showCharacterItemActionMenu(anchor, event, item, actor, commands, scope) {
   if (scope.disposed) return;
   let actions;
   try { ({ item, actions } = resolveCharacterItemMenu(item, actor, commands)); }
   catch (error) {
-    status.classList.add("is-error");
-    status.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.ThisItemIsNoLongerAvailable", "This item is no longer available.");
+    if (!scope.disposed) notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Errors.ItemMenuFailed", "The item actions could not be loaded."), { readOnly: true }), "error");
     return;
   }
   if (!actions.length) return;
@@ -2096,18 +2078,15 @@ function showCharacterItemActionMenu(anchor, event, item, actor, commands, statu
               kind: "item", itemId: item.id, label: item.name, img: item.img ?? "",
               ...(item.activityId ? { activityId: item.activityId } : {})
             });
-            status.classList.remove("is-error");
-            status.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.AddedToQuickbar", "{name} added to Quickbar.", { name: (item.name) });
+            if (!scope.disposed) notifyCharacter(commands, characterRecordSourceUuid(actor), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AddedToQuickbar", "{name} added to Quickbar.", { name: (item.name) }));
             globalThis.navigator?.vibrate?.(5);
           } else if (action.id === "hotbar") {
             await commands.addHotbarItem({ ...payload, ...(item.activityId ? { activityId: item.activityId } : {}) });
-            status.classList.remove("is-error");
-            status.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.AddedToHotbar", "{name} added to Hotbar.", { name: (item.name) });
+            if (!scope.disposed) notifyCharacter(commands, characterRecordSourceUuid(actor), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AddedToHotbar", "{name} added to Hotbar.", { name: (item.name) }));
             globalThis.navigator?.vibrate?.(5);
           } else await commands.execute(action.command, payload);
         } catch (error) {
-          status.classList.add("is-error");
-          status.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.FailedFor", "{label} failed for {name}.", { label: (action.label), name: (item.name) });
+          if (!scope.disposed) notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.FailedFor", "{label} failed for {name}.", { label: (action.label), name: (item.name) })), "error");
         }
       } },
       children: [icon(action.icon), node("span", { text: action.label })]
@@ -2144,7 +2123,7 @@ function positionCharacterMenu(menu, host, event) {
 }
 
 // Display supported currency totals and expose the scoped currency editor.
-function currencyStrip(actor, commands, status, scope) {
+function currencyStrip(actor, commands, scope) {
   const edit = node("button", {
     className: "ve-currency-edit",
     attrs: { type: "button", disabled: !actor.capabilities?.updateCurrency, "aria-label": localizedText(commands.localize, "VEMOBILE.Character.Presenter.EditCurrency", "Edit {name} currency", { name: (actor.name) }) },
@@ -2162,12 +2141,12 @@ function currencyStrip(actor, commands, status, scope) {
       edit
     ]
   });
-  scope.listen(edit, "click", () => openCurrencyEditor(edit, actor, commands, status, scope));
+  scope.listen(edit, "click", () => openCurrencyEditor(edit, actor, commands, scope));
   return strip;
 }
 
 // Edit currency with a scoped dialog and submit only its bounded numeric amount.
-function openCurrencyEditor(anchor, actor, commands, pageStatus, scope) {
+function openCurrencyEditor(anchor, actor, commands, scope) {
   if (anchor.disabled) return;
   const screen = anchor.closest(".ve-character-screen");
   const host = screen?.__veCharacterOverlayHost ?? screen ?? anchor.ownerDocument?.body;
@@ -2175,7 +2154,6 @@ function openCurrencyEditor(anchor, actor, commands, pageStatus, scope) {
   const editorScope = scope.child("currency-editor");
   const initial = Object.fromEntries(CURRENCY_DENOMINATIONS.map((key) => [key, Number(actor.currency?.[key]) || 0]));
   const inputs = {};
-  const editorStatus = node("p", { className: "ve-currency-editor-status", attrs: { role: "status", "aria-live": "polite" } });
   let pending = false;
   // Dispose the currency editor and its listeners after save or dismissal.
   const close = () => editorScope.dispose();
@@ -2201,8 +2179,7 @@ function openCurrencyEditor(anchor, actor, commands, pageStatus, scope) {
       for (const denomination of CURRENCY_DENOMINATIONS) {
         const value = Number(inputs[denomination].value);
         if (!Number.isSafeInteger(value) || value < 0) {
-          editorStatus.classList.add("is-error");
-          editorStatus.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.MustBeANonNegativeWholeNumber", "{denomination} must be a non-negative whole number.", { denomination: denomination.toUpperCase() });
+          notifyCharacter(commands, characterRecordSourceUuid(actor), localizedText(commands.localize, "VEMOBILE.Character.Presenter.MustBeANonNegativeWholeNumber", "{denomination} must be a non-negative whole number.", { denomination: denomination.toUpperCase() }), "error");
           return;
         }
         if (value !== initial[denomination]) values[denomination] = value;
@@ -2210,24 +2187,19 @@ function openCurrencyEditor(anchor, actor, commands, pageStatus, scope) {
       if (!Object.keys(values).length) return close();
       pending = true;
       for (const control of form.querySelectorAll("button, input")) control.disabled = true;
-      editorStatus.classList.remove("is-error");
-      editorStatus.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.UpdatingCurrency", "Updating currency…");
       try {
         await commands.execute(ACTOR_COMMANDS.UPDATE_CURRENCY, { actorSourceUuid: characterRecordSourceUuid(actor), values });
-        pageStatus.textContent = "";
         close();
       } catch (error) {
         if (editorScope.disposed) return;
         pending = false;
         for (const control of form.querySelectorAll("button, input")) control.disabled = false;
-        editorStatus.classList.add("is-error");
-        editorStatus.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.CurrencyCouldNotBeUpdated", "Currency could not be updated.");
+        notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.CurrencyCouldNotBeUpdated", "Currency could not be updated.")), "error");
       }
     } },
     children: [
       node("header", { children: [node("span", { className: "ve-hp-editor-heading-icon", children: [icon("fa-coins")] }), node("div", { children: [node("small", { text: localizedText(commands.localize, "VEMOBILE.Character.Tabs.Inventory", "Inventory") }), node("h2", { text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.EditCurrency2", "Edit Currency") })] }), node("button", { className: "ve-hp-editor-close", attrs: { type: "button", "aria-label": localizedText(commands.localize, "VEMOBILE.Character.Presenter.CloseCurrencyEditor", "Close currency editor") }, on: { click: close }, children: [icon("fa-xmark")] }, editorScope)] }),
       node("div", { className: "ve-currency-editor-rows", children: rows }),
-      editorStatus,
       node("button", { className: "ve-currency-editor-submit", attrs: { type: "submit" }, children: [icon("fa-check"), node("span", { text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.SaveChanges", "Save Changes") })] })
     ]
   }, editorScope);
@@ -2276,7 +2248,7 @@ function thresholdMarker(stop, label) {
 }
 
 // Present concise item actions and details within a collection row.
-function itemInlineSummary(item, actor, commands, status, openItem, scope) {
+function itemInlineSummary(item, actor, commands, openItem, scope) {
   const description = node("div", { className: "ve-sheet-item-inline-description" });
   if (item.descriptionHtml) {
     description.innerHTML = item.descriptionHtml;
@@ -2300,7 +2272,7 @@ function itemInlineSummary(item, actor, commands, status, openItem, scope) {
       node("button", {
         className: "is-primary",
         attrs: { type: "button", disabled: !enabled, title: enabled ? `${actionLabel} ${item.name}` : localizedText(commands.localize, "VEMOBILE.Character.Presenter.YouDoNotHavePermissionToUse", "You do not have permission to use {name}", { name: (item.name) }), ...quickbarItemAttrs(item) },
-        on: { click: (event) => runItemAction(event.currentTarget, item, actor, commands, status) },
+        on: { click: (event) => runItemAction(event.currentTarget, item, actor, commands) },
         children: [icon(item.type === "spell" ? "fa-wand-magic-sparkles" : "fa-play"), node("span", { text: actionLabel })]
       }, scope),
       node("button", {
@@ -2385,10 +2357,9 @@ function collectionFilterButton(initialFilter, onToggle, scope, localize = null)
 }
 
 // Save one sort/filter preference through the settings command and report failures.
-function persistCollectionPreference(commands, key, value, status) {
+function persistCollectionPreference(commands, key, value, actor, scope) {
   void Promise.resolve(commands.updateCharacterCollectionPreference?.(key, value)).catch((error) => {
-    status.classList.add("is-error");
-    status.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.ThatDisplayPreferenceCouldNotBeSaved", "That display preference could not be saved.");
+    if (!scope.disposed) notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.ThatDisplayPreferenceCouldNotBeSaved", "That display preference could not be saved.")), "error");
   });
 }
 
@@ -2499,7 +2470,7 @@ function embeddedEffectDetail(effect, localize = null) {
 }
 
 // Build the primary use control only when the item snapshot grants that action.
-function itemActionButton(item, actor, commands, status, scope) {
+function itemActionButton(item, actor, commands, scope) {
   const hasActivity = item.useMode === "activity";
   const enabled = actor.capabilities?.useItem?.includes(item.id) ?? false;
   const actionLabel = hasActivity
@@ -2517,18 +2488,18 @@ function itemActionButton(item, actor, commands, status, scope) {
     on: { click: (event) => {
       event.preventDefault();
       event.stopPropagation();
-      runItemAction(event.currentTarget, item, actor, commands, status);
+      runItemAction(event.currentTarget, item, actor, commands);
     } },
     children: item.img ? [node("img", { attrs: { src: item.img, alt: "" } })] : [icon(item.type === "spell" ? "fa-sparkles" : "fa-diamond")]
   }, scope);
 }
 
 // Run one item action with pending-state protection and user-facing failure feedback.
-function runItemAction(button, item, actor, commands, status) {
+function runItemAction(button, item, actor, commands) {
   const hasActivity = item.useMode === "activity";
   return runActorCommand(button, ACTOR_COMMANDS.USE_ITEM, actor,
     { itemId: item.id, ...(item.activityId ? { activityId: item.activityId } : {}) },
-    commands, status, localizedText(commands.localize, hasActivity ? "VEMOBILE.Character.Presenter.UsingItem" : "VEMOBILE.Character.Presenter.SharingItem", hasActivity ? "Using {name}…" : "Sharing {name}…", { name: item.name }), item.name);
+    commands, item.name);
 }
 
 // Render the standard empty-state copy for a collection panel.
@@ -2573,7 +2544,7 @@ function bindEffectContextMenu(element, effect, actor, commands, scope) {
       })
       .catch((error) => {
         commands.traceActiveEffectHold?.({ ...identity, phase: "context-error", message: String(error?.message ?? error) });
-        commands.reportCharacterMutationError?.(error);
+        if (!scope.disposed) notifyCharacter(commands, identity.actorSourceUuid, characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Errors.EffectMenuFailed", "Effect controls could not be opened."), { readOnly: true }), "error");
       });
   }, {
     claimPointer: true,
@@ -2609,7 +2580,7 @@ function renderEffectContextMenu(anchor, menuRecord, commands, scope) {
     scope.listen(button, "click", () => {
       button.disabled = true;
       void Promise.resolve(commands.selectActiveEffectContextOption?.({ menuId: menuRecord.id, optionId: option.id }))
-        .catch((error) => commands.reportCharacterMutationError?.(error))
+        .catch((error) => { if (!scope.disposed) notifyCharacter(commands, element.dataset.actorSourceUuid, characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Errors.EffectFailed", "The effect could not be updated.")), "error"); })
         .finally(() => dismiss(false));
     });
     menu.append(button);
@@ -2637,12 +2608,12 @@ function positionEffectContextMenu(menu, surface, record) {
 }
 
 // Show trained skills and saving throws as a compact overview preview.
-function abilitiesSavesPreview(actor, onViewAll, commands, status, scope) {
+function abilitiesSavesPreview(actor, onViewAll, commands, scope) {
   const trainedSkills = (actor.skills ?? []).filter((skill) => Number(skill.proficiency) > 0).sort((first, second) => first.label.localeCompare(second.label));
   const toolProficiencies = actor.toolProficiencies ?? [];
   return node("section", { className: "ve-sheet-card ve-abilities-saves-preview", children: [
     sectionHeading(localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitiesAndSaves", "Abilities and saves"), "fa-dumbbell", cardAction(localizedText(commands.localize, "VEMOBILE.Character.Presenter.ViewAll", "View All"), onViewAll, scope)),
-    abilityScoresPreview(actor, commands, status, scope),
+    abilityScoresPreview(actor, commands, scope),
     node("div", { className: "ve-trained-skills-preview", children: [
       node("p", { className: "ve-trained-skills-heading", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.SkillProficiencies", "Skill Proficiencies") }),
       trainedSkills.length ? node("div", { className: "ve-trained-skills-list", children: trainedSkills.map((skill) => {
@@ -2651,41 +2622,41 @@ function abilitiesSavesPreview(actor, onViewAll, commands, status, scope) {
         return node("button", {
           className: `ve-trained-skill is-${proficiency.key}`,
           attrs: { type: "button", disabled: !enabled, title: `${proficiency.label} · ${skill.ability}`, "aria-label": localizedText(commands.localize, "VEMOBILE.Character.Presenter.Roll", "Roll {label} {modifier}; {proficiency}", { label: skill.label, modifier: formatModifier(skill.modifier), proficiency: proficiency.label }), ...quickbarSkillAttrs(skill) },
-          on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_SKILL, actor, { skill: skill.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingSkill", "Rolling {label}…", { label: skill.label }), skill.label) },
+          on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_SKILL, actor, { skill: skill.key }, commands, skill.label) },
           children: [node("span", { text: skill.label }), node("b", { text: formatModifier(skill.modifier) }), icon("fa-dice-d20")]
         }, scope);
       }) }) : node("p", { className: "ve-trained-skills-empty", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.NoSkillProficiencies", "No skill proficiencies.") })
     ] }),
     node("div", { className: "ve-trained-skills-preview ve-tool-proficiencies-preview", children: [
       node("p", { className: "ve-trained-skills-heading", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.ToolProficiencies", "Tool Proficiencies") }),
-      toolProficiencies.length ? node("div", { className: "ve-trained-skills-list", children: toolProficiencies.map((tool) => toolProficiencyButton(tool, actor, commands, status, scope)) }) : node("p", { className: "ve-trained-skills-empty", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.NoToolProficiencies", "No tool proficiencies.") })
+      toolProficiencies.length ? node("div", { className: "ve-trained-skills-list", children: toolProficiencies.map((tool) => toolProficiencyButton(tool, actor, commands, scope)) }) : node("p", { className: "ve-trained-skills-empty", text: localizedText(commands.localize, "VEMOBILE.Character.Presenter.NoToolProficiencies", "No tool proficiencies.") })
     ] })
   ] });
 }
 
 // Render ability score summaries with capability-gated checks and saves.
-function abilityScoresPreview(actor, commands, status, scope) {
+function abilityScoresPreview(actor, commands, scope) {
   return node("div", { className: "ve-abilities-saves-grid", children: (actor.abilities ?? []).map((ability) => {
     const canCheck = actor.capabilities?.rollAbility?.includes(ability.key);
     const canSave = actor.capabilities?.rollSave?.includes(ability.key);
     return node("article", { attrs: { "aria-label": localizedText(commands.localize, "VEMOBILE.Character.Presenter.Score", "{label}: score {score}", { label: (ability.label), score: (ability.score) }) }, children: [
       node("div", { className: "ve-ability-preview-score", children: [node("strong", { text: ability.short }), node("span", { text: ability.score })] }),
       node("div", { className: "ve-ability-preview-actions", children: [
-        abilityPreviewRoll(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Check", "Check"), ability.checkModifier ?? ability.modifier, canCheck, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_ABILITY, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilityCheck", "Rolling {label} check…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilityCheck", "{label} check", { label: ability.label })), scope, false, commands.localize),
-        abilityPreviewRoll(localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrowShort", "Save"), ability.saveModifier, canSave, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SAVE, actor, { ability: ability.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingAbilitySave", "Rolling {label} save…", { label: ability.label }), localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitySave", "{label} save", { label: ability.label })), scope, Number(ability.proficiency) > 0, commands.localize, localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrow", "Saving throw"))
+        abilityPreviewRoll(localizedText(commands.localize, "VEMOBILE.Character.Presenter.Check", "Check"), ability.checkModifier ?? ability.modifier, canCheck, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_ABILITY, actor, { ability: ability.key }, commands, localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilityCheck", "{label} check", { label: ability.label })), scope, false, commands.localize),
+        abilityPreviewRoll(localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrowShort", "Save"), ability.saveModifier, canSave, (button) => runActorCommand(button, ACTOR_COMMANDS.ROLL_SAVE, actor, { ability: ability.key }, commands, localizedText(commands.localize, "VEMOBILE.Character.Presenter.AbilitySave", "{label} save", { label: ability.label })), scope, Number(ability.proficiency) > 0, commands.localize, localizedText(commands.localize, "VEMOBILE.Character.Presenter.SavingThrow", "Saving throw"))
       ] })
     ] });
   }) });
 }
 
 // Bind a roll button to one tool proficiency record and the active Actor source.
-function toolProficiencyButton(tool, actor, commands, status, scope) {
+function toolProficiencyButton(tool, actor, commands, scope) {
   const enabled = actor.capabilities?.rollTool?.includes(tool.key);
   const proficiency = skillProficiencyLabel(tool.proficiency, commands.localize);
   return node("button", {
     className: `ve-trained-skill is-${proficiency.key}`,
     attrs: { type: "button", disabled: !enabled, title: localizedText(commands.localize, "VEMOBILE.Character.Presenter.Tool", "{label} · tool", { label: proficiency.label }), "aria-label": localizedText(commands.localize, "VEMOBILE.Character.Presenter.Roll", "Roll {label} {modifier}; {proficiency}", { label: tool.label, modifier: formatModifier(tool.modifier), proficiency: proficiency.label }) },
-    on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_TOOL, actor, { tool: tool.key }, commands, status, localizedText(commands.localize, "VEMOBILE.Character.Presenter.RollingTool", "Rolling {label}…", { label: tool.label }), tool.label) },
+    on: { click: (event) => runActorCommand(event.currentTarget, ACTOR_COMMANDS.ROLL_TOOL, actor, { tool: tool.key }, commands, tool.label) },
     children: [node("span", { text: tool.label }), node("b", { text: formatModifier(tool.modifier) }), icon("fa-dice-d20")]
   }, scope);
 }
@@ -2744,7 +2715,6 @@ function spellSlotEditor(actor, requestedEditor, commands, scope) {
   const maximum = Math.max(0, Math.trunc(Number(resource.max) || 0));
   let value = Math.max(0, Math.min(maximum, Math.trunc(Number(resource.value) || 0)));
   let pending = false;
-  const modalStatus = node("p", { className: "ve-spell-slot-editor-status", attrs: { role: "status", "aria-live": "polite" } });
   const pips = capacityIndicator(value, maximum);
   pips.classList.add("ve-spell-slot-editor-pips");
   const fraction = node("strong", { className: "ve-spell-slot-editor-fraction", text: `${value} / ${maximum}` });
@@ -2782,8 +2752,6 @@ function spellSlotEditor(actor, requestedEditor, commands, scope) {
       closeButton.disabled = true;
       confirm.disabled = true;
       form.setAttribute("aria-busy", "true");
-      modalStatus.classList.remove("is-error");
-      modalStatus.textContent = localizedText(commands.localize, "VEMOBILE.Character.Presenter.UpdatingSpellSlots", "Updating spell slots…");
       try {
         await commands.execute(ACTOR_COMMANDS.SET_SPELL_SLOT_VALUE, {
           actorSourceUuid: requestedEditor.actorSourceUuid,
@@ -2798,8 +2766,7 @@ function spellSlotEditor(actor, requestedEditor, commands, scope) {
           closeButton.disabled = false;
           confirm.disabled = false;
           form.removeAttribute("aria-busy");
-          modalStatus.classList.add("is-error");
-          modalStatus.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.SpellSlotsCouldNotBeUpdated", "Spell slots could not be updated.");
+          notifyCharacter(commands, requestedEditor.actorSourceUuid, characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.SpellSlotsCouldNotBeUpdated", "Spell slots could not be updated.")), "error");
           update();
         }
       }
@@ -2819,7 +2786,6 @@ function spellSlotEditor(actor, requestedEditor, commands, scope) {
     ] }),
     node("div", { className: "ve-spell-slot-editor-summary", children: [pips, fraction] }),
     node("div", { className: "ve-spell-slot-editor-controls", children: [minus, current, plus] }),
-    modalStatus,
     confirm
   );
   update();
@@ -2876,14 +2842,12 @@ function saveProficiencyMarker() {
   return node("span", { className: "ve-save-proficiency", attrs: { "aria-hidden": "true" }, children: [icon("fa-shield")] });
 }
 
-// Run a character action with duplicate-tap protection and a scoped result session.
-async function runActorCommand(button, command, actor, payload, commands, status, pendingMessage, resultLabel) {
+// Run a character command with duplicate-tap protection and present its roll or action result.
+async function runActorCommand(button, command, actor, payload, commands, resultLabel) {
   if (button.disabled) return;
   button.disabled = true;
   button.classList.add("is-pending");
   button.setAttribute("aria-busy", "true");
-  status.classList.remove("is-error", "is-success");
-  status.textContent = pendingMessage;
   let openedActionSessionId = "";
   let displayedRollResultId = 0;
   const expectsRollResult = command !== ACTOR_COMMANDS.USE_ITEM && Boolean(resultLabel);
@@ -2899,7 +2863,6 @@ async function runActorCommand(button, command, actor, payload, commands, status
     const outcome = await commands.execute(command, { actorSourceUuid: characterRecordSourceUuid(actor), ...payload }, {
       onActionSession: openActionSession
     });
-    status.textContent = "";
     if (outcome?.actionSession) openActionSession(outcome.actionSession);
     else if (outcome?.rollResult && resultLabel) {
       if (displayedRollResultId) commands.updateRollResult(displayedRollResultId, { label: resultLabel, ...outcome.rollResult, pending: false });
@@ -2908,8 +2871,7 @@ async function runActorCommand(button, command, actor, payload, commands, status
     else if (displayedRollResultId) commands.dismissRollResult(displayedRollResultId);
   } catch (error) {
     if (displayedRollResultId) commands.dismissRollResult(displayedRollResultId);
-    status.classList.add("is-error");
-    status.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotCompleteThatRoll", "Foundry could not complete that roll.");
+    if (button.isConnected !== false) notifyCharacter(commands, characterRecordSourceUuid(actor), characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.FoundryCouldNotCompleteThatRoll", "Foundry could not complete that roll.")), "error");
   } finally {
     button.disabled = false;
     button.classList.remove("is-pending");
@@ -2993,7 +2955,7 @@ function bindQuickbarCandidates(screen, actor, commands, scope) {
           if (prompt !== currentPrompt) return;
           currentPrompt.disabled = false;
           currentPrompt.removeAttribute("aria-busy");
-          currentPrompt.replaceChildren(icon("fa-triangle-exclamation"), node("span", { text: error?.code === "QUICKBAR_FULL" ? localizedText(commands.localize, "VEMOBILE.Character.Presenter.QuickbarFull", "Quickbar full") : (error?.message ?? localizedText(commands.localize, "VEMOBILE.Character.Presenter.CouldNotAdd", "Could not add")) }));
+          currentPrompt.replaceChildren(icon("fa-triangle-exclamation"), node("span", { text: characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Presenter.CouldNotAdd", "Could not add")) }));
           currentPrompt.classList.toggle("is-full", error?.code === "QUICKBAR_FULL");
         }
       } },

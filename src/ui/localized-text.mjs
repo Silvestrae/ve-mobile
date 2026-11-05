@@ -9,7 +9,7 @@ export function localizedText(localize, key, fallback = key, data) {
   return data ? String(text).replace(/\{([^}]+)\}/gu, (token, name) => Object.hasOwn(data, name) ? String(data[name]) : token) : String(text);
 }
 
-// Thirty-six entries cover the six supported languages, number precisions and
+// Thirty-six entries bound repeated locale/precision combinations and
 // common native regional aliases. Bounded caches key on the actual language;
 // a Foundry language reload cannot reuse a formatter from a different locale.
 const numberFormats = new Map();
@@ -39,7 +39,7 @@ export function localizedDate(value, locale = "en") {
 }
 
 /** Select complete native dictionary messages; Foundry format does not parse ICU.
- * These six languages need one/other UI forms; other categories use Other. */
+ * Extra plural categories use complete neutral-count wording from Other. */
 export function localizedCount(localize, key, { one, other }, count, locale = "en", data = {}) {
   const category = formatter(pluralRules, locale, Intl.PluralRules).select(count) === "one" ? "One" : "Other";
   return localizedText(localize, `${key}.${category}`, category === "One" ? one : other, { ...data, count: localizedNumber(count, locale) });

@@ -1,5 +1,6 @@
 import { icon, node } from "../../../../ui/dom.mjs";
 import { bindDetailsDisclosure } from "../../../../ui/disclosure.mjs";
+import { characterErrorMessage, notifyCharacter } from "../../notifications.mjs";
 
 // Select the sheet tabs supported by group and vehicle Actors.
 export function actorSheetTabs(type) {
@@ -19,7 +20,7 @@ export function actorOriginBack(state, commands, scope) {
 }
 
 // Compose identity and role-specific header content for collective Actors.
-export function collectiveHeaderContent(actor, { portraitButton, characterName, trigger, commands, scope, status }) {
+export function collectiveHeaderContent(actor, { portraitButton, characterName, trigger, commands, scope }) {
   const data = actor.collective;
   return [node("div", { className: "ve-collective-identity", children: [
     portraitButton, node("div", { className: "ve-collective-identity-copy", children: [characterName, node("p", {
@@ -30,7 +31,7 @@ export function collectiveHeaderContent(actor, { portraitButton, characterName, 
       const button = event.currentTarget;
       button.disabled = true;
       try { await commands.openNativeActorEditor({ actorSourceUuid: actor.sourceUuid }); }
-      catch (error) { if (!scope.disposed) { status.classList.add("is-error"); status.textContent = error.message; } }
+      catch (error) { if (!scope.disposed) notifyCharacter(commands, actor.sourceUuid, characterErrorMessage(commands, error, translate(commands, "NativeEditorFailed", "The native character editor could not open."), { readOnly: true }), "error"); }
       finally { if (!scope.disposed) button.disabled = false; }
     } }, children: [icon("fa-pen-to-square"), node("span", { text: translate(commands, "NativeEditor", "Native configuration & edit") })]
   }, scope) : null];
@@ -141,12 +142,12 @@ function vehicleDetails(actor, context) {
 
 // Render linked references with optional compact vital details.
 function referenceList(title, records, actor, context, vitals = false) {
-  const { commands, scope, status } = context;
+  const { commands, scope } = context;
   return card(title, [node("div", { className: "ve-collective-roster", children: records.length ? records.map(member => {
     const action = node("button", { className: "ve-collective-member-open", attrs: { type: "button", disabled: !member.canNavigate },
       on: { click: () => {
         try { commands.openReferencedActor({ originSourceUuid: actor.sourceUuid, targetSourceUuid: member.sourceUuid }); }
-        catch (error) { if (!scope.disposed) { status.classList.add("is-error"); status.textContent = error.message; } }
+        catch (error) { if (!scope.disposed) notifyCharacter(commands, actor.sourceUuid, characterErrorMessage(commands, error, translate(commands, "ReferenceCouldNotOpen", "The selected character could not be opened."), { readOnly: true }), "error"); }
       } }, children: [member.available ? node("img", { attrs: { src: member.img, alt: "", loading: "lazy", decoding: "async" } }) : icon("fa-lock"),
         node("span", { children: [node("strong", { text: member.available ? member.name : translate(commands, "UnavailableMember", "Unavailable member") }),
           member.quantity > 1 ? node("small", { text: `×${member.quantity}` }) : null] }), member.canNavigate ? icon("fa-chevron-right") : null]

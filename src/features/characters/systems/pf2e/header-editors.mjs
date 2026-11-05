@@ -2,6 +2,7 @@ import { experienceEditor, hitPointEditor } from "../../value-editors.mjs";
 import { ACTOR_COMMANDS } from "../../../../kernel/command-names.mjs";
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
+import { notifyCharacter, characterErrorMessage } from "../../notifications.mjs";
 
 // Select the Actor capability used by each header editor kind.
 const capability = kind => kind === "xp" ? "editExperience" : kind === "hero" ? "resources" : "editHitPoints";
@@ -96,9 +97,8 @@ function heroEditor(actor, commands, scope, close) {
   const maximum = Math.min(3, Math.max(0, resource.max));
   let value = Math.min(maximum, Math.max(0, originalValue)), pending = false;
   // Resolve localized field and status copy for this header editor.
-  const translate = (key, fallback) => localizedText(commands.localize, key, fallback);
+  const translate = (key, fallback, values) => localizedText(commands.localize, key, fallback, values);
   const stars = node("strong", { className: "ve-pf2e-hero-editor-stars", attrs: { role: "img" } });
-  const status = node("p", { className: "ve-hp-editor-status", attrs: { role: "status", "aria-live": "polite" } });
   const decrease = node("button", { className: "ve-hp-editor-step", attrs: { type: "button", "aria-label": translate("VEMOBILE.Character.Presenter.DecreaseAmount", "Decrease amount") }, children: [icon("fa-minus")], on: { click: () => change(-1) } }, scope);
   const increase = node("button", { className: "ve-hp-editor-step", attrs: { type: "button", "aria-label": translate("VEMOBILE.Character.Presenter.IncreaseAmount", "Increase amount") }, children: [icon("fa-plus")], on: { click: () => change(1) } }, scope);
   const cancel = node("button", { attrs: { type: "button" }, text: translate("VEMOBILE.Interface.Presenter.Cancel", "Cancel"), on: { click: close } }, scope);
@@ -106,20 +106,19 @@ function heroEditor(actor, commands, scope, close) {
   const dismiss = node("button", { className: "ve-hp-editor-close", attrs: { type: "button", "aria-label": translate("VEMOBILE.Controls.Close", "Close") }, children: [icon("fa-xmark")], on: { click: close } }, scope);
   const form = node("form", { className: "ve-hp-editor ve-xp-editor ve-pf2e-hero-editor", attrs: { role: "dialog", "aria-modal": "true", "aria-label": title }, children: [
     node("header", { children: [node("span", { className: "ve-hp-editor-heading-icon", children: [icon("fa-star")] }), node("div", { children: [node("small", { text: actor.name }), node("h2", { text: title })] }), dismiss] }),
-    node("div", { className: "ve-pf2e-hero-editor-stepper", children: [decrease, stars, increase] }), status,
+    node("div", { className: "ve-pf2e-hero-editor-stepper", children: [decrease, stars, increase] }),
     node("div", { className: "ve-pf2e-hero-editor-actions", children: [cancel, confirm] })
   ], on: { /* Save the resource with its displayed original value/maximum so stale edits can fail safely. */ submit: async event => {
     event.preventDefault();
     if (pending) return;
     pending = true;
     form.setAttribute("aria-busy", "true");
-    status.textContent = "";
     refresh();
     try {
       await commands.execute(ACTOR_COMMANDS.SET_PF2E_RESOURCE, { resource: resource.id, value, originalValue, originalMax: resource.max });
       if (!scope.disposed) close();
     } catch (error) {
-      if (!scope.disposed) { status.classList.add("is-error"); status.textContent = error.message; }
+      if (!scope.disposed) notifyCharacter(commands, actor.sourceUuid, characterErrorMessage(commands, error, translate("VEMOBILE.Character.Errors.UpdateFailed", "Could not update {label}.", { label: title })), "error");
     } finally {
       if (!scope.disposed) { pending = false; form.removeAttribute("aria-busy"); refresh(); }
     }

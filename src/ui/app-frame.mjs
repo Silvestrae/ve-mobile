@@ -1523,8 +1523,24 @@ export function scenePresentationKey(snapshot) {
 export function sceneTargetsOnlyChanged(previous, current) {
   const previousCount = Number(previous?.scene?.movement?.targetCount ?? 0);
   const currentCount = Number(current?.scene?.movement?.targetCount ?? 0);
-  return previousCount !== currentCount
-    && sceneTargetIndependentKey(previous) === sceneTargetIndependentKey(current);
+  if (previousCount === currentCount) return false;
+  // The session gateway's target patch preserves all other immutable records.
+  // Check those shared fields without serializing token/macro/combat lists twice.
+  // Rebuilt but equivalent records retain the existing value-comparison fallback.
+  if (previous?.combat === current?.combat
+    && sameRecordExcept(previous?.scene, current?.scene, "movement")
+    && sameRecordExcept(previous?.scene?.movement, current?.scene?.movement, "targetCount")) return true;
+  return sceneTargetIndependentKey(previous) === sceneTargetIndependentKey(current);
+}
+
+// Compare every published field except the one handled separately by the caller.
+// Unknown future fields participate too; this does not maintain a second schema.
+function sameRecordExcept(previous, current, excludedKey) {
+  if (!previous || !current) return previous === current;
+  const previousKeys = Object.keys(previous).filter(key => key !== excludedKey);
+  const currentKeys = Object.keys(current).filter(key => key !== excludedKey);
+  return previousKeys.length === currentKeys.length
+    && previousKeys.every(key => Object.hasOwn(current, key) && previous[key] === current[key]);
 }
 
 // Compare the Scene snapshot with target count neutralized for the narrow update check.

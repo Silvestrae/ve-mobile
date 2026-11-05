@@ -25,7 +25,7 @@ export function nativeSceneTileTapAllowed({ active, state, presentation }) {
 }
 
 // Own one activation transaction, its command boundary, presentation and deterministic shutdown.
-export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, pwaInstall = null, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
+export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, craftingGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, pwaInstall = null, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
   // Adapt the preference gateway's localizer for shared UI helpers.
   const localize = (key, fallback, data) => localizedText((id, _fallback, values) => preferencesGateway?.localize?.(id, values), key, fallback, data);
   let runtimeScope = null;
@@ -168,6 +168,16 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     reportCharacterMutationError: (error) => {
       diagnostics?.record?.("warn", "Character mutation was rejected", error);
       commandGateway.notifyError?.(error);
+    },
+    // Sheet presenters replace unexpected technical copy, while this existing
+    // bounded diagnostic trail retains the original error for investigation.
+    recordCharacterError: (error) => diagnostics?.record?.("warn", "Character sheet action failed", error),
+    // Late sheet feedback must not appear for another Actor, a closed route or
+    // a disconnected/retired presentation. Native notifications own the toast.
+    notifyCharacterStatus: (payload) => {
+      if (!payload?.actorSourceUuid) return false;
+      try { requireCharacterView(payload.actorSourceUuid); } catch { return false; }
+      return commandGateway.notifyCharacterStatus?.(payload) ?? false;
     },
     traceScenePickerEvent: (entry) => diagnostics?.record?.("debug", `Scene picker ${JSON.stringify(entry)}`),
     // Publish the exact selected source, then try to control its native Scene token.
@@ -658,6 +668,31 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       assertCurrent();
       return result;
     },
+    // The open pane owns native crafting dependency subscriptions; no watcher is
+    // acquired for a closed tab or a stale character context.
+    watchCharacterCrafting: (payload, scope, onChange) => {
+      const sourceUuid = String(payload?.actorSourceUuid ?? "");
+      if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active || scope.disposed
+        || store.state.route !== "characters" || store.state.characterTab !== "crafting"
+        || store.state.selectedActorSourceUuid !== sourceUuid || !craftingGateway) return;
+      craftingGateway.watch(payload, scope, onChange);
+    },
+    // Crafting reads are lazy and belong to the current open tab and exact source.
+    readCharacterCrafting: async (payload) => {
+      const sourceUuid = String(payload?.actorSourceUuid ?? "");
+      const assertCurrent = () => {
+        if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active
+          || store.state.reconnect || store.state.modeTransition || !craftingGateway
+          || store.state.route !== "characters" || store.state.characterTab !== "crafting"
+          || store.state.selectedActorSourceUuid !== sourceUuid) {
+          throw new Error(localizedText(localize, "VEMOBILE.PF2E.Crafting.STALE_VALUE", "Crafting changed. Refresh and try again."));
+        }
+      };
+      assertCurrent();
+      const result = await guardConnection(expected => craftingGateway.read(payload, expected));
+      assertCurrent();
+      return result;
+    },
     // Read current biography content through the selected system boundary.
     readCharacterBiography: async (actorSourceUuid) => {
       const sourceUuid = String(actorSourceUuid ?? "");
@@ -683,11 +718,11 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       const visibleSource = store.state.route === "characters" ? store.state.selectedActorSourceUuid
         : store.state.route === "scene" ? store.state.snapshot?.scene?.quickbarActorSourceUuid || store.state.selectedActorSourceUuid : "";
       if (sourceUuid && sourceUuid !== visibleSource) return Promise.reject(new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.TheSelectedActorSourceChangedBeforeThisActionCould", "The selected Actor source changed before this action could run.")));
-      if ([ACTOR_COMMANDS.ADD_EXPERIENCE, ACTOR_COMMANDS.UPDATE_CURRENCY, ACTOR_COMMANDS.SET_SPELL_SLOT_VALUE, ACTOR_COMMANDS.SET_ITEM_EQUIPPED, ACTOR_COMMANDS.SET_ITEM_ATTUNED, ACTOR_COMMANDS.SET_ITEM_FAVORITE, ACTOR_COMMANDS.SET_SPELL_PREPARED, ACTOR_COMMANDS.EDIT_PF2E_SPELL_PREPARATION, ACTOR_COMMANDS.EDIT_PF2E_PLAY, ACTOR_COMMANDS.EDIT_PF2E_INVENTORY, ACTOR_COMMANDS.EDIT_PF2E_EFFECT, ACTOR_COMMANDS.EDIT_PF2E_PERSISTENT_DAMAGE, ACTOR_COMMANDS.EDIT_PF2E_SPELLS, ACTOR_COMMANDS.OPEN_ITEM_SHEET].includes(name)
+      if ([ACTOR_COMMANDS.ADD_EXPERIENCE, ACTOR_COMMANDS.UPDATE_CURRENCY, ACTOR_COMMANDS.SET_SPELL_SLOT_VALUE, ACTOR_COMMANDS.SET_ITEM_EQUIPPED, ACTOR_COMMANDS.SET_ITEM_ATTUNED, ACTOR_COMMANDS.SET_ITEM_FAVORITE, ACTOR_COMMANDS.SET_SPELL_PREPARED, ACTOR_COMMANDS.EDIT_PF2E_SPELL_PREPARATION, ACTOR_COMMANDS.EDIT_PF2E_PLAY, ACTOR_COMMANDS.EDIT_PF2E_INVENTORY, ACTOR_COMMANDS.EDIT_PF2E_EFFECT, ACTOR_COMMANDS.EDIT_PF2E_PERSISTENT_DAMAGE, ACTOR_COMMANDS.EDIT_PF2E_SPELLS, ACTOR_COMMANDS.EDIT_PF2E_CRAFTING, ACTOR_COMMANDS.EDIT_PF2E_SOCIETY, ACTOR_COMMANDS.OPEN_ITEM_SHEET].includes(name)
         || name === ACTOR_COMMANDS.UPDATE_BIOGRAPHY_SECTION || name === ACTOR_COMMANDS.SET_EXHAUSTION_LEVEL) {
         const sourceUuid = String(payload?.actorSourceUuid ?? "");
         if (store.state.route !== "characters" || store.state.selectedActorSourceUuid !== sourceUuid
-          || (name === ACTOR_COMMANDS.UPDATE_BIOGRAPHY_SECTION && store.state.characterTab !== "biography")) {
+          || (name === ACTOR_COMMANDS.UPDATE_BIOGRAPHY_SECTION && store.state.characterTab !== "biography") || (name === ACTOR_COMMANDS.EDIT_PF2E_CRAFTING && store.state.characterTab !== "crafting") || (name === ACTOR_COMMANDS.EDIT_PF2E_SOCIETY && store.state.characterTab !== "society")) {
           return Promise.reject(new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.TheSelectedCharacterSourceChangedBeforeThisActionCould", "The selected character source changed before this action could run.")));
         }
       }
@@ -727,8 +762,21 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       executionSequence = activeActionExecutions.get(executionKey);
       const summaryExecution = { roots: new Set(), dismissed: false };
       activeSummaryExecutions.add(summaryExecution);
+      // Craft's callback-driven native dialog needs a cancellation owner in
+      // addition to the existing async result guards. Other commands keep their
+      // established lifetimes. No native resource is created by this controller.
+      const craftingScope = name === ACTOR_COMMANDS.EDIT_PF2E_CRAFTING ? owner.child("crafting-command") : null;
+      const craftingCancellation = craftingScope ? new AbortController() : null;
+      if (craftingScope) {
+        craftingScope.own(() => craftingCancellation.abort());
+        craftingScope.own(store.subscribe(state => {
+          if (state.route !== "characters" || state.characterTab !== "crafting" || state.selectedActorSourceUuid !== sourceUuid
+            || state.reconnect || state.modeTransition || state.snapshot?.selectedActor?.capabilities?.owner === false) craftingCancellation.abort();
+        }, { immediate: false }));
+      }
       return guardConnection((expected) => commandGateway.execute(name, payload, expected, {
         ...observer,
+        ...(craftingCancellation ? { signal: craftingCancellation.signal } : {}),
         // Publish only a native session still owned by the initiating execution and not dismissed by the user.
         onActionSession: (session) => {
           if (summaryExecution.dismissed || owner !== runtimeScope || owner.disposed) return;
@@ -744,6 +792,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
         const { actionSession: _dismissed, ...rest } = outcome;
         return Object.freeze(rest);
       }).finally(() => {
+        craftingScope?.dispose();
         activeSummaryExecutions.delete(summaryExecution);
         if (ownsExecution && activeActionExecutions.get(executionKey) === executionSequence) activeActionExecutions.delete(executionKey);
       });

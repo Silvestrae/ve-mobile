@@ -1,3 +1,4 @@
+import { characterErrorMessage } from "../../notifications.mjs";
 import { icon, node } from "../../../../ui/dom.mjs";
 import { localizedText } from "../../../../ui/localized-text.mjs";
 
@@ -58,7 +59,7 @@ export function itemRow({ item, actor, commands, scope, className, header, actio
       if (!result.html?.trim()) description.textContent = localizedText(commands.localize, "VEMOBILE.PF2E.Character.Empty", "Nothing to show here.");
       loaded = true;
     } catch (error) {
-      if (!scope.disposed) description.textContent = error?.message ?? localizedText(commands.localize, "VEMOBILE.PF2E.Character.ActionFailed", "That action could not be completed.");
+      if (!scope.disposed) description.textContent = characterErrorMessage(commands, error, localizedText(commands.localize, "VEMOBILE.Character.Errors.LoadFailed", "Could not load {label}.", { label: item.name }), { readOnly: true });
     } finally {
       if (!scope.disposed) description.removeAttribute("aria-busy");
       pending = false;

@@ -1,6 +1,8 @@
 import { openItemDetails, syncItemDetails } from "./item-details.mjs";
 import { openPersistentDamageDialog, syncPersistentDamageDialog } from "./persistent-damage-dialog.mjs";
 import { openSpellPreparation } from "./spell-preparation.mjs";
+import { renderCraftingPanel } from "./crafting-panel.mjs";
+import { renderSocietyPanel } from "./society-panel.mjs";
 import { openHeaderEditor, syncHeaderEditor, headerPointResource } from "./header-editors.mjs";
 import { collectionGroup, inventoryControls, listControls } from "./collection-controls.mjs";
 import { itemArt, itemRow } from "./item-rows.mjs";
@@ -9,6 +11,7 @@ import { inventoryControls as itemInventoryControls, effectControls } from "./in
 import { bindPf2eShortcutIcons } from "./shortcut-hold.mjs";
 import { openAcEditor, openBiographyEditor, openCurrencyEditor, openDefenseEditor, syncDocumentEditor } from "./document-editors.mjs";
 import { createCharacterMenuController } from "../../character-menu.mjs";
+import { notifyCharacter, characterErrorMessage } from "../../notifications.mjs";
 import { ACTOR_COMMANDS } from "../../../../kernel/command-names.mjs";
 import { localizedNumber, localizedText } from "../../../../ui/localized-text.mjs";
 import { icon, node, vectorIcon } from "../../../../ui/dom.mjs";
@@ -22,11 +25,13 @@ const TABS = Object.freeze([
   ["overview", "fa-address-card", "Character", "PF2E.TabCharacterLabel"],
   ["features", "action-glyph", "Actions", "PF2E.TabActionsLabel"],
   ["inventory", "fa-backpack", "Inventory", "PF2E.TabInventoryLabel"],
+  ["crafting", "fa-hammer", "Crafting", "PF2E.TabCraftingLabel"],
   ["spells", "fa-wand-magic-sparkles", "Spellcasting", "PF2E.TabSpellbookLabel"],
   ["abilities", "fa-hand", "Proficiencies", "PF2E.TabSkillsLabel"],
   ["feats", "fa-medal", "Feats", "PF2E.Item.Feat.Plural"],
   ["effects", "fa-person-rays", "Effects", "PF2E.Item.Effect.Plural"],
-  ["biography", "fa-book-reader", "Biography", "PF2E.Biography"]
+  ["biography", "fa-book-reader", "Biography", "PF2E.Biography"],
+  ["society", "fa-globe", "Pathfinder Society", "PF2E.TabPathfinderSociety"]
 ]);
 const CARRY_CHOICES = Object.freeze([
   ["held-1", "Held (1 hand)", "VEMOBILE.PF2E.Character.Carry.Held1", { carryType: "held", handsHeld: 1, inSlot: false }],
@@ -96,13 +101,12 @@ export function renderPf2eCharacters({ state, commands, scope, overlayHost = nul
     openPf2eItemDetails: { value: payload => openItemDetails(shell, payload, ownerScope, overlayHost) }
   });
   const screen = shell.screen ??= node("section", { className: "ve-character-screen ve-character-shared-shell ve-pf2e-character-screen" });
-  shell.status ??= node("p", { className: "ve-action-status", attrs: { role: "status", "aria-live": "polite" } });
   shell.heading ??= node("div", { className: "ve-character-heading ve-pf2e-character-heading", dataset: { headerLayout: "intrinsic" } });
   shell.scroller ??= node("div", { className: "ve-character-content-scroller", attrs: { tabindex: "0" } });
   shell.panelHost ??= node("div", { className: "ve-sheet-panel ve-pf2e-sheet-panel" });
   if (!shell.mounted) {
     shell.scroller.append(shell.panelHost);
-    shell.screen.append(shell.heading, shell.status, shell.scroller);
+    shell.screen.append(shell.heading, shell.scroller);
     shell.mounted = true;
   }
   shell.openHeaderEditor = kind => openHeaderEditor(shell, kind, ownerScope, overlayHost);
@@ -113,7 +117,6 @@ export function renderPf2eCharacters({ state, commands, scope, overlayHost = nul
   shell.openPersistentDamage = () => openPersistentDamageDialog(shell, ownerScope, overlayHost);
   shell.openConditions = () => openConditionsOverlay(shell, ownerScope, overlayHost);
   shell.conditionCommands = commands;
-  const status = shell.status;
   const resultsDeferred = actionResultsDeferred(state);
   // Keep overlays separate from pane rendering so deferred results cannot outlive their owner.
   syncOverlays(shell, { state, commands, ownerScope, overlayHost, resultsDeferred });
@@ -146,7 +149,7 @@ export function renderPf2eCharacters({ state, commands, scope, overlayHost = nul
     const paneScopeNow = ownerScope.child("pf2e-character-pane");
     shell.paneScope = paneScopeNow;
     shell.activePanelContext = context;
-    const panel = renderTab(tab, actor, state, commands, status, paneScopeNow, shell);
+    const panel = renderTab(tab, actor, state, commands, paneScopeNow, shell, ownerScope);
     if (["features", "spells"].includes(tab)) {
       prepareListSorting(panel);
       listControls(panel, commands, paneScopeNow, { label: text(commands, TABS.find(([key]) => key === tab)[2], TABS.find(([key]) => key === tab)[3]), stateKey: `${tab}-sort` });
@@ -219,7 +222,7 @@ function syncPortraitConditions(shell, commands, scope) {
     headerRefs.recoveryLabel = node("span");
     headerRefs.recoveryButton = node("button", { className: "ve-pf2e-portrait-recovery", attrs: { type: "button", hidden: true }, children: [icon("fa-dice-d20"), headerRefs.recoveryLabel],
       on: { click: event => issueCommand({ button: event.currentTarget, actor: shell.actor, command: ACTOR_COMMANDS.ROLL_PF2E_RECOVERY, payload: {},
-        commands: shell.actionCommands, status: shell.status, scope, resultLabel: text(shell.commands, "Recovery", "VEMOBILE.PF2E.Character.Recovery"),
+        commands: shell.actionCommands, scope, resultLabel: text(shell.commands, "Recovery", "VEMOBILE.PF2E.Character.Recovery"),
         isEnabled: () => can(shell.actor, "rollRecovery") }) } }, scope);
     headerRefs.portrait.append(headerRefs.recoveryButton);
   }
@@ -409,14 +412,35 @@ function syncTabs(shell, visibleTabs, selectedTab, commands, ownerScope) {
     const active = key === selectedTab;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-selected", String(active));
-    if (active && shell.lastSelectedTab !== selectedTab && typeof button.offsetLeft === "number") {
-      const left = button.offsetLeft;
-      if (left < shell.tabBar.scrollLeft) shell.tabBar.scrollLeft = left;
-      else if (left + button.offsetWidth > shell.tabBar.scrollLeft + shell.tabBar.clientWidth) shell.tabBar.scrollLeft = left + button.offsetWidth - shell.tabBar.clientWidth;
-    }
+    if (active) revealSelectedTab(shell.tabBar, button);
   }
   shell.lastSelectedTab = selectedTab;
   if (shell.tabBar.parentElement !== shell.heading) shell.heading.append(shell.tabBar);
+  shell.tabRevealScope?.dispose();
+  const tabBar = shell.tabBar;
+  const view = tabBar.ownerDocument?.defaultView;
+  // A route return can render this shell before its DOM is mounted. Measure
+  // once after mounting; the child scope cancels stale work and releases itself.
+  if (tabBar.isConnected === false && typeof view?.requestAnimationFrame === "function") {
+    const revealScope = ownerScope.child("pf2e-tab-reveal");
+    shell.tabRevealScope = revealScope;
+    revealScope.own(() => { if (shell.tabRevealScope === revealScope) shell.tabRevealScope = null; });
+    const frame = view.requestAnimationFrame(() => {
+      if (revealScope.disposed) return;
+      try {
+        if (shell.tabBar === tabBar && shell.lastSelectedTab === selectedTab) revealSelectedTab(tabBar, shell.tabButtons?.get(selectedTab));
+      } finally { revealScope.dispose(); }
+    });
+    revealScope.own(() => view.cancelAnimationFrame(frame));
+  }
+}
+
+// Reveal only the horizontal tab strip; leave the user's sheet scroll untouched.
+function revealSelectedTab(tabBar, button) {
+  if (typeof button?.offsetLeft !== "number" || !tabBar?.clientWidth || !button.offsetWidth) return;
+  const left = button.offsetLeft;
+  if (left < tabBar.scrollLeft) tabBar.scrollLeft = left;
+  else if (left + button.offsetWidth > tabBar.scrollLeft + tabBar.clientWidth) tabBar.scrollLeft = left + button.offsetWidth - tabBar.clientWidth;
 }
 
 // Refresh HP labels and damage indicators without rebuilding the header shell.
@@ -538,7 +562,7 @@ function updateSpeedDetails(shell, actor, commands) {
     return node("div", { className: "ve-pf2e-speed-stat", children: [node("small", { text: label }),
       entry?.value ? node("strong", { text: `${number(commands, entry.value)} ${entry.unit || "ft"}` })
         : roll ? actionButton(commands, label, "fa-dice-d20", () => issueCommand({ actor: shell.actor, command: ACTOR_COMMANDS.USE_PF2E_MOVEMENT_ACTION,
-          payload: { slug: entry.action }, commands: shell.commands, status: shell.status, scope, actionSession: true }), scope, false, label)
+          payload: { slug: entry.action }, commands: shell.commands, scope, actionSession: true }), scope, false, label)
         : node("strong", { text: "—" })
     ] });
   }));
@@ -639,8 +663,7 @@ function updateHeaderDetailPanels(shell, actor, commands) {
   // Build a permitted roll control using this detail panel's Actor command.
   const roll = (label, key, command, payload, enabled) => node("button", {
     className: "ve-pf2e-action-button", attrs: { type: "button", disabled: !enabled, "aria-label": text(commands, label, key) },
-    on: { click: event => issueCommand({ button: event.currentTarget, actor: shell.actor, command, payload, commands: shell.actionCommands,
-      status: shell.status, scope, resultLabel: command === ACTOR_COMMANDS.ROLL_STATISTIC ? `${perception?.label || text(commands, "Perception", "VEMOBILE.PF2E.Character.Perception")} ${text(commands, "Check", "VEMOBILE.PF2E.Character.Check")}` : text(commands, "Initiative", "VEMOBILE.PF2E.Character.Initiative"),
+    on: { click: event => issueCommand({ button: event.currentTarget, actor: shell.actor, command, payload, commands: shell.actionCommands, scope, resultLabel: command === ACTOR_COMMANDS.ROLL_STATISTIC ? `${perception?.label || text(commands, "Perception", "VEMOBILE.PF2E.Character.Perception")} ${text(commands, "Check", "VEMOBILE.PF2E.Character.Check")}` : text(commands, "Initiative", "VEMOBILE.PF2E.Character.Initiative"),
       isEnabled: () => command === ACTOR_COMMANDS.ROLL_STATISTIC ? can(shell.actor, "rollStatistic", payload.statistic) : can(shell.actor, "rollInitiative") }) },
     children: [icon("fa-dice-d20")]
   }, scope);
@@ -759,20 +782,22 @@ function actorChoices(actors, commands, scope) {
 }
 
 // Dispatch the selected PF2e tab to its dedicated panel presenter.
-function renderTab(tab, actor, state, commands, status, scope, shell) {
+function renderTab(tab, actor, state, commands, scope, shell, ownerScope) {
   const pf2e = actor.pf2e ?? {};
-  if (tab === "abilities") return statisticsPanel(actor, commands, status, scope, shell);
-  if (tab === "effects") return effectsPanel(actor, commands, status, scope, shell);
-  if (tab === "inventory") return inventoryPanel(actor, commands, status, scope, shell);
-  if (tab === "spells") return spellsPanel(actor, commands, status, scope, shell);
-  if (tab === "features") return actionsPanel(actor, commands, status, scope, shell);
-  if (tab === "feats") return featsPanel(actor, commands, status, scope, shell);
-  if (tab === "biography") return morePanel(actor, pf2e.biography, commands, status, scope, shell);
-  return overviewPanel(actor, commands, status, scope, shell);
+  if (tab === "abilities") return statisticsPanel(actor, commands, scope, shell);
+  if (tab === "effects") return effectsPanel(actor, commands, scope, shell);
+  if (tab === "inventory") return inventoryPanel(actor, commands, scope, shell);
+  if (tab === "crafting") return renderCraftingPanel({ actor, commands, scope, shell });
+  if (tab === "society") return renderSocietyPanel({ actor, commands, scope, shell, ownerScope });
+  if (tab === "spells") return spellsPanel(actor, commands, scope, shell);
+  if (tab === "features") return actionsPanel(actor, commands, scope, shell);
+  if (tab === "feats") return featsPanel(actor, commands, scope, shell);
+  if (tab === "biography") return morePanel(actor, pf2e.biography, commands, scope, shell);
+  return overviewPanel(actor, commands, scope, shell);
 }
 
 // Compose the compact overview from vital, strike, resource, and statistic sections.
-function overviewPanel(actor, commands, status, scope, shell) {
+function overviewPanel(actor, commands, scope, shell) {
   const pf2e = actor.pf2e ?? {};
   const defenses = node("section", { className: "ve-sheet-card ve-pf2e-overview-defenses", children: [
     node("header", { className: "ve-pf2e-defense-heading", children: [overviewGlyph("fortitude"), node("h3", { text: text(commands, "Defenses", "VEMOBILE.PF2E.Character.OverviewDefenses") })] }),
@@ -787,24 +812,24 @@ function overviewPanel(actor, commands, status, scope, shell) {
   ] });
   return node("div", { className: "ve-pf2e-overview", children: [
     node("div", { className: "ve-pf2e-overview-stats", children: [
-      savingThrows(pf2e.saves ?? [], actor, commands, status, scope),
+      savingThrows(pf2e.saves ?? [], actor, commands, scope),
       pf2e.attributes?.length ? attributesPanel(pf2e.attributes, commands) : null
     ] }),
     defenses,
     characterDetails(actor, commands, scope),
     node("div", { className: "ve-pf2e-character-tools", children: [
-      restControl(actor, commands, status, scope)
+      restControl(actor, commands, scope)
     ] })
   ] });
 }
 
 // Group skills and proficiencies while retaining roll controls for permitted checks.
-function statisticsPanel(actor, commands, status, scope, shell = null) {
+function statisticsPanel(actor, commands, scope, shell = null) {
   const skills = actor.pf2e?.skills ?? [];
   // Render a proficiency group only when it contains entries.
   const group = (label, key, entries) => entries.length ? collectionGroup({ key: `proficiency:${key}`, label: text(commands, label, key), glyph: "fa-dice-d20", className: "ve-pf2e-proficiency-group", children: [
     node("div", { className: "ve-pf2e-proficiency-skills", children: entries.map(skill => node("div", { className: "ve-pf2e-proficiency-skill", children: [
-      skillRoll(skill, actor, commands, status, scope, true),
+      skillRoll(skill, actor, commands, scope, true),
 
     ] })) })
   ] }) : null;
@@ -829,13 +854,13 @@ function overviewGlyph(kind) {
 }
 
 // Render saving throw totals and route rolls through the action command boundary.
-function savingThrows(saves, actor, commands, status, scope) {
+function savingThrows(saves, actor, commands, scope) {
   return node("section", { className: "ve-sheet-card ve-pf2e-saves", children: [sectionHeading(commands, "Saving throws", "fa-shield"), node("div", {
     className: "ve-pf2e-save-grid", children: saves.map(save => node("button", { className: "ve-pf2e-save", dataset: { save: save.slug }, attrs: {
       type: "button", disabled: !can(actor, "rollSave", save.slug),
       "aria-label": localizedText(commands.localize, "VEMOBILE.PF2E.Character.RollSave", "Roll {label} save {modifier}", { label: save.label, modifier: modifier(save.modifier) })
     }, on: { click: event => issueCommand({ button: event.currentTarget, actor, command: ACTOR_COMMANDS.ROLL_SAVE,
-      payload: { ability: save.slug }, commands, status, scope,
+      payload: { ability: save.slug }, commands, scope,
       resultLabel: `${save.label} ${text(commands, "Check", "VEMOBILE.PF2E.Character.Check")}` }) }, children: [
       node("span", { className: "ve-pf2e-save-content", children: [
         overviewGlyph(save.slug), node("strong", { text: modifier(save.modifier) }),
@@ -856,7 +881,7 @@ function attributesPanel(attributes, commands) {
 }
 
 // Show the most relevant trained skills in the overview panel.
-function skillPreview(skills, actor, commands, status, scope) {
+function skillPreview(skills, actor, commands, scope) {
   const quickbar = Array.isArray(actor.quickbar) ? actor.quickbar : [];
   const pinnedSlugs = quickbar.map(slot => slot?.kind === "skill" ? slot.skill : "").filter(Boolean);
   const pinned = pinnedSlugs.length ? pinnedSlugs.map(slug => skills.find(skill => skill.slug === slug)).filter(Boolean) : skills.slice(0, 4);
@@ -864,11 +889,11 @@ function skillPreview(skills, actor, commands, status, scope) {
   return node("section", { className: "ve-sheet-card ve-pf2e-skill-preview", children: [node("header", { className: "ve-sheet-card-heading", children: [
     icon("fa-dice-d20"), node("h3", { text: text(commands, "Skills", "VEMOBILE.PF2E.Character.Section.Skills") }),
     actionButton(commands, "View all", "fa-arrow-right", () => commands.selectCharacterTab("abilities"), scope)
-  ] }), entries.length ? node("div", { className: "ve-pf2e-skill-grid", children: entries.map(skill => skillRoll(skill, actor, commands, status, scope)) }) : empty(commands)] });
+  ] }), entries.length ? node("div", { className: "ve-pf2e-skill-grid", children: entries.map(skill => skillRoll(skill, actor, commands, scope)) }) : empty(commands)] });
 }
 
 // Present one skill's rank and a capability-gated roll action.
-function skillRoll(skill, actor, commands, status, scope, fullRank = false) {
+function skillRoll(skill, actor, commands, scope, fullRank = false) {
   const label = skill.label || skill.slug;
   const ariaLabel = skill.rankLabel
     ? localizedText(commands.localize, "VEMOBILE.PF2E.Character.RollSkill", "Roll {label} {modifier}; {rank}", { label, modifier: modifier(skill.modifier), rank: skill.rankLabel })
@@ -876,7 +901,7 @@ function skillRoll(skill, actor, commands, status, scope, fullRank = false) {
   return node("button", { className: "ve-pf2e-skill-roll", attrs: {
     type: "button", disabled: !can(actor, "rollSkill", skill.slug), "aria-label": ariaLabel
   }, on: { click: event => issueCommand({ button: event.currentTarget, actor, command: ACTOR_COMMANDS.ROLL_SKILL,
-    payload: { skill: skill.slug }, commands, status, scope,
+    payload: { skill: skill.slug }, commands, scope,
     resultLabel: label + " " + text(commands, "Check", "VEMOBILE.PF2E.Character.Check") }) }, children: [
       itemArt({ name: label }, { kind: "skill", skill: skill.slug, label, img: "" }),
       node("span", { text: label }), rankBadge(commands, skill, fullRank), node("strong", { text: modifier(skill.modifier) })
@@ -981,11 +1006,11 @@ function equipmentSummary(actor, commands, scope, shell) {
   ] });
 }
 // Group active conditions, effects, and persistent damage with supported actions.
-function effectsPanel(actor, commands, status, scope, shell) {
+function effectsPanel(actor, commands, scope, shell) {
   const details = actor.pf2e?.details ?? {};
   // Create one effect category disclosure from its prepared records.
   const list = (label, key, glyph, entries = []) => collectionGroup({ key: `effects:${key}`, label: text(commands, label, key), glyph, className: "ve-pf2e-effects-list", children: [
-    node("div", { className: "ve-pf2e-effect-rows", children: entries.length ? entries.map(effect => itemRow({ item: effect, actor, commands, scope, extraDetails: itemRuleControls(effect, actor, commands, status, scope), className: `ve-pf2e-effect-row${effect.expired ? " is-expired" : ""}`, primaryAction: canItem(actor, effect.id) ? itemPrimaryAction(effect, actor, commands, status, scope) : null, actions: [...itemPostActions(effect, actor, commands, status, scope), actor.capabilities?.owner ? effectControls(effect,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,status,scope})):null], header: [
+    node("div", { className: "ve-pf2e-effect-rows", children: entries.length ? entries.map(effect => itemRow({ item: effect, actor, commands, scope, extraDetails: itemRuleControls(effect, actor, commands, scope), className: `ve-pf2e-effect-row${effect.expired ? " is-expired" : ""}`, primaryAction: canItem(actor, effect.id) ? itemPrimaryAction(effect, actor, commands, scope) : null, actions: [...itemPostActions(effect, actor, commands, scope), actor.capabilities?.owner ? effectControls(effect,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,scope})):null], header: [
       itemArt(effect),
       node("div", { children: [node("strong", { text: effect.name }), node("small", { text: [effect.badge,effect.stage,effect.duration,effect.expired ? supplement(commands, "Expired", "Expired") : ""].filter(Boolean).join(" · ") })] }),
     ] })) : [empty(commands)] })
@@ -1011,9 +1036,9 @@ function shieldSummary(shield, commands) {
 }
 
 // Present the supported rest action with pending state and result feedback.
-function restControl(actor, commands, status, scope) {
+function restControl(actor, commands, scope) {
   const button = actionButton(commands, "Rest overnight", "fa-bed", () => issueCommand({ actor, command: ACTOR_COMMANDS.TAKE_REST,
-    payload: { rest: "night" }, commands, status, scope }), scope, !can(actor, "rest"));
+    payload: { rest: "night" }, commands, scope }), scope, !can(actor, "rest"));
   button.classList.add("ve-pf2e-rest-banner");
   button.replaceChildren(overviewGlyph("rest"), node("span", { className: "ve-pf2e-rest-copy", children: [
     node("strong", { text: text(commands, "Rest overnight", "VEMOBILE.PF2E.Character.Action.RestOvernight") }),
@@ -1023,7 +1048,7 @@ function restControl(actor, commands, status, scope) {
 }
 
 // Render PF2e actions, exploration options, and pinned action rows.
-function actionsPanel(actor, commands, status, scope, shell) {
+function actionsPanel(actor, commands, scope, shell) {
   const pf2e = actor.pf2e ?? {};
   const actions = (pf2e.features ?? []).filter(feature => isActiveFeature(feature) || (feature.traitSlugs ?? []).some(trait => ["exploration", "downtime"].includes(trait)));
   const selected = shell.panelState.get(shell.activePanelContext)?.inputs?.get("actions-mode")?.value ?? "encounter";
@@ -1032,7 +1057,7 @@ function actionsPanel(actor, commands, status, scope, shell) {
   const modeOf = feature => (feature.traitSlugs ?? []).includes("exploration") ? "exploration" : (feature.traitSlugs ?? []).includes("downtime") ? "downtime" : "encounter";
   const groups = [];
   if (pf2e.strikes?.length) {
-    const strikes = strikesPanel(pf2e.strikes, actor, commands, status, scope);
+    const strikes = strikesPanel(pf2e.strikes, actor, commands, scope);
     strikes.dataset.pf2eActionMode = "encounter"; groups.push(strikes);
   }
   for (const [mode, fallback, modeKey] of modes) {
@@ -1041,17 +1066,17 @@ function actionsPanel(actor, commands, status, scope, shell) {
       const entries = actions.filter(feature => modeOf(feature) === mode && (type === "all" || (feature.actionType || "action") === type));
       if (!entries.length) continue;
       groups.push(collectionGroup({ key: `actions:${mode}:${type}`, label: text(commands, label, key), glyph: "fa-bolt", className: "ve-pf2e-action-browser", dataset: { pf2eActionMode: mode }, children: [
-        node("div", { className: "ve-pf2e-feature-list", children: entries.map(feature => compactActionRow(feature, actor, commands, status, scope)) })
+        node("div", { className: "ve-pf2e-feature-list", children: entries.map(feature => compactActionRow(feature, actor, commands, scope)) })
       ] }));
     }
   }
   const view = node("div", { className: "ve-pf2e-actions-view", dataset: { actionMode: selected }, children: [
     node("div", { className: "ve-pf2e-action-tools", children: [filterChips({ className: "ve-pf2e-action-modes", key: "actions-mode", label: text(commands, "Actions", "VEMOBILE.PF2E.Character.Actions"), options: modes, selected, commands, scope, shell,
       apply: select => { const root = select.closest(".ve-pf2e-actions-view"); if (root) { root.dataset.actionMode = select.value; updateActionGroups(root); } } })] }),
-    elementalBlasts(actor,commands,scope,(command,payload,actionSession)=>issueCommand({actor,command,payload,commands,status,scope,actionSession})),
+    elementalBlasts(actor,commands,scope,(command,payload,actionSession)=>issueCommand({actor,command,payload,commands,scope,actionSession})),
     ...groups,
-    resourcesPanel(specialResources(actor).filter(resource => !resource.sourceItemId || !resourceItemVisible(actor, resource.sourceItemId)), actor, commands, status, scope),
-    ruleOptions(actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,status,scope})),
+    resourcesPanel(specialResources(actor).filter(resource => !resource.sourceItemId || !resourceItemVisible(actor, resource.sourceItemId)), actor, commands, scope),
+    ruleOptions(actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,scope})),
     node("div", { className: "ve-pf2e-action-empty", children: [empty(commands)] })
   ] });
   updateActionGroups(view);
@@ -1069,26 +1094,26 @@ function updateActionGroups(root) {
 }
 
 // Render an exploration or feature action in the compact action list.
-function compactActionRow(feature, actor, commands, status, scope) {
+function compactActionRow(feature, actor, commands, scope) {
   const cost = feature.actionCost ?? (feature.actions ? { type: "action", value: feature.actions } : null);
-  return itemRow({ item: feature, actor, commands, scope, extraDetails: itemRuleControls(feature, actor, commands, status, scope), className: "ve-pf2e-feature ve-pf2e-compact-action", primaryAction: itemPrimaryAction(feature, actor, commands, status, scope), dataset: { actionType: feature.actionType ?? "" }, header: [
+  return itemRow({ item: feature, actor, commands, scope, extraDetails: itemRuleControls(feature, actor, commands, scope), className: "ve-pf2e-feature ve-pf2e-compact-action", primaryAction: itemPrimaryAction(feature, actor, commands, scope), dataset: { actionType: feature.actionType ?? "" }, header: [
     itemArt(feature), node("div", { className: "ve-pf2e-feature-copy", children: [node("h3", { text: feature.name }),
       feature.frequency ? node("small", { text: [feature.frequency.value == null ? null : `${feature.frequency.value}/${feature.frequency.max}`, feature.frequency.label || feature.frequency.per].filter(Boolean).join(" · ") }) : null] }),
     actor.pf2e.play?.exploration?.includes(feature.id) ? node("small",{className:"ve-pf2e-exploration-active",text:text(commands,"Active exploration","VEMOBILE.PF2E.Play.ActiveExploration")}):null,
     cost ? costGlyph(commands, cost) : null
   ], actions: [actionButton(commands, "Post to chat", "fa-comment-dots", () => issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM,
-    payload: { itemId: feature.id, kind: "item" }, commands, status, scope, actionSession: true }), scope, !canItem(actor, feature.id)), explorationControl(feature,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,status,scope}))] });
+    payload: { itemId: feature.id, kind: "item" }, commands, scope, actionSession: true }), scope, !canItem(actor, feature.id)), explorationControl(feature,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,scope}))] });
 }
 
 // Bind item rule toggles through the shared action-command path.
-function itemRuleControls(item, actor, commands, status, scope) {
-  const options = itemRuleOptions(item.id,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,status,scope}));
+function itemRuleControls(item, actor, commands, scope) {
+  const options = itemRuleOptions(item.id,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,scope}));
   const limits = actor.pf2e?.limitedUses?.find(entry => entry.itemId === item.id);
   const rows = ["frequency", "uses"].filter(kind => limits?.[kind]).map(kind => {
     const limit = limits[kind];
     // Adjust the current item quantity through the shared command handler.
     const change = (delta, button) => issueCommand({actor,command:ACTOR_COMMANDS.EDIT_PF2E_INVENTORY,
-      payload:{operation:"limit",itemId:item.id,kind,value:limit.value+delta,originalValue:limit.value,originalMax:limit.max},commands,status,scope});
+      payload:{operation:"limit",itemId:item.id,kind,value:limit.value+delta,originalValue:limit.value,originalMax:limit.max},commands,scope});
     return node("div", {className:"ve-pf2e-resource-row",children:[
       node("span",{text:kind === "frequency"
         ? [localizedText(commands.localize,"VEMOBILE.PF2E.Character.LimitedUses","Uses"), limit.label || limit.per].filter(Boolean).join(" · ")
@@ -1098,14 +1123,14 @@ function itemRuleControls(item, actor, commands, status, scope) {
       actionButton(commands,"+","fa-plus",button=>change(1,button),scope,!actor.capabilities?.owner||limit.value>=limit.max)
     ]});
   });
-  const resources = resourcesPanel(specialResources(actor).filter(resource => resource.sourceItemId === item.id), actor, commands, status, scope, false);
+  const resources = resourcesPanel(specialResources(actor).filter(resource => resource.sourceItemId === item.id), actor, commands, scope, false);
   return options || rows.length || resources ? node("div", {className:"ve-pf2e-item-rule-controls",children:[options,...rows,resources]}) : null;
 }
 
 // Combine biography and secondary character details in one panel.
-function morePanel(actor, biography, commands, status, scope, shell) {
+function morePanel(actor, biography, commands, scope, shell) {
   return node("div", { className: "ve-pf2e-more ve-pf2e-biography-view", children: [
-    biographyPanel(biography, actor, commands, status, scope, shell)
+    biographyPanel(biography, actor, commands, scope, shell)
   ] });
 }
 
@@ -1120,33 +1145,33 @@ function pinnedIds(actor) {
 }
 
 // Resolve pinned IDs to current features before rendering action rows.
-function pinnedRows(pf2e, pinned, actor, commands, status, scope) {
+function pinnedRows(pf2e, pinned, actor, commands, scope) {
   const rows = [];
   for (const slug of pinned) {
     const skill = pf2e.skills?.find(entry => entry.slug === slug);
     const item = pf2e.inventory?.find(entry => entry.id === slug) || pf2e.features?.find(entry => entry.id === slug);
-    if (skill) rows.push(skillRoll(skill, actor, commands, status, scope));
-    else if (item) rows.push(itemSummaryAction(item, actor, commands, status, scope));
+    if (skill) rows.push(skillRoll(skill, actor, commands, scope));
+    else if (item) rows.push(itemSummaryAction(item, actor, commands, scope));
   }
   return rows;
 }
 
 // Choose the primary summary action supported by this item and Actor.
-function itemSummaryAction(item, actor, commands, status, scope) {
+function itemSummaryAction(item, actor, commands, scope) {
   return actionButton(commands, item.name, "fa-comment-dots", () => issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM,
-    payload: { itemId: item.id, kind: "item" }, commands, status, scope, actionSession: true }), scope, !canItem(actor, item.id));
+    payload: { itemId: item.id, kind: "item" }, commands, scope, actionSession: true }), scope, !canItem(actor, item.id));
 }
 
 // Render grouped statistic rolls while retaining each exact slug.
-function statisticList(title, statistics, defaultSlug, actor, commands, status, scope, saves = false, showRank = false) {
+function statisticList(title, statistics, defaultSlug, actor, commands, scope, saves = false, showRank = false) {
   return node("section", { className: "ve-sheet-card ve-pf2e-statistics-card", children: [
     sectionHeading(commands, title, saves ? "fa-shield" : "fa-dice-d20"),
     statistics.length ? node("div", { className: "ve-pf2e-statistic-list", children: statistics.map(statistic => {
       const slug = statistic.slug || defaultSlug;
       const action = saves ? ACTOR_COMMANDS.ROLL_SAVE : slug === "perception" ? ACTOR_COMMANDS.ROLL_STATISTIC : ACTOR_COMMANDS.ROLL_SKILL;
       const payload = saves ? { ability: slug } : action === ACTOR_COMMANDS.ROLL_STATISTIC ? { statistic: slug } : { skill: slug };
-      const roll = action === ACTOR_COMMANDS.ROLL_SKILL ? skillRoll(statistic, actor, commands, status, scope) : rollButton(statistic.label || slug, `${modifier(statistic.modifier)}${showRank ? rankBadgeText(commands, statistic) : ""}`, () => issueCommand({
-        button: null, actor, command: action, payload, commands, status,
+      const roll = action === ACTOR_COMMANDS.ROLL_SKILL ? skillRoll(statistic, actor, commands, scope) : rollButton(statistic.label || slug, `${modifier(statistic.modifier)}${showRank ? rankBadgeText(commands, statistic) : ""}`, () => issueCommand({
+        button: null, actor, command: action, payload, commands,
         resultLabel: `${statistic.label || slug} ${text(commands, "Check", "VEMOBILE.PF2E.Character.Check")}`,
         scope
       }), scope, can(actor, saves ? "rollSave" : action === ACTOR_COMMANDS.ROLL_SKILL ? "rollSkill" : "rollStatistic", slug));
@@ -1156,7 +1181,7 @@ function statisticList(title, statistics, defaultSlug, actor, commands, status, 
 }
 
 // Present bounded HP and temporary HP controls for the current Actor.
-function hpPanel(actor, commands, status, scope) {
+function hpPanel(actor, commands, scope) {
   const hp = actor.hp;
   const input = node("input", { attrs: { type: "number", min: "0", step: "1", value: "1", inputmode: "numeric", "aria-label": text(commands, "Hit point amount", "VEMOBILE.PF2E.Character.HitPointAmount") } });
   // Read the HP amount as a whole non-negative value.
@@ -1170,7 +1195,7 @@ function hpPanel(actor, commands, status, scope) {
     sectionHeading(commands, "Hit points", "fa-heart"),
     node("div", { className: "ve-pf2e-hp-readout", children: [node("strong", { text: `${number(commands, hp.value)} / ${number(commands, hp.max)}` }), hp.temp ? node("span", { text: `${text(commands, "Temporary", "VEMOBILE.PF2E.Character.TemporaryHP")}: ${number(commands, hp.temp)}` }) : null] }),
     node("div", { className: "ve-pf2e-hp-controls", children: [input, ...commandsList.map(([label, iconName, operation]) => actionButton(commands, label, iconName, () => issueCommand({
-      actor, command: ACTOR_COMMANDS.EDIT_HIT_POINTS, payload: { ...Object.fromEntries(Object.entries(operation).map(([key, value]) => [key, typeof value === "function" ? value() : value])) }, commands, status, scope,
+      actor, command: ACTOR_COMMANDS.EDIT_HIT_POINTS, payload: { ...Object.fromEntries(Object.entries(operation).map(([key, value]) => [key, typeof value === "function" ? value() : value])) }, commands, scope,
       disabled: !can(actor, "editHitPoints")
     }), scope, !can(actor, "editHitPoints"))) ] })
   ] });
@@ -1184,7 +1209,7 @@ function resourceItemVisible(actor, id) {
 }
 
 // Render resource counters and execute each update through its native command.
-function resourcesPanel(resources = [], actor, commands, status, scope, heading = true) {
+function resourcesPanel(resources = [], actor, commands, scope, heading = true) {
   if (!resources.length) return null;
   return node("section", { className: "ve-sheet-card ve-pf2e-resources", children: [heading ? sectionHeading(commands, "Resources", "fa-gauge") : null, node("div", {
     className: "ve-pf2e-resource-list", children: resources.map(resource => node("div", { className: "ve-pf2e-resource-row", children: [
@@ -1199,12 +1224,12 @@ function resourcesPanel(resources = [], actor, commands, status, scope, heading 
   // Block duplicate clicks and recheck whether the resource remains editable.
   function changeResource(resource, delta, button) {
     return issueCommand({ actor, command: ACTOR_COMMANDS.SET_PF2E_RESOURCE,
-      payload: { resource: resource.id, value: resource.value + delta, originalValue: resource.value, originalMax: resource.max }, commands, status, scope });
+      payload: { resource: resource.id, value: resource.value + delta, originalValue: resource.value, originalMax: resource.max }, commands, scope });
   }
 }
 
 // Present each strike with its variants, damage choices, and permitted actions.
-function strikesPanel(strikes, actor, commands, status, scope) {
+function strikesPanel(strikes, actor, commands, scope) {
   return collectionGroup({ key: "actions:strikes", label: text(commands, "Attacks", "VEMOBILE.PF2E.Character.Section.Strikes"), glyph: "fa-swords", open: true, className: "ve-pf2e-strikes", children: [node("div", {
     className: "ve-pf2e-strike-list", children: strikes.map(strike => node("article", { className: "ve-pf2e-strike", dataset: { pf2eSearchText: [strike.label, ...(strike.traits ?? [])].join(" ").toLocaleLowerCase(), itemId: strike.itemId, actionType: "strike" }, children: [
       itemArt({ id: strike.itemId, name: strike.label, img: strike.img }, undefined, "ve-pf2e-strike-image"),
@@ -1213,9 +1238,9 @@ function strikesPanel(strikes, actor, commands, status, scope) {
         strike.traits?.length ? node("p", { className: "ve-pf2e-traits", text: strike.traits.join(" · ") }) : null
       ] }),
       Array.isArray(strike.auxiliaryActions) || Array.isArray(strike.versatileOptions)
-        ? strikeNativeControls(strike, actor, commands, status, scope)
-        : strike.ready === false ? strikeCarryControls(strike, actor, commands, status, scope) : null,
-      ammunitionControls(strike,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,status,scope})),
+        ? strikeNativeControls(strike, actor, commands, scope)
+        : strike.ready === false ? strikeCarryControls(strike, actor, commands, scope) : null,
+      ammunitionControls(strike,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,scope})),
       node("div", { className: "ve-pf2e-map-variants", attrs: { hidden: strike.ready === false, "aria-label": text(commands, "Attack variants", "VEMOBILE.PF2E.Character.AttackVariants") }, children:
         (strike.variants ?? []).map((variant, ordinal) => {
           const button = actionButton(commands, variant.label || text(commands, "Attack", "VEMOBILE.PF2E.Character.Attack"), "fa-dice-d20", () => useItem({ itemId: strike.itemId, kind: "strike", slug: strike.slug, variant: variant.index, mode: "attack" }), scope, !canItem(actor, strike.itemId), `${text(commands, "Attack", "VEMOBILE.PF2E.Character.Action.Attack")} ${ordinal + 1}${variant.label ? `: ${variant.label}` : ""}`);
@@ -1238,15 +1263,15 @@ function strikesPanel(strikes, actor, commands, status, scope) {
 
   // Route the selected strike's embedded item action through shared command handling.
   function useItem(payload) {
-    return issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM, payload, commands, status, scope, actionSession: true });
+    return issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM, payload, commands, scope, actionSession: true });
   }
 }
 
 // Present auxiliary and damage-type controls supplied by the strike record.
-function strikeNativeControls(strike, actor, commands, status, scope) {
+function strikeNativeControls(strike, actor, commands, scope) {
   // Execute one supplied item action with action-session and error handling.
   const execute = payload => issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM,
-    payload: { itemId: strike.itemId, kind: "strike", slug: strike.slug, ...payload }, commands, status, scope });
+    payload: { itemId: strike.itemId, kind: "strike", slug: strike.slug, ...payload }, commands, scope });
   const auxiliary = (strike.auxiliaryActions ?? []).map(action => {
     const select = action.options?.length ? node("select", { attrs: { "aria-label": action.label }, children: action.options.map(option =>
       node("option", { attrs: { value: option.value, selected: option.selected }, text: option.label })) }) : null;
@@ -1265,20 +1290,20 @@ function strikeNativeControls(strike, actor, commands, status, scope) {
 }
 
 // Show carry adjustments when this strike's source item supports them.
-function strikeCarryControls(strike, actor, commands, status, scope) {
+function strikeCarryControls(strike, actor, commands, scope) {
   const item = actor.pf2e?.inventory?.find(item => item.id === strike.itemId);
-  if (!item) return actionButton(commands, "Details", "fa-book-open", () => execute(commands, ACTOR_COMMANDS.OPEN_ITEM_SHEET, actor, { itemId: strike.itemId }, status, scope), scope, !canItem(actor, strike.itemId));
+  if (!item) return actionButton(commands, "Details", "fa-book-open", () => execute(commands, ACTOR_COMMANDS.OPEN_ITEM_SHEET, actor, { itemId: strike.itemId }, scope), scope, !canItem(actor, strike.itemId));
   const carry = carrySelectForItem(item, commands, scope);
   return node("div", { className: "ve-pf2e-actions", children: [carry.element,
     actionButton(commands, "Apply carry", "fa-box", () => {
       const [, , , payload] = CARRY_CHOICES.find(([value]) => value === carry.select.value) ?? CARRY_CHOICES[0];
-      return issueCommand({ actor, command: ACTOR_COMMANDS.SET_ITEM_EQUIPPED, payload: { itemId: item.id, ...payload }, commands, status, scope });
+      return issueCommand({ actor, command: ACTOR_COMMANDS.SET_ITEM_EQUIPPED, payload: { itemId: item.id, ...payload }, commands, scope });
     }, scope, !can(actor, "equipItem"))
   ] });
 }
 
 // Build the nested PF2e inventory while preventing cycles in container records.
-function inventoryPanel(actor, commands, status, scope, shell) {
+function inventoryPanel(actor, commands, scope, shell) {
   const inventory = actor.pf2e?.inventory ?? [];
   const byId = new Map(inventory.map(item => [item.id, item]));
   const topLevel = inventory.filter(item => !item.containerId || !byId.has(item.containerId));
@@ -1290,7 +1315,7 @@ function inventoryPanel(actor, commands, status, scope, shell) {
   const renderItem = (item, ancestors = new Set()) => {
     const next = new Set([...ancestors, item.id]);
     const contents = inventory.filter(child => child.containerId === item.id && !next.has(child.id));
-    const card = itemCard(item, actor, commands, status, scope);
+    const card = itemCard(item, actor, commands, scope);
     const capacity = item.containerCapacity;
     const row = !contents.length && !capacity ? card : node("div", { className: "ve-pf2e-container", children: [card,
       node("details", { className: "ve-pf2e-container-contents", attrs: { "data-pf2e-disclosure-key": `container:${item.id}` }, children: [
@@ -1328,9 +1353,9 @@ function inventoryPanel(actor, commands, status, scope, shell) {
 }
 
 // Add secondary item actions after the primary inventory action.
-function itemPostActions(item, actor, commands, status, scope) {
+function itemPostActions(item, actor, commands, scope) {
   return canItem(actor, item.id) ? [actionButton(commands, "Post to chat", "fa-comment-dots", () => issueCommand({ actor,
-    command: ACTOR_COMMANDS.USE_ITEM, payload: { itemId: item.id, kind: "item" }, commands, status, scope, actionSession: true }), scope)] : [];
+    command: ACTOR_COMMANDS.USE_ITEM, payload: { itemId: item.id, kind: "item" }, commands, scope, actionSession: true }), scope)] : [];
 }
 
 // Confirm that the published Actor capabilities allow consuming this item.
@@ -1339,30 +1364,30 @@ function canConsumeItem(actor, item) {
 }
 
 // Select the item's primary action from its current capability and action record.
-function itemPrimaryAction(item, actor, commands, status, scope) {
+function itemPrimaryAction(item, actor, commands, scope) {
   const consume = item.type === "consumable";
   return { label: `${text(commands, consume ? "Use" : "Post to chat", ACTION_LABELS[consume ? "Use" : "Post to chat"])}: ${item.name}`,
     enabled: canConsumeItem(actor, item), activate: button => issueCommand({ button, actor, command: ACTOR_COMMANDS.USE_ITEM,
-      payload: { itemId: item.id, kind: consume ? "consume" : "item" }, commands, status, scope, actionSession: true }) };
+      payload: { itemId: item.id, kind: consume ? "consume" : "item" }, commands, scope, actionSession: true }) };
 }
 
 // Compose an inventory card with carry state, supported controls, and details.
-function itemCard(item, actor, commands, status, scope) {
+function itemCard(item, actor, commands, scope) {
   const actions = [actionButton(commands, item.type === "consumable" ? "Use" : "Post to chat", item.type === "consumable" ? "fa-hand" : "fa-comment-dots", () => issueCommand({
-    actor, command: ACTOR_COMMANDS.USE_ITEM, payload: { itemId: item.id, kind: item.type === "consumable" ? "consume" : "item" }, commands, status, scope, actionSession: true
+    actor, command: ACTOR_COMMANDS.USE_ITEM, payload: { itemId: item.id, kind: item.type === "consumable" ? "consume" : "item" }, commands, scope, actionSession: true
   }), scope, !canConsumeItem(actor, item))];
-  if(actor.capabilities?.owner)actions.push(itemInventoryControls(item,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,status,scope})));
+  if(actor.capabilities?.owner)actions.push(itemInventoryControls(item,actor,commands,scope,(command,payload)=>issueCommand({actor,command,payload,commands,scope})));
   if (["weapon", "armor", "shield", "equipment"].includes(item.type)) {
     const carry = carrySelectForItem(item, commands, scope);
     actions.push(node("div", { className: "ve-pf2e-carry-actions", children: [carry.element, actionButton(commands, "Apply carry", "fa-box", () => {
       const [, , , payload] = CARRY_CHOICES.find(([value]) => value === carry.select.value) ?? CARRY_CHOICES[0];
-      return issueCommand({ actor, command: ACTOR_COMMANDS.SET_ITEM_EQUIPPED, payload: { itemId: item.id, ...payload }, commands, status, scope });
+      return issueCommand({ actor, command: ACTOR_COMMANDS.SET_ITEM_EQUIPPED, payload: { itemId: item.id, ...payload }, commands, scope });
     }, scope, !can(actor, "equipItem"))] }));
     if (item.invested !== null && item.invested !== undefined) actions.push(actionButton(commands, item.invested ? "Uninvest" : "Invest", "fa-gem", () => issueCommand({
-      actor, command: ACTOR_COMMANDS.SET_ITEM_ATTUNED, payload: { itemId: item.id, invested: !item.invested }, commands, status, scope
+      actor, command: ACTOR_COMMANDS.SET_ITEM_ATTUNED, payload: { itemId: item.id, invested: !item.invested }, commands, scope
     }), scope, !can(actor, "investItem")));
   }
-  return itemRow({ item, actor, commands, scope, extraDetails: itemRuleControls(item, actor, commands, status, scope), className: "ve-pf2e-item", primaryAction: itemPrimaryAction(item, actor, commands, status, scope), header: [itemArt(item),
+  return itemRow({ item, actor, commands, scope, extraDetails: itemRuleControls(item, actor, commands, scope), className: "ve-pf2e-item", primaryAction: itemPrimaryAction(item, actor, commands, scope), header: [itemArt(item),
     node("div", { className: "ve-pf2e-item-copy", children: [node("h3", { text: item.name }), node("p", { className: "ve-pf2e-item-meta", text: [
       item.carryType ? text(commands, item.carryType, CARRY_LABEL_BY_TYPE[item.carryType]) : "", item.invested ? supplement(commands, "Invested", "Invested") : "",
       item.identified === false ? text(commands, "Unidentified", "VEMOBILE.PF2E.Character.Unidentified") : ""
@@ -1388,7 +1413,7 @@ function carrySelectForItem(item, commands, scope) {
 }
 
 // Render spellcasting entries lazily with local filters and preserved panel state.
-function spellsPanel(actor, commands, status, scope, shell) {
+function spellsPanel(actor, commands, scope, shell) {
   const entries = actor.pf2e?.spellcasting ?? [];
   const focus = actor.pf2e?.resources?.find(resource => resource.id === "focus");
   const selected = shell.panelState.get(shell.activePanelContext)?.inputs?.get("spell-mode")?.value ?? "known";
@@ -1398,9 +1423,9 @@ function spellsPanel(actor, commands, status, scope, shell) {
   // Build a known-spells view or one of the alternate spell browsing collections.
   const createPane = mode => {
     if (mode === "known") {
-      const cards = entries.map(entry => spellEntry(entry, actor, commands, status, scope, shell)).filter(Boolean);
+      const cards = entries.map(entry => spellEntry(entry, actor, commands, scope, shell)).filter(Boolean);
       return node("div", { className: "ve-pf2e-known-spells", dataset: { spellMode: mode }, children: [
-        focus ? resourcesPanel([focus], actor, commands, status, scope) : null,
+        focus ? resourcesPanel([focus], actor, commands, scope) : null,
         node("section", { className: "ve-sheet-card ve-pf2e-spellbook", children: [
           cards.length ? node("div", { className: "ve-pf2e-spell-entries", children: cards }) : empty(commands)
         ] })
@@ -1409,7 +1434,7 @@ function spellsPanel(actor, commands, status, scope, shell) {
     const [, label, key] = modes.find(([value]) => value === mode);
     const items = actor.pf2e?.spellBrowsing?.[mode] ?? [];
     return collectionGroup({ key: `spells:${mode}`, label: text(commands, label, key), glyph: "fa-book-open", open: true, className: "ve-pf2e-spell-browsing", dataset: { spellMode: mode }, attrs: { hidden: true }, children: [
-      node("div", { className: "ve-pf2e-spell-reference-list", children: items.length ? items.map(item => itemRow({ item, actor, commands, scope, extraDetails: itemRuleControls(item, actor, commands, status, scope), className: "ve-pf2e-spell-reference", primaryAction: spellReferencePrimary(item, actor, commands, status, scope), actions: [...itemPostActions(item, actor, commands, status, scope), item.castAction ? actionButton(commands, "Cast", "fa-wand-sparkles", () => issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM, payload: item.castAction, commands, status, scope, actionSession: true }), scope, !canSpellReference(actor, item)) : null], header: [
+      node("div", { className: "ve-pf2e-spell-reference-list", children: items.length ? items.map(item => itemRow({ item, actor, commands, scope, extraDetails: itemRuleControls(item, actor, commands, scope), className: "ve-pf2e-spell-reference", primaryAction: spellReferencePrimary(item, actor, commands, scope), actions: [...itemPostActions(item, actor, commands, scope), item.castAction ? actionButton(commands, "Cast", "fa-wand-sparkles", () => issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM, payload: item.castAction, commands, scope, actionSession: true }), scope, !canSpellReference(actor, item)) : null], header: [
         itemArt(item),
         node("div", { children: [node("strong", { text: item.name }), node("small", { text: [item.spellName, item.rank != null ? `${text(commands, "Rank", "VEMOBILE.PF2E.Character.Rank.Label")} ${number(commands, item.rank)}` : "", item.timeLabel].filter(Boolean).join(" · ") })] }),
       ] })) : [empty(commands)] })
@@ -1457,10 +1482,10 @@ function spellsPanel(actor, commands, status, scope, shell) {
 const canSpellReference = (actor, item) => canItem(actor, item.id) && (item.castAction?.kind !== "activation" || item.castAction.originalUses !== 0);
 
 // Render the primary cast/use action for a spell obtained from an item.
-function spellReferencePrimary(item, actor, commands, status, scope) {
-  if (!item.castAction) return canItem(actor,item.id) ? itemPrimaryAction(item,actor,commands,status,scope) : null;
+function spellReferencePrimary(item, actor, commands, scope) {
+  if (!item.castAction) return canItem(actor,item.id) ? itemPrimaryAction(item,actor,commands,scope) : null;
   return {label: text(commands,"Cast",ACTION_LABELS.Cast)+": "+item.name, enabled:canSpellReference(actor,item),
-    activate:button=>issueCommand({button,actor,command:ACTOR_COMMANDS.USE_ITEM,payload:item.castAction,commands,status,scope,actionSession:true})};
+    activate:button=>issueCommand({button,actor,command:ACTOR_COMMANDS.USE_ITEM,payload:item.castAction,commands,scope,actionSession:true})};
 }
 
 // Summarize one casting entry and expose its supported preparation editor.
@@ -1471,13 +1496,13 @@ function castingSummary(entry, commands, actor, scope, shell) {
       node("small", { text: [entry.traditionLabel, entry.categoryLabel].filter(Boolean).join(" · ") })
     ] })] }),
     (entry.preparation && actor.capabilities?.prepareSpells || entry.management && actor.capabilities?.manageSpells) ? node("button", { className: "ve-pf2e-prepare-button", attrs: { type: "button", "aria-label": entry.preparation ? localizedText(commands.localize, "VEMOBILE.PF2E.Character.PrepareEntry", "Prepare {entry}", { entry: entry.label }):text(commands,"Manage spells","VEMOBILE.PF2E.Spells.Title") }, children: [icon("fa-book-open"), node("span", { text: entry.preparation ? text(commands, "Prepare", "VEMOBILE.PF2E.Character.PrepareSpells"):text(commands,"Manage spells","VEMOBILE.PF2E.Spells.Title") })], on: { click: () => shell.openSpellPreparation(entry.entryId) } }, scope) : null,
-    entry.attackModifier !== null && entry.attackModifier !== undefined ? node("button",{className:"ve-pf2e-spell-attack-roll",attrs:{type:"button",disabled:!actor.capabilities?.manageSpells},children:[statReadout(commands,"Spell attack","VEMOBILE.PF2E.Character.SpellAttack",modifier(entry.attackModifier))],on:{click:event=>issueCommand({button:event.currentTarget,actor,command:ACTOR_COMMANDS.EDIT_PF2E_SPELLS,payload:{entryId:entry.entryId,operation:"attack"},commands,status:shell.status,scope,actionSession:true})}},scope):null,
+    entry.attackModifier !== null && entry.attackModifier !== undefined ? node("button",{className:"ve-pf2e-spell-attack-roll",attrs:{type:"button",disabled:!actor.capabilities?.manageSpells},children:[statReadout(commands,"Spell attack","VEMOBILE.PF2E.Character.SpellAttack",modifier(entry.attackModifier))],on:{click:event=>issueCommand({button:event.currentTarget,actor,command:ACTOR_COMMANDS.EDIT_PF2E_SPELLS,payload:{entryId:entry.entryId,operation:"attack"},commands,scope,actionSession:true})}},scope):null,
     entry.dc !== null && entry.dc !== undefined ? statReadout(commands, "Spell DC", "VEMOBILE.PF2E.Character.SpellDC", number(commands, entry.dc)) : null
   ] });
 }
 
 // Build spell groups for one exact spellcasting entry.
-function spellEntry(entry, actor, commands, status, scope, shell) {
+function spellEntry(entry, actor, commands, scope, shell) {
   const options = entry.options ?? [];
   if (!options.length && !entry.preparation && !entry.management) return null;
   const groups = new Map();
@@ -1493,7 +1518,7 @@ function spellEntry(entry, actor, commands, status, scope, shell) {
     ...[...groups.values()].map((group, index) => collectionGroup({ key: `spells:${entry.entryId}:${group.key}`, className: "ve-pf2e-spell-rank-group", attrs: { "data-spell-rank": group.key }, open: index === 0,
       label: group.cantrip ? text(commands, "Cantrips", "VEMOBILE.PF2E.Character.Cantrips") : `${text(commands, "Rank", "VEMOBILE.PF2E.Character.Rank.Label")} ${number(commands, group.rank)}`,
       glyph: "fa-wand-magic-sparkles", extra: slotSummary(entry, group, commands), children: [
-      node("div", { className: "ve-pf2e-spell-list", children: group.spells.map(spell => spellRow(spell, entry, actor, commands, status, scope)) })
+      node("div", { className: "ve-pf2e-spell-list", children: group.spells.map(spell => spellRow(spell, entry, actor, commands, scope)) })
     ] }))
   ] });
 }
@@ -1507,7 +1532,7 @@ function slotSummary(entry, group, commands) {
 }
 
 // Present one spell's actions with exact entry, slot, and current capability context.
-function spellRow(spell, entry, actor, commands, status, scope) {
+function spellRow(spell, entry, actor, commands, scope) {
   const traits = spell.traits ?? [];
   const cost = spell.actionCost;
   const tags = [spell.isCantrip ? text(commands, "Cantrip", "VEMOBILE.PF2E.Character.Cantrip") : "",
@@ -1530,10 +1555,10 @@ function spellRow(spell, entry, actor, commands, status, scope) {
     ...(spell.slotId === null ? {} : { slotId: spell.slotId }) };
   const enabled = !spell.expended && canItem(actor, spell.spellId);
   // Cast this spell from its exact entry, rank, and slot payload.
-  const cast = button => issueCommand({ button, actor, command: ACTOR_COMMANDS.USE_ITEM, payload, commands, status, scope, actionSession: true });
+  const cast = button => issueCommand({ button, actor, command: ACTOR_COMMANDS.USE_ITEM, payload, commands, scope, actionSession: true });
   // Build cast control on demand so the row shares the same revalidated cast path.
   const castButton = () => actionButton(commands, "Cast", "fa-wand-sparkles", () => cast(), scope, !enabled);
-  const row = itemRow({ item, actor, commands, scope, extraDetails: itemRuleControls(item, actor, commands, status, scope), className: `ve-pf2e-spell${spell.expended ? " is-expended" : ""}`,
+  const row = itemRow({ item, actor, commands, scope, extraDetails: itemRuleControls(item, actor, commands, scope), className: `ve-pf2e-spell${spell.expended ? " is-expended" : ""}`,
     disclosureKey: `spell:${entry.entryId}:${spell.presentationId}`,
     primaryAction: { label: `${text(commands, "Cast", ACTION_LABELS.Cast)}: ${spell.name}`, enabled, activate: cast },
     dataset: { spellId: spell.presentationId, spellRank: spell.isCantrip ? "cantrip" : `rank-${spell.rank}` },
@@ -1640,7 +1665,7 @@ function costGlyph(commands, cost) {
 }
 
 // Group feats and passive features using PF2e item actions where available.
-function featsPanel(actor, commands, status, scope, shell) {
+function featsPanel(actor, commands, scope, shell) {
   const features = (actor.pf2e?.features ?? []).filter(feature => feature.type === "feat" || feature.type === "campaignFeature" || !isActiveFeature(feature));
   const groups = actor.pf2e?.featGroups?.length ? actor.pf2e.featGroups : [{ id: "features", label: text(commands, "Feats", "PF2E.Item.Feat.Plural"), entries: features }];
   const byId = new Map(features.map(feature => [feature.id, feature]));
@@ -1648,29 +1673,29 @@ function featsPanel(actor, commands, status, scope, shell) {
     ...groups.filter(group => group.entries?.length).map((group, index) => collectionGroup({ key: `feats:${group.id}`, label: group.label, glyph: "fa-medal", open: index === 0, className: "ve-pf2e-feat-group", children: [
       node("div", { className: "ve-pf2e-feat-rows", children: group.entries.map(entry => {
         const feat = { ...byId.get(entry.id), ...entry };
-        return itemRow({ item: feat, actor, commands, scope, extraDetails: itemRuleControls(feat, actor, commands, status, scope), className: "ve-pf2e-feat-row", primaryAction: itemPrimaryAction(feat, actor, commands, status, scope), depth: Math.min(3, Math.max(0, Number(feat.depth) || 0)), header: [
+        return itemRow({ item: feat, actor, commands, scope, extraDetails: itemRuleControls(feat, actor, commands, scope), className: "ve-pf2e-feat-row", primaryAction: itemPrimaryAction(feat, actor, commands, scope), depth: Math.min(3, Math.max(0, Number(feat.depth) || 0)), header: [
           node("small", { className: "ve-pf2e-feat-level", text: feat.levelLabel ?? "" }), itemArt(feat), node("strong", { className: "ve-pf2e-feat-name", text: feat.name })
         ], actions: [actionButton(commands, "Post to chat", "fa-comment-dots", () => issueCommand({ actor, command: ACTOR_COMMANDS.USE_ITEM,
-          payload: { itemId: feat.id, kind: "item" }, commands, status, scope, actionSession: true }), scope, !canItem(actor, feat.id))] });
+          payload: { itemId: feat.id, kind: "item" }, commands, scope, actionSession: true }), scope, !canItem(actor, feat.id))] });
       }) })
     ] })), !groups.some(group => group.entries?.length) ? empty(commands) : null
   ] });
 }
 
 // Group related feats or features into a reusable list presentation.
-function featureList(features, actor, commands, status, scope, title) {
+function featureList(features, actor, commands, scope, title) {
   return node("section", { className: "ve-sheet-card ve-pf2e-features", children: [sectionHeading(commands, title, "fa-book-sparkles"), features.length ? node("div", {
-    className: "ve-pf2e-feature-list", children: features.map(feature => featureRow(feature, actor, commands, status, scope))
+    className: "ve-pf2e-feature-list", children: features.map(feature => featureRow(feature, actor, commands, scope))
   }) : empty(commands)] });
 }
 
 // Present one PF2e feature with its native action and detail affordances.
-function featureRow(feature, actor, commands, status, scope) {
-  return compactActionRow(feature, actor, commands, status, scope);
+function featureRow(feature, actor, commands, scope) {
+  return compactActionRow(feature, actor, commands, scope);
 }
 
 // Load enriched biography content and discard it if the Actor or pane scope changes.
-function biographyPanel(biography, actor, commands, status, scope, shell) {
+function biographyPanel(biography, actor, commands, scope, shell) {
   const context = shell.activePanelContext;
   const enriched = node("div", { className: "ve-pf2e-biography-enriched is-loading", attrs: { "aria-busy": "true", "data-actor-source-uuid": actor.sourceUuid } });
   void commands.readCharacterBiography(actor.sourceUuid).then(result => {
@@ -1716,9 +1741,9 @@ function biographyPanel(biography, actor, commands, status, scope, shell) {
     if (scope.disposed) return;
     enriched.classList.remove("is-loading");
     enriched.removeAttribute("aria-busy");
-    enriched.replaceChildren(node("p", { className: "ve-sheet-empty", text: error?.message ?? text(commands, "Biography is unavailable.", "VEMOBILE.PF2E.Character.BiographyUnavailable") }));
-    status.classList.add("is-error");
-    status.textContent = error?.message ?? text(commands, "Biography is unavailable.", "VEMOBILE.PF2E.Character.BiographyUnavailable");
+    const message = characterErrorMessage(commands, error, text(commands, "Biography is unavailable.", "VEMOBILE.PF2E.Character.BiographyUnavailable"), { readOnly: true });
+    enriched.replaceChildren(node("p", { className: "ve-sheet-empty", text: message }));
+    notifyCharacter(commands, actor.sourceUuid, message, "error");
   });
   return node("section", { className: "ve-pf2e-biography", children: [enriched] });
 }
@@ -1767,7 +1792,6 @@ function openConditionsOverlay(shell, ownerScope, overlayHost) {
   const scope = ownerScope.child("pf2e-conditions-overlay");
   const commands = shell.conditionCommands;
   const title = text(commands, "Conditions", "VEMOBILE.PF2E.Character.Section.Conditions");
-  const status = node("p", { className: "ve-action-status", attrs: { role: "status", "aria-live": "polite" } });
   const body = node("div", { className: "ve-pf2e-condition-options" });
   const modal = { sourceUuid: shell.actor.sourceUuid, pending: new Set(), rowScope: null };
   shell.conditionModal = modal;
@@ -1778,7 +1802,7 @@ function openConditionsOverlay(shell, ownerScope, overlayHost) {
   };
   const close = node("button", { attrs: { type: "button", "aria-label": text(commands, "Close", "VEMOBILE.Controls.Close") }, children: [icon("fa-xmark")], on: { click: () => modal.close() } }, scope);
   const dialog = node("section", { className: "ve-pf2e-conditions-dialog", attrs: { role: "dialog", "aria-modal": "true", "aria-label": title }, children: [
-    node("header", { children: [icon("fa-heart-pulse"), node("h2", { text: title }), close] }), status, body
+    node("header", { children: [icon("fa-heart-pulse"), node("h2", { text: title }), close] }), body
   ] });
   const layer = node("div", { className: "ve-pf2e-conditions-layer", children: [dialog], on: { click: event => { if (event.target === layer) modal.close(); } } }, scope);
   scope.own(() => { layer.remove(); if (shell.conditionModal === modal) shell.conditionModal = null; });
@@ -1804,7 +1828,7 @@ function openConditionsOverlay(shell, ownerScope, overlayHost) {
     const firstInactive = choices.findIndex(condition => !condition.active);
     body.replaceChildren(...choices.flatMap((condition, index) => [
       ...(index === firstInactive && index > 0 ? [node("div", { className: "ve-pf2e-condition-divider", attrs: { role: "separator" } })] : []),
-      conditionOverlayRow(condition, shell, modal, status, modal.rowScope, scope)
+      conditionOverlayRow(condition, shell, modal, modal.rowScope, scope)
     ]));
     body.scrollTop = scroll;
     modal.focusKey = focusedKey || modal.focusKey;
@@ -1816,7 +1840,7 @@ function openConditionsOverlay(shell, ownerScope, overlayHost) {
 }
 
 // Render one condition row and recheck Actor context before changing its value.
-function conditionOverlayRow(condition, shell, modal, status, rowScope, scope) {
+function conditionOverlayRow(condition, shell, modal, rowScope, scope) {
   const commands = shell.conditionCommands;
   const editable = can(shell.actor, "conditions") && !condition.locked && !modal.pending.has(condition.slug);
   // Recheck this exact character's current condition and lock its row while the native increase/decrease executes.
@@ -1826,7 +1850,7 @@ function conditionOverlayRow(condition, shell, modal, status, rowScope, scope) {
     if (!current || current.locked || (direction < 0 && !current.active)) return;
     modal.pending.add(condition.slug);
     modal.render();
-    try { await issueCommand({ actor: shell.actor, command: ACTOR_COMMANDS.SET_PF2E_CONDITION, payload: { conditionId: condition.slug, direction }, commands: shell.conditionCommands, status, scope }); }
+    try { await issueCommand({ actor: shell.actor, command: ACTOR_COMMANDS.SET_PF2E_CONDITION, payload: { conditionId: condition.slug, direction }, commands: shell.conditionCommands, scope }); }
     finally { modal.pending.delete(condition.slug); if (!scope.disposed) modal.render(); }
   };
   // Build one accessible condition adjustment button with the row's current permission and pending-state checks.
@@ -1873,11 +1897,9 @@ function rollButton(label, meta, onClick, scope, enabled) {
 }
 
 // Revalidate Actor/session ownership around an async action and show its result safely.
-async function issueCommand({ button, actor, command, payload, commands, status, scope, resultLabel = "", actionSession = false, isEnabled = null }) {
+async function issueCommand({ button, actor, command, payload, commands, scope, resultLabel = "", actionSession = false, isEnabled = null }) {
   if (scope.disposed || button?.disabled) return;
   if (button) { button.disabled = true; button.classList.add("is-pending"); button.setAttribute("aria-busy", "true"); }
-  status.classList.remove("is-error", "is-success");
-  status.textContent = "";
   let rollId = null;
   let openedRootId = "";
   // A roll popup or resource publication replaces the pane during its own
@@ -1895,7 +1917,6 @@ async function issueCommand({ button, actor, command, payload, commands, status,
     if (resultLabel) rollId = commands.showRollResult({ label: resultLabel, total: 0, pending: true });
     const output = await commands.execute(command, { actorSourceUuid: actor.sourceUuid, ...payload }, actionSession ? { onActionSession } : {});
     if (!current()) return;
-    status.textContent = "";
     if (output?.actionSession) onActionSession(output.actionSession);
     else if (output?.rollResult && resultLabel) {
       if (rollId) commands.updateRollResult(rollId, { label: resultLabel, ...output.rollResult, pending: false });
@@ -1903,21 +1924,47 @@ async function issueCommand({ button, actor, command, payload, commands, status,
     } else if (rollId) commands.dismissRollResult(rollId);
   } catch (error) {
     if (rollId) commands.dismissRollResult(rollId);
-    if (current()) { status.classList.add("is-error"); status.textContent = error?.message ?? text(commands, "That action could not be completed.", "VEMOBILE.PF2E.Character.ActionFailed"); }
+    if (current()) notifyCharacter(commands, actor.sourceUuid, characterErrorMessage(commands, error, actionFailureText(commands, command), { readOnly: command === ACTOR_COMMANDS.OPEN_ITEM_SHEET }), "error");
   } finally {
     if (button && !scope.disposed) { button.disabled = isEnabled ? !isEnabled() : false; button.classList.remove("is-pending"); button.removeAttribute("aria-busy"); }
   }
 }
 
+// Name the affected PF2e section without inferring meaning from exception text.
+function actionFailureText(commands, command) {
+  if ([ACTOR_COMMANDS.ROLL_STATISTIC, ACTOR_COMMANDS.ROLL_PF2E_RECOVERY, ACTOR_COMMANDS.ROLL_INITIATIVE, ACTOR_COMMANDS.ROLL_SAVE, ACTOR_COMMANDS.ROLL_SKILL].includes(command)) return text(commands, "Foundry could not complete that roll.", "VEMOBILE.Character.Presenter.FoundryCouldNotCompleteThatRoll");
+  if (command === ACTOR_COMMANDS.USE_ITEM) return text(commands, "The item could not be used.", "VEMOBILE.Character.Errors.ItemUseFailed");
+  if (command === ACTOR_COMMANDS.TAKE_REST) return text(commands, "The rest could not be completed.", "VEMOBILE.Character.Errors.RestFailed");
+  if (command === ACTOR_COMMANDS.USE_PF2E_MOVEMENT_ACTION) return text(commands, "The movement action could not be completed.", "VEMOBILE.Character.Errors.MovementFailed");
+  if (command === ACTOR_COMMANDS.EDIT_HIT_POINTS) return text(commands, "Foundry could not update these hit points.", "VEMOBILE.Character.Presenter.FoundryCouldNotUpdateTheseHitPoints");
+  const sections = {
+    [ACTOR_COMMANDS.SET_PF2E_RESOURCE]: ["VEMOBILE.PF2E.Character.Section.Resources", "Resources"],
+    [ACTOR_COMMANDS.SET_PF2E_CONDITION]: ["VEMOBILE.PF2E.Character.Section.Conditions", "Conditions"],
+    [ACTOR_COMMANDS.EDIT_PF2E_INVENTORY]: ["VEMOBILE.PF2E.Character.Section.Inventory", "Inventory"],
+    [ACTOR_COMMANDS.SET_ITEM_EQUIPPED]: ["VEMOBILE.PF2E.Character.Section.Inventory", "Inventory"],
+    [ACTOR_COMMANDS.SET_ITEM_ATTUNED]: ["VEMOBILE.PF2E.Character.Section.Inventory", "Inventory"],
+    [ACTOR_COMMANDS.EDIT_PF2E_EFFECT]: ["VEMOBILE.PF2E.Character.Section.Conditions", "Conditions"],
+    [ACTOR_COMMANDS.EDIT_PF2E_AC_MODIFIER]: ["VEMOBILE.PF2E.Character.ArmorClass", "Armor Class"],
+    [ACTOR_COMMANDS.EDIT_PF2E_SHIELD]: ["VEMOBILE.PF2E.Character.Shield.Tab", "Shield"],
+    [ACTOR_COMMANDS.EDIT_PF2E_DEFENSES]: ["VEMOBILE.PF2E.Character.OverviewDefenses", "Defenses"],
+    [ACTOR_COMMANDS.EDIT_PF2E_SPELLS]: ["VEMOBILE.PF2E.Character.Tab.Spells", "Spellcasting"],
+    [ACTOR_COMMANDS.EDIT_PF2E_SPELL_PREPARATION]: ["VEMOBILE.PF2E.Character.Tab.Spells", "Spellcasting"],
+    [ACTOR_COMMANDS.EDIT_PF2E_PLAY]: ["VEMOBILE.PF2E.Character.Tab.Actions", "Actions"]
+  };
+  if (command === ACTOR_COMMANDS.OPEN_ITEM_SHEET) return text(commands, "The item details could not be loaded.", "VEMOBILE.Character.Errors.ItemLoadFailed");
+  const section = sections[command];
+  return section ? localizedText(commands.localize, "VEMOBILE.Character.Errors.UpdateFailed", "Could not update {label}.", { label: text(commands, section[1], section[0]) })
+    : text(commands, "That action could not be completed.", "VEMOBILE.PF2E.Character.ActionFailed");
+}
+
 // Run one named command and present failures only while its pane remains mounted.
-function execute(commands, command, actor, payload, status, scope) {
+function execute(commands, command, actor, payload, scope) {
   const details = command === ACTOR_COMMANDS.OPEN_ITEM_SHEET && commands.openPf2eItemDetails;
   const result = details ? details({ actorSourceUuid: actor.sourceUuid, ...payload })
     : commands.execute(command, { actorSourceUuid: actor.sourceUuid, ...payload });
   return Promise.resolve(result).catch(error => {
     if (!scope.disposed) {
-      status.classList.add("is-error");
-      status.textContent = error?.message ?? text(commands, "That action could not be completed.", "VEMOBILE.PF2E.Character.ActionFailed");
+      notifyCharacter(commands, actor.sourceUuid, characterErrorMessage(commands, error, actionFailureText(commands, command), { readOnly: command === ACTOR_COMMANDS.OPEN_ITEM_SHEET }), "error");
     }
   });
 }

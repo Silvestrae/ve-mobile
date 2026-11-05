@@ -12,6 +12,8 @@ import { editPlayControl } from "./play-controls.mjs";
 import { useSpellReference } from "./spell-reference-actions.mjs";
 import { setPf2eResource, setPf2eItemLimit } from "./resource-controls.mjs";
 import { editPersistentDamage } from "./persistent-damage.mjs";
+import { editCrafting } from "./crafting-actions.mjs";
+import { editSociety } from "./society-controls.mjs";
 
 // Create a localized command error with the supplied code and message key.
 const fail = (code, key, fallback) => { throw new CommandError(code, localizeFoundry(`VEMOBILE.PF2E.${key}`, fallback)); };
@@ -268,6 +270,8 @@ const handlers = Object.freeze({
   [ACTOR_COMMANDS.EDIT_PF2E_INVENTORY]: (actor, payload, context) => payload.operation === "limit" ? setPf2eItemLimit(actor, payload, context) : editInventory(actor, payload, context),
   [ACTOR_COMMANDS.EDIT_PF2E_EFFECT]: editEffect,
   [ACTOR_COMMANDS.EDIT_PF2E_SPELLS]: (actor,payload,context) => payload.operation === "search" ? readSpellCatalog(actor,payload,context) : editSpellManagement(actor,payload,context),
+  [ACTOR_COMMANDS.EDIT_PF2E_CRAFTING]: editCrafting,
+  [ACTOR_COMMANDS.EDIT_PF2E_SOCIETY]: editSociety,
   [ACTOR_COMMANDS.ROLL_SAVE]: (actor, payload) => {
     if (!["fortitude", "reflex", "will"].includes(payload.ability)) invalid();
     return statistic(actor, payload.ability).check.roll({});
@@ -323,8 +327,10 @@ export const pf2eActorActions = Object.freeze({
         && Number.isSafeInteger(actor.system?.details?.xp?.value) && actor.system.details.xp.value >= 0,
       prepareSpells: owner,
       manageSpells: owner, playControls: owner,
+      crafting: owner && actor.type === "character" && typeof actor.crafting?.getFormulas === "function",
       conditions: owner && typeof actor.increaseCondition === "function", resources: owner && typeof actor.updateResource === "function",
       editPersistentDamage: owner && actor.type === "character" && typeof actor.createEmbeddedDocuments === "function",
+      editSociety: owner && actor.type === "character" && typeof actor.update === "function",
       nativeEditor: owner, rest: owner && actor.type === "character", currency: owner && Boolean(actor.inventory),
       editBiography: owner && actor.type === "character" && typeof actor.update === "function",
       editArmorClass: owner && ["character", "npc"].includes(actor.type) && typeof actor.addCustomModifier === "function" && typeof actor.removeCustomModifier === "function",
@@ -337,5 +343,9 @@ export const pf2eActorActions = Object.freeze({
     const item = resolvePf2eItem(actor, payload.itemId);
     return Object.freeze({ itemId: item.id, name: String(item.name), activities: [] });
   },
-  resultFields(name,output) { return name === ACTOR_COMMANDS.EDIT_PF2E_SPELLS && Array.isArray(output?.spells) ? {catalog:output} : {}; }
+  resultFields(name,output) {
+    if (name === ACTOR_COMMANDS.EDIT_PF2E_SPELLS && Array.isArray(output?.spells)) return { catalog: output };
+    if (name === ACTOR_COMMANDS.EDIT_PF2E_SOCIETY && Array.isArray(output?.boons)) return { catalog: output };
+    return {};
+  }
 });

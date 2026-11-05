@@ -416,6 +416,7 @@ if (isGamePage) {
     getConnectionGeneration: () => connectionGeneration.current });
   const biographyGateway = systemIntegration.services.biography({ getConnectionGeneration: () => connectionGeneration.current });
   const itemDetailsGateway = systemIntegration.services.itemDetails?.({ getConnectionGeneration: () => connectionGeneration.current }) ?? null;
+  const craftingGateway = systemIntegration.services.crafting?.({ getConnectionGeneration: () => connectionGeneration.current }) ?? null;
   lowMemoryGateway = createLowMemoryCanvasGateway({ getGraphicsPolicy: baseGraphicsPolicy, mobileAuthority: mobilePerformanceAuthority, diagnostics });
   durableProfileHandoff = createDurableProfileHandoff({ gateway: lowMemoryGateway, mobileAuthority: mobilePerformanceAuthority, diagnostics });
   mobileAssetGateway = createFoundryMobileAssetGateway({
@@ -624,6 +625,7 @@ if (isGamePage) {
     actorEditorGateway,
     biographyGateway,
     itemDetailsGateway,
+    craftingGateway,
     combatGateway,
     cameraIntents,
     authoritativeGateway,
