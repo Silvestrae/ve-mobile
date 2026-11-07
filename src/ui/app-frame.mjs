@@ -9,6 +9,7 @@ import { renderSettings } from "../features/settings/presenter.mjs";
 import { createCombatCarouselUiState, renderCombat, renderGmCombatControls } from "../features/combat/presenter.mjs";
 import { sheetTabIcon } from "../features/characters/sheet-icons.mjs";
 import { resolveCharacterThemeProfile } from "../kernel/character-theme.mjs";
+import { DEFAULT_HEADER_ARTWORK_OPACITY } from "../kernel/header-banner.mjs";
 import { createCustomThemePaletteResolver } from "../kernel/custom-theme.mjs";
 import { actionResultsDeferred, renderActionSessionModal } from "./action-session-modal.mjs";
 import { createSceneChoiceTransition } from "./scene-choice-transition.mjs";
@@ -366,8 +367,8 @@ export function createAppFrame({ store, commands, policy, scope, mobileBackGatew
     root.dataset.sceneChooser = state.sceneChooserOpen ? "open" : "closed";
     root.dataset.characterTheme = characterTheme;
     root.dataset.characterThemeBlend = themeProfile.multiclass ? "multiclass" : "single";
-    const artworkOpacity = Number(settings.headerArtworkOpacity);
-    root.style.setProperty("--ve-class-art-opacity", String(Number.isFinite(artworkOpacity) ? Math.max(0, Math.min(1, artworkOpacity)) : 1));
+    const artworkOpacity = Number(settings.headerArtworkOpacity ?? DEFAULT_HEADER_ARTWORK_OPACITY);
+    root.style.setProperty("--ve-class-art-opacity", String(Number.isFinite(artworkOpacity) ? Math.max(0, Math.min(1, artworkOpacity)) : DEFAULT_HEADER_ARTWORK_OPACITY));
     applyThemeBlend(root, themeProfile);
     root.classList.toggle("ve-has-roll-result", Boolean(state.rollResult));
     root.classList.toggle("ve-has-action-session", Boolean(state.actionSession));

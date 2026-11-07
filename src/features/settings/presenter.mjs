@@ -10,6 +10,7 @@ import {
 } from "../../kernel/mobile-asset-optimizer-model.mjs";
 import { memoryProfilePolicy, resolvedProfileSettings } from "../../kernel/memory-profile-model.mjs";
 import { localizedNumber, localizedText } from "../../ui/localized-text.mjs";
+import { renderCustomHeaderSettings } from "./custom-header.mjs";
 
 // Resolve the shared VE settings UI text namespace.
 const uiText = (commands, key, fallback, data) => localizedText(commands?.localize, `VEMOBILE.Settings.UI.${key}`, fallback, data);
@@ -296,12 +297,16 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
         node("div", { className: "ve-settings-groups", children: groups.map((group) => {
           // Render setting fields with shared status, reload handling, and color visibility.
           const rowsFor = (groupFields) => groupFields.flatMap((field) => {
+            const customHeader = field.key === "headerArtwork"
+              ? renderCustomHeaderSettings(commands, scope, field.value === "custom")
+              : null;
             const row = settingField(field, commands, status, scope, reloadPrompt, {
               detail: field.key === "joystickSide" ? joystickDetail : field.key === "graphicsSafety" ? graphicsDetail : field.key === "diceRendering" ? diceDetail : null,
               // Refresh dependent colour/layout controls only after the corresponding preference has saved.
               onSaved: result => {
                 if (field.key === "colorScheme") colourScheme = result.value;
                 if (field.key === "customThemeThirdEnabled") thirdColourEnabled = result.value === true;
+                if (field.key === "headerArtwork") customHeader?.setVisible(result.value === "custom");
                 syncCustomColourRows();
                 if (["joystickSide", "mode", "graphicsSafety", "diceRendering"].includes(field.key)) updateJoystickDetail(commands.readPresentationPreferences());
               }
@@ -310,9 +315,20 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
               customColourRows.push([field.key, row]);
               syncCustomColourRows();
             }
+            if (customHeader) return [row, customHeader.element];
             return field.key === "mode" ? [row, deviceInfo] : [row];
           });
           let children = rowsFor(group.fields);
+          if (group.id === "appearance") children.push(node("div", { className: "ve-setting", children: [
+            node("a", {
+              text: localizedText(commands.localize, "VEMOBILE.Settings.UI.HeaderArtworkCredits", "Header artwork credits"),
+              attrs: {
+                href: new URL("../../../assets/header-banners/credits.html", import.meta.url).href,
+                target: "_blank",
+                rel: "noopener"
+              }
+            })
+          ] }));
           if (group.id === "device" && pwaNamePrompt) children.push(renderPwaInstallSettings(commands, scope, pwaNamePrompt));
           if (group.id === "performance") {
             // Select this category's fields for the requested settings subsection.

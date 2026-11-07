@@ -1,3 +1,4 @@
+import { loadCustomHeaderArtwork } from "../../../../ui/custom-header-artwork.mjs";
 import { openItemDetails, syncItemDetails } from "./item-details.mjs";
 import { openPersistentDamageDialog, syncPersistentDamageDialog } from "./persistent-damage-dialog.mjs";
 import { openSpellPreparation } from "./spell-preparation.mjs";
@@ -20,6 +21,8 @@ import { renderRollResultOverlay } from "../../../../ui/roll-result-overlay.mjs"
 import { renderImageViewer } from "../../../../ui/image-viewer.mjs";
 import { resolveCharacterTheme } from "../../../../kernel/character-theme.mjs";
 import { resolvePf2eHeaderBanner } from "../../../../kernel/pf2e-class-appearance.mjs";
+import { DEFAULT_HEADER_ARTWORK } from "../../../../kernel/header-banner.mjs";
+import { applyBannerArtwork } from "../../../../ui/header-banner-artwork.mjs";
 
 const TABS = Object.freeze([
   ["overview", "fa-address-card", "Character", "PF2E.TabCharacterLabel"],
@@ -348,14 +351,20 @@ function syncHeader(shell, { actor, actors, commands, ownerScope, overlayHost })
   }
   updateHeaderHealth(shell, actor, commands);
   updateHeaderVitals(shell, actor, commands);
-  const artwork = settings.headerArtwork ?? "automatic";
-  const bannerSignature = [actor.sourceUuid, artwork, actor.type, identity.classSlug, identity.ancestrySlug, identity.ancestry].join("|");
+  const artwork = settings.headerArtwork ?? DEFAULT_HEADER_ARTWORK;
+  // The retained header refreshes when the active mode's seed or saved image changes.
+  const customHeader = settings.customHeader;
+  const customPath = customHeader?.scope === "user" ? customHeader.image : actor.header?.customImage;
+  const bannerSignature = JSON.stringify([actor.sourceUuid, artwork, actor.type, identity.classSlug,
+    identity.ancestrySlug, identity.ancestry, artwork === "automatic" ? actor.name : null,
+    artwork === "custom" ? customHeader?.scope : null, artwork === "custom" ? customPath : null]);
   if (shell.bannerSignature !== bannerSignature) {
     shell.bannerScope?.dispose();
     shell.bannerScope = ownerScope.child("pf2e-character-banner");
     shell.bannerSignature = bannerSignature;
-    const resolution = resolvePf2eHeaderBanner(actor, artwork);
-    loadPf2eBanner(headerRefs.hero, resolution.candidates, shell.bannerScope);
+    const resolution = resolvePf2eHeaderBanner(actor, artwork, customHeader);
+    if (resolution.choice === "custom") loadCustomHeaderArtwork(headerRefs.hero, resolution.candidates, shell.bannerScope);
+    else loadPf2eBanner(headerRefs.hero, resolution.candidates, shell.bannerScope);
   }
   if (headerRefs.selector.parentElement !== shell.heading) shell.heading.append(headerRefs.selector);
 }
@@ -700,8 +709,7 @@ function loadPf2eBanner(header, candidates, scope) {
     const image = new Image();
     image.onload = () => {
       if (cancelled) return;
-      header.style?.setProperty("--ve-class-art", `url("${candidate.url}")`);
-      header.dataset.bannerCatalogue = "true";
+      applyBannerArtwork(header, candidate, image, scope);
     };
     image.onerror = () => tryCandidate(index + 1);
     image.src = candidate.url;

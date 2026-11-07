@@ -1,3 +1,4 @@
+import { readCustomHeaderImage } from "../../custom-header-image.mjs";
 import { pf2eClassThemeKey } from "../../../kernel/pf2e-class-appearance.mjs";
 import { localizeFoundry } from "../../localization.mjs";
 import { customAcModifiers } from "./character-edits.mjs";
@@ -30,7 +31,7 @@ export function createActorDirectoryRecord(actor) {
     themeClassKeys: [actorThemeKey(actor, classes)],
     sort: finite(actor?.sort),
     folderPath: folderPath(actor),
-    header: { labels: { level: localizeFoundry("PF2E.LevelLabel", "Level") } },
+    header: { customImage: readCustomHeaderImage(actor), labels: { level: localizeFoundry("PF2E.LevelLabel", "Level") } },
     level,
     classes: classes.map((item) => ({
       id: string(item?.id),
@@ -104,7 +105,7 @@ export function createActorViewRecord(actor, user, capabilitiesForActor = () => 
     sort: finite(actor?.sort),
     folderPath: folderPath(actor),
     level: actorLevel(actor, system, classes),
-    header: { labels: { level: localizeFoundry("PF2E.LevelLabel", "Level") } },
+    header: { customImage: readCustomHeaderImage(actor), labels: { level: localizeFoundry("PF2E.LevelLabel", "Level") } },
     classes: classes.map((item) => ({ id: string(item?.id), name: string(item?.name), levels: finite(item?.system?.levels ?? item?.system?.level?.value) })),
     npc: actor?.type === "npc" ? npcIdentity(system) : null,
     hp: hpRecord,

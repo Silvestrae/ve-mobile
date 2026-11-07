@@ -1,3 +1,4 @@
+import { readCustomHeaderImage } from "../../custom-header-image.mjs";
 import { localizedNumber } from "../../../ui/localized-text.mjs";
 import { localizeFoundry } from "../../localization.mjs";
 import { characterHeaderRecord } from "./character-header.mjs";
@@ -106,7 +107,7 @@ export function createActorDirectoryRecord(actor) {
     type: String(actor?.type ?? ""),
     sort: number(actor?.sort),
     folderPath: actorFolderPath(actor),
-    header: Object.freeze({ labels: Object.freeze({ level: localizeFoundry("VEMOBILE.Character.Header.level", "Level") }) }),
+    header: Object.freeze({ customImage: readCustomHeaderImage(actor), labels: Object.freeze({ level: localizeFoundry("VEMOBILE.Character.Header.level", "Level") }) }),
     level,
     classes: Object.freeze(classes.map((item) => Object.freeze({ id: String(item.id ?? ""), name: String(item.name ?? ""), levels: number(item.system?.levels) }))),
     npc: actor?.type === "npc" ? Object.freeze(npcIdentityRecord(system)) : null
@@ -150,7 +151,7 @@ export function createActorViewRecord(actor, user, capabilitiesForActor = () => 
     name: String(actor.name ?? localizeFoundry("VEMOBILE.Character.ActorView.UnknownActor", "Unknown actor")),
     img: actor.img ?? "",
     type: actor.type,
-    header: {
+    header: { customImage: readCustomHeaderImage(actor),
       ...characterHeaderRecord(actor),
       bannerClassification: normalizeBannerClassification(system.details?.type),
       bannerSpecies: (typeof system.details?.race === "string" ? system.details.race : system.details?.race?.name) || originName(items, ["race", "species"])
@@ -224,7 +225,7 @@ function createCollectiveViewRecord(actor, user, capabilitiesForActor) {
     id: String(actor.id ?? ""), sourceUuid: String(actor.uuid ?? `Actor.${actor.id}`), type: actor.type,
     name: String(actor.name ?? ""), img: String(actor.img ?? ""), sort: number(actor.sort), folderPath: actorFolderPath(actor),
     themeClassKey: "neutral", themeClassKeys: ["neutral"], classes: [],
-    header: { bannerClassification: null, bannerSpecies: "" },
+    header: { customImage: readCustomHeaderImage(actor), bannerClassification: null, bannerSpecies: "" },
     collective: collectiveActorData(actor, user), capabilities: capabilitiesForActor(actor, user),
     hp: actor.type === "vehicle" ? collectiveHealth(system.attributes?.hp) : null,
     abilities: actor.type === "vehicle" ? abilityRecords(system.abilities) : [],

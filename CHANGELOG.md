@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 (2026-11-08)
+
+- **Foundry VTT AI Content Policy compliance.** Replaced the AI-generated character header art with credited illustrations. Paused German, Spanish, French and Italian until a native speaker reviews each localisation file.
+- **Character headers.** Choose Artwork, Procedural SVG, Custom or Off. Use your own image for one actor or across all actors on your account.
+- **README.** Added new D&D5e and PF2e screenshots, artist credits and a phone demo.
+
 ## 1.1.3 — 2026-11-05
 
 - **Added Russian language support:** VE Mobile now includes Russian alongside its six existing languages. Original Russian translation provided and verified by [Mokudgo](https://github.com/Mokudgo).

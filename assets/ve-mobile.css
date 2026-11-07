@@ -3850,8 +3850,8 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
   background-image: var(--ve-class-art);
   background-position: center;
   background-repeat: no-repeat;
-  background-size: cover;
-  opacity: var(--ve-class-art-opacity, 1);
+  background-size: var(--ve-banner-size, cover);
+  opacity: var(--ve-class-art-opacity, 0.75);
   mask-image: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / 0.16) 30%, #000 100%);
   mask-repeat: no-repeat;
   mask-size: 100% 100%;
@@ -3863,7 +3863,7 @@ body.ve-mobile-running.ve-mobile-scene-active.ve-mobile-native-measurement-activ
 }
 
 .ve-sheet-identity[data-banner-catalogue="true"]::after {
-  background-position: right center;
+  background-position: var(--ve-banner-position, right center);
 }
 
 .ve-mobile-app[data-theme="light"] .ve-sheet-identity[data-class-art]::after {
@@ -9506,6 +9506,26 @@ details.ve-action-session-compact-result {
   color: var(--ve-red-bright) !important;
   font-weight: 700;
 }
+
+.ve-custom-header-settings {
+  min-width: 0;
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--ve-border);
+  background: color-mix(in srgb, var(--ve-surface-up) 42%, transparent);
+}
+
+.ve-custom-header-settings[hidden] { display: none !important; }
+.ve-custom-header-settings > p { margin: 0; }
+.ve-custom-header-target,
+.ve-custom-header-saved { min-width: 0; display: grid; grid-template-columns: minmax(82px, auto) minmax(0, 1fr); gap: 8px; color: var(--ve-subtle); font-size: 0.74rem; }
+.ve-custom-header-actor { min-width: 0; overflow-wrap: anywhere; color: var(--ve-text); }
+.ve-custom-header-path { min-width: 0; overflow-wrap: anywhere; color: var(--ve-text); font: inherit; user-select: text; }
+.ve-custom-header-guidance,
+.ve-custom-header-status { color: var(--ve-subtle); font-size: 0.72rem; line-height: 1.4; }
+.ve-custom-header-button { width: fit-content; max-width: 100%; }
+.ve-custom-header-button:disabled { color: var(--ve-subtle); border-color: var(--ve-border); background: var(--ve-surface); opacity: 0.68; }
 
 .ve-module-overlays {
   padding: 14px;

@@ -1,5 +1,11 @@
-// Resolve catalogue artwork from plain character records; image loading belongs to the presenters.
-import { HEADER_BANNERS, HEADER_BANNER_BY_ID } from "./header-banner-catalogue.mjs";
+// Resolve artwork from plain character records. The presenters own image loading.
+import { HEADER_BANNERS } from "./header-banner-catalogue.mjs";
+import { seededClassCandidate, seededHabitatCandidate } from "./seeded-class-banner.mjs";
+import { customHeaderImagePath } from "./custom-header-image.mjs";
+
+export const HEADER_ARTWORK_CHOICES = Object.freeze(["artwork", "automatic", "custom", "off"]);
+export const DEFAULT_HEADER_ARTWORK = "artwork";
+export const DEFAULT_HEADER_ARTWORK_OPACITY = 0.75;
 
 // Match catalogue names consistently without changing their displayed spelling.
 const key = (value) => String(value ?? "").trim().toLocaleLowerCase("en");
@@ -7,7 +13,6 @@ const byType = new Map(HEADER_BANNERS.filter((entry) => entry.kind === "creature
 const byClass = new Map(HEADER_BANNERS.filter((entry) => entry.kind === "class").map((entry) => [key(entry.label), entry]));
 const speciesAliases = Object.freeze({ "high elf": "elf", "wood elf": "elf", "dark elf": "elf", drow: "elf", "hill dwarf": "dwarf", "mountain dwarf": "dwarf", "rock gnome": "gnome", "forest gnome": "gnome" });
 const humanoidSpecies = new Set(["elf", "dwarf", "gnome", "human", "orc", "halfling", "dragonborn", "tiefling", "gnoll", "kobold", "lizardfolk", "sahuagin"]);
-const heroicIds = Object.freeze({ heroic1: "heroic-starlit-legacy", heroic2: "heroic-stormbound-resolve", heroic3: "heroic-embers-of-victory", heroic4: "heroic-dawn-of-adventure" });
 const heroicPool = Object.freeze(HEADER_BANNERS.filter((entry) => entry.kind === "heroic-general"));
 
 /** D&D5e 5.3 uses {value, subtype}; older actors may retain a type string. */
@@ -34,45 +39,54 @@ export function normalizeBannerSpecies(species, classification = {}) {
   return Object.freeze({ parentType, tags: Object.freeze(tag ? [tag] : []) });
 }
 
-// Fall back to Automatic when an old or invalid preference reaches the resolver.
+// Keep valid saved choices, including Automatic for Procedural SVG. Use Artwork for retired or missing values.
 export function normalizedHeaderArtwork(value) {
   const choice = key(value);
-  return ["automatic", "race", "heroic1", "heroic2", "heroic3", "heroic4", "off"].includes(choice) ? choice : "automatic";
+  return HEADER_ARTWORK_CHOICES.includes(choice) ? choice : DEFAULT_HEADER_ARTWORK;
 }
 
 // Return ordered image candidates for the chosen preference; Off produces no image requests.
-export function resolveHeaderBanner(actor, headerArtwork = "automatic") {
+export function resolveHeaderBanner(actor, headerArtwork = DEFAULT_HEADER_ARTWORK, customHeader = null) {
   const choice = normalizedHeaderArtwork(headerArtwork);
-  const candidates = choice === "off" ? [] : heroicIds[choice]
-    ? [HEADER_BANNER_BY_ID.get(heroicIds[choice])]
-    : automaticBanners(actor, { ignoreClass: choice === "race" });
+  // User-wide Custom has priority only when explicitly selected. Empty paths
+  // in either scope intentionally have no catalogue or other-scope fallback.
+  if (choice === "custom") {
+    const url = customHeaderImagePath(customHeader?.scope === "user" ? customHeader.image : actor?.header?.customImage);
+    return Object.freeze({ choice, candidates: Object.freeze(url ? [Object.freeze({ id: "custom", url })] : []) });
+  }
+  const candidates = choice === "off" ? [] : automaticBanners(actor, { procedural: choice === "automatic" });
   return Object.freeze({ choice, candidates: Object.freeze(candidates) });
 }
 
 // Append stable heroic fallbacks after the actor's specific class, species or creature matches.
-export function automaticBanners(actor, { ignoreClass = false } = {}) {
-  const matched = classifiedBanners(actor, { ignoreClass });
+export function automaticBanners(actor, { procedural = true } = {}) {
+  const matched = classifiedBanners(actor, procedural);
   return Object.freeze(appendHeroicFallback(actor, matched));
 }
 
-// Prefer a character's first recognised class; NPCs use their exact type/tag classification.
-function classifiedBanners(actor, { ignoreClass = false } = {}) {
+// Use class scenes or a general adventurer scene for PCs. NPCs start with their habitat in procedural mode.
+function classifiedBanners(actor, procedural) {
   const classification = actor.header?.bannerClassification ?? {};
   const parentType = key(classification.parentType);
   const generic = byType.get(parentType);
   if (actor.type === "npc") {
     const tags = classification.tags ?? [];
     const exact = matchingTags(parentType, tags);
-    return [...exact, ...(generic ? [generic] : [])];
+    const candidates = [...exact, ...(generic ? [generic] : [])];
+    if (procedural) candidates.unshift(seededHabitatCandidate(parentType, actor.name) ?? seededHabitatCandidate("generic", actor.name));
+    return candidates;
   }
   if (actor.type !== "character") return [];
-  if (!ignoreClass) {
-    const matched = (actor.classes ?? []).map((entry) => byClass.get(key(entry.name))).find(Boolean);
-    if (matched) return [matched];
+  for (const entry of actor.classes ?? []) {
+    const classId = key(entry.name);
+    const matched = byClass.get(classId);
+    if (matched) return [procedural ? seededClassCandidate(matched, classId, actor.name) : matched];
   }
   const species = normalizeBannerSpecies(actor.header?.bannerSpecies ?? actor.species, classification);
   const exact = matchingTags(species.parentType, species.tags);
-  return [...exact, ...(generic ? [generic] : [])];
+  const candidates = [...exact, ...(generic ? [generic] : [])];
+  if (procedural) candidates.unshift(seededHabitatCandidate("generic", actor.name));
+  return candidates;
 }
 
 // Add each generic fallback once so a failed specific image still has somewhere to go.

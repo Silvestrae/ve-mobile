@@ -1,6 +1,8 @@
 import { COLOR_SCHEME_CHOICES } from "../kernel/character-theme.mjs";
 import { CUSTOM_THEME_DEFAULTS, normalizeCustomThemeColors, normalizeThemeColor } from "../kernel/custom-theme.mjs";
+import { DEFAULT_HEADER_ARTWORK, DEFAULT_HEADER_ARTWORK_OPACITY, HEADER_ARTWORK_CHOICES, normalizedHeaderArtwork } from "../kernel/header-banner.mjs";
 import { localizeFoundry } from "./localization.mjs";
+import { readCustomHeaderUserSettings } from "./custom-header-image.mjs";
 
 /** IDs and preference storage keys shared by Foundry-bound preference adapters. */
 export const MODULE_ID = "ve-mobile";
@@ -67,7 +69,7 @@ const CHOICES = Object.freeze({
   [KEYS.MODE]: Object.freeze(["auto", "phone", "tablet", "desktop"]),
   [KEYS.THEME]: Object.freeze(["system", "light", "dark"]),
   [KEYS.COLOR_SCHEME]: COLOR_SCHEME_CHOICES,
-  [KEYS.HEADER_ARTWORK]: Object.freeze(["automatic", "race", "heroic1", "heroic2", "heroic3", "heroic4", "off"]),
+  [KEYS.HEADER_ARTWORK]: HEADER_ARTWORK_CHOICES,
   [KEYS.QUICKBAR_ROWS]: Object.freeze(["1", "2"]),
   [KEYS.QUICKBAR_SOURCE]: Object.freeze(["character", "foundry"]),
   [KEYS.GRAPHICS_SAFETY]: Object.freeze(["auto", "strict", "balanced", "off"]),
@@ -89,7 +91,7 @@ const CHOICES = Object.freeze({
   [KEYS.LOGGING_LEVEL]: Object.freeze(["off", "error", "warn", "info", "debug"])
 });
 
-const DEFAULTS = Object.freeze({ mode: "auto", theme: "system", colorScheme: "class", customThemePrimary: CUSTOM_THEME_DEFAULTS.primary, customThemeSecondary: CUSTOM_THEME_DEFAULTS.secondary, customThemeThird: CUSTOM_THEME_DEFAULTS.third, customThemeThirdEnabled: false, headerArtwork: "automatic", headerArtworkOpacity: 1, quickbarEnabled: true, quickbarSource: "character", quickbarRows: "1", showActionSummaries: true, compactActionSummaries: false, graphicsSafety: "auto", diceRendering: "auto", mobileOptimizedAssets: "auto", lowMemoryCanvas: false, memoryProtectionProfile: "normal", memoryProtectionBehavior: "recommend", afterGraphicsFailure: "ask", sceneMemoryWarnings: true, fcsAutoSoftOverride: true, movementRepeatDelay: 0.5, recenterAfterMove: false, joystickSide: "follow", movementControl: "joystick", actionSceneReturn: "off", combatCarousel: true, keepScreenAwake: false, protectVeStyling: true, moduleOverlayVisibility: Object.freeze({}), moduleOverlayCatalog: Object.freeze({ scanned: false, entries: Object.freeze([]) }), moduleOverlayOrder: Object.freeze([]), moduleOverlayScale: Object.freeze({}), characterInventorySort: "manual", characterSpellSort: "manual", characterSpellFilter: "all", characterFeatureSort: "manual", characterFavouritesSort: "manual", characterEffectsSort: "manual", characterFavouritesSource: "core", loggingLevel: "warn", saveDiagnosticsToJournal: true });
+const DEFAULTS = Object.freeze({ mode: "auto", theme: "system", colorScheme: "class", customThemePrimary: CUSTOM_THEME_DEFAULTS.primary, customThemeSecondary: CUSTOM_THEME_DEFAULTS.secondary, customThemeThird: CUSTOM_THEME_DEFAULTS.third, customThemeThirdEnabled: false, headerArtwork: DEFAULT_HEADER_ARTWORK, headerArtworkOpacity: DEFAULT_HEADER_ARTWORK_OPACITY, quickbarEnabled: true, quickbarSource: "character", quickbarRows: "1", showActionSummaries: true, compactActionSummaries: false, graphicsSafety: "auto", diceRendering: "auto", mobileOptimizedAssets: "auto", lowMemoryCanvas: false, memoryProtectionProfile: "normal", memoryProtectionBehavior: "recommend", afterGraphicsFailure: "ask", sceneMemoryWarnings: true, fcsAutoSoftOverride: true, movementRepeatDelay: 0.5, recenterAfterMove: false, joystickSide: "follow", movementControl: "joystick", actionSceneReturn: "off", combatCarousel: true, keepScreenAwake: false, protectVeStyling: true, moduleOverlayVisibility: Object.freeze({}), moduleOverlayCatalog: Object.freeze({ scanned: false, entries: Object.freeze([]) }), moduleOverlayOrder: Object.freeze([]), moduleOverlayScale: Object.freeze({}), characterInventorySort: "manual", characterSpellSort: "manual", characterSpellFilter: "all", characterFeatureSort: "manual", characterFavouritesSort: "manual", characterEffectsSort: "manual", characterFavouritesSource: "core", loggingLevel: "warn", saveDiagnosticsToJournal: true });
 
 const CHARACTER_COLLECTION_SETTING_KEYS = Object.freeze({
   inventorySort: KEYS.CHARACTER_INVENTORY_SORT,
@@ -203,7 +205,7 @@ export function registerPreferences({
     config: true,
     type: Number,
     range: { min: 0, max: 1, step: 0.05 },
-    default: 1,
+    default: DEFAULTS.headerArtworkOpacity,
     onChange: changed(KEYS.HEADER_ARTWORK_OPACITY, onApplicationChange)
   });
 
@@ -655,9 +657,12 @@ export function registerPreferences({
   }
   syncBootstrapPreferences();
   const storedArtwork = readSetting(KEYS.HEADER_ARTWORK, DEFAULTS.headerArtwork);
-  if (isMobilePresentation() && typeof storedArtwork === "string" && !CHOICES[KEYS.HEADER_ARTWORK].includes(storedArtwork)) {
-    // One client-setting migration at registration; snapshots never write.
-    void Promise.resolve(game.settings.set(MODULE_ID, KEYS.HEADER_ARTWORK, DEFAULTS.headerArtwork)).catch((error) => {
+  const artworkChoice = normalizedHeaderArtwork(storedArtwork);
+  // Rewrite legacy client preferences only when native settings own the value.
+  // Force Client Settings can intercept writes. Its values are normalized on read.
+  if (isMobilePresentation() && !game.modules?.get?.("force-client-settings")?.active
+    && typeof storedArtwork === "string" && artworkChoice !== storedArtwork) {
+    void Promise.resolve(game.settings.set(MODULE_ID, KEYS.HEADER_ARTWORK, artworkChoice)).catch((error) => {
       console.warn("VE Mobile | Could not migrate obsolete Header Artwork setting", error);
     });
   }
@@ -796,7 +801,7 @@ export function createFoundryPreferencesGateway({
     mode: () => normalizedModePreference(setting(KEYS.MODE)),
     movementRepeatDelayMs: () => normalizedDelay(setting(KEYS.MOVEMENT_REPEAT_DELAY)) * 1000,
     colorScheme: () => normalizedColorScheme(setting(KEYS.COLOR_SCHEME)),
-    headerArtwork: () => normalizedChoice(KEYS.HEADER_ARTWORK, setting(KEYS.HEADER_ARTWORK), DEFAULTS.headerArtwork),
+    headerArtwork: () => normalizedHeaderArtwork(setting(KEYS.HEADER_ARTWORK)),
     headerArtworkOpacity: () => normalizedOpacity(setting(KEYS.HEADER_ARTWORK_OPACITY)),
     quickbarEnabled: () => setting(KEYS.QUICKBAR_ENABLED) !== false,
     quickbarSource: () => normalizedChoice(KEYS.QUICKBAR_SOURCE, setting(KEYS.QUICKBAR_SOURCE), "character"),
@@ -855,7 +860,8 @@ export function createFoundryPreferencesGateway({
       const frame = pick(["colorScheme", "headerArtworkOpacity", "protectVeStyling", "joystickSide", "movementControl", "movementRepeatDelayMs", "quickbarEnabled", "quickbarSource", "combatCarousel"]);
       return frame.colorScheme === "custom" ? Object.freeze({ ...frame, customTheme: readCustomTheme() }) : frame;
     },
-    character: () => pick(["colorScheme", "headerArtwork", "quickbarEnabled", "quickbarSource", "characterCollections", "characterFavouritesSource", "characterFavouritesEnabled"]),
+    character: () => Object.freeze({ ...pick(["colorScheme", "headerArtwork", "quickbarEnabled", "quickbarSource", "characterCollections", "characterFavouritesSource", "characterFavouritesEnabled"]),
+      customHeader: readCustomHeaderUserSettings(getGame()?.user) }),
     scene: () => pick(["joystickSide", "movementControl", "movementRepeatDelayMs", "quickbarEnabled", "quickbarSource", "quickbarRows", "combatCarousel", "showActionSummaries", "compactActionSummaries"]),
     actionMenu: () => pick(["quickbarEnabled", "quickbarSource"]),
     actionNavigation: () => pick(["actionSceneReturn"]),
@@ -1010,7 +1016,7 @@ function preferenceFields(setting, localize, getNavigator, getGame, getWindow) {
     booleanField(KEYS.CUSTOM_THEME_THIRD_ENABLED, "CustomThemeThirdEnabled", setting(KEYS.CUSTOM_THEME_THIRD_ENABLED) === true, localize),
     colorField(KEYS.CUSTOM_THEME_THIRD, "CustomThemeThird", setting(KEYS.CUSTOM_THEME_THIRD), localize),
     booleanField(KEYS.PROTECT_VE_STYLING, "ProtectVeStyling", setting(KEYS.PROTECT_VE_STYLING) !== false, localize),
-    choiceField(KEYS.HEADER_ARTWORK, "HeaderArtwork", setting(KEYS.HEADER_ARTWORK), localize),
+    choiceField(KEYS.HEADER_ARTWORK, "HeaderArtwork", normalizedHeaderArtwork(setting(KEYS.HEADER_ARTWORK)), localize),
     Object.freeze({
       namespace: MODULE_ID,
       key: KEYS.HEADER_ARTWORK_OPACITY,
@@ -1367,8 +1373,8 @@ function normalizedDelay(value) {
 
 // Clamp a saved opacity value to the supported display range.
 function normalizedOpacity(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return 1;
+  const number = Number(value ?? DEFAULTS.headerArtworkOpacity);
+  if (!Number.isFinite(number)) return DEFAULTS.headerArtworkOpacity;
   return Math.round(Math.min(1, Math.max(0, number)) * 20) / 20;
 }
 

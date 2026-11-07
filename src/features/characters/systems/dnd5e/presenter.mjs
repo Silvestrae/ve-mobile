@@ -1,3 +1,4 @@
+import { loadCustomHeaderArtwork } from "../../../../ui/custom-header-artwork.mjs";
 import { experienceEditor, hitPointEditor } from "../../value-editors.mjs";
 import { createCharacterMenuController as createSharedCharacterMenuController } from "../../character-menu.mjs";
 import { localizedNumber, localizedText, localizedCount } from "../../../../ui/localized-text.mjs";
@@ -14,6 +15,7 @@ import { hasCharacterDisclosure } from "../../../../kernel/app-state.mjs";
 import { renderImageViewer } from "../../../../ui/image-viewer.mjs";
 import { renderRollResultOverlay } from "../../../../ui/roll-result-overlay.mjs";
 import { resolveHeaderBanner } from "../../../../kernel/header-banner.mjs";
+import { applyBannerArtwork } from "../../../../ui/header-banner-artwork.mjs";
 import { bindActorPlacementHold } from "../../portrait-token-gesture.mjs";
 import { actorSheetTabs, actorOriginBack, collectiveHeaderContent, renderCollectivePanel } from "./collective-sheet.mjs";
 
@@ -168,10 +170,13 @@ export function renderCharacters({ state, commands, scope, overlayHost = null, r
 function updateCharacterSharedHeader(shell, { actors, actor, state, commands, settings, ownerScope, overlayHost }) {
   // Snapshot identity is the invalidation boundary. A tab tap reuses the
   // authoritative Actor record and never constructs a selector or menu.
-  const headerPreferences = { artwork: settings.headerArtwork, colorScheme: settings.colorScheme };
+  const headerPreferences = { artwork: settings.headerArtwork, colorScheme: settings.colorScheme,
+    customScope: settings.customHeader?.scope, customImage: settings.customHeader?.image };
   const headerPreferencesChanged = !shell.headerPreferences
     || shell.headerPreferences.artwork !== headerPreferences.artwork
-    || shell.headerPreferences.colorScheme !== headerPreferences.colorScheme;
+    || shell.headerPreferences.colorScheme !== headerPreferences.colorScheme
+    || shell.headerPreferences.customScope !== headerPreferences.customScope
+    || shell.headerPreferences.customImage !== headerPreferences.customImage;
   if (!shell.selector || shell.actor !== actor || headerPreferencesChanged || shell.actors !== actors) {
     shell.headerScope?.dispose();
     shell.headerScope = ownerScope.child("character-header");
@@ -195,7 +200,7 @@ function characterSelector(actors, actor, state, commands, scope, settings, over
   let open = false;
   let placementHold = null;
   const arrow = icon("fa-chevron-down");
-  const bannerResolution = resolveHeaderBanner(actor, settings.headerArtwork);
+  const bannerResolution = resolveHeaderBanner(actor, settings.headerArtwork, settings.customHeader);
   const menuController = createCharacterMenuController({ actors, selectedActor: actor, commands, onClose: () => setOpen(false), scope });
   const menu = menuController.element;
 
@@ -238,7 +243,8 @@ function characterSelector(actors, actor, state, commands, scope, settings, over
       characterHeaderVitals(actor, commands, scope)
     ]
   });
-  loadBannerArtwork(header, bannerResolution.candidates, scope);
+  if (bannerResolution.choice === "custom") loadCustomHeaderArtwork(header, bannerResolution.candidates, scope);
+  else loadBannerArtwork(header, bannerResolution.candidates, scope);
   if (overlayHost) { overlayHost.append(menu); scope.own(() => menu.remove()); }
   const selector = node("div", { className: "ve-character-selector", children: [header, ...(overlayHost ? [] : [menu])] });
   placementHold = actor.collective ? null : bindActorPlacementHold({
@@ -296,14 +302,9 @@ export function loadBannerArtwork(header, candidates, scope) {
   if (!candidates.length || typeof Image !== "function") return;
   let cancelled = false;
   scope.own(() => { cancelled = true; });
-  // Apply the decoded artwork URL to this header's background state.
-  const apply = (url) => {
-    header.style.setProperty("--ve-class-art", `url("${url}")`);
-    header.dataset.bannerCatalogue = "true";
-  };
   const first = bannerImageCache.get(candidates[0].url);
   if (first?.loaded) {
-    apply(candidates[0].url);
+    applyBannerArtwork(header, candidates[0], first.image, scope);
     return;
   }
   // Advance after failed candidates; the owner scope cancels retries on teardown.
@@ -311,9 +312,9 @@ export function loadBannerArtwork(header, candidates, scope) {
     for (const candidate of candidates) {
       if (cancelled) return;
       try {
-        await readyBanner(candidate.url).ready;
+        const image = await readyBanner(candidate.url).ready;
         if (cancelled) return;
-        apply(candidate.url);
+        applyBannerArtwork(header, candidate, image, scope);
         return;
       } catch { /* Try the next catalogue fallback. */ }
     }

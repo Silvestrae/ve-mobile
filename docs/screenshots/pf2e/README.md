@@ -1,11 +1,15 @@
 # PF2e phone layout
 
-Captured on a Samsung Galaxy S25 Ultra in Chrome 156, running Foundry VTT
-14.369 with PF2e 8.6.1 and VE Mobile 1.1.0. The phone viewport is 384 × 693 CSS
-pixels; images contain only app content, excluding browser and system bars.
+Captured in VE Mobile 1.2.0 on the local desktop Foundry VTT 14.369 world
+running PF2e 8.6.1. The browser was set to a 430 × 930 CSS pixel viewport
+with VE Mobile in Phone mode.
 
 Seelah (Level 5) demonstrates the Character, Actions and Inventory tabs.
 Kyra (Level 7) demonstrates Spellcasting and spell preparation.
+
+Seelah and Kyra use the Paizo iconic portraits supplied with PF2e. Their
+header uses *Merab, Golden Temple* by Mirco Paganessi.
+[Header artwork credits](../../../assets/header-banners/credits.html)
 
 | View | Dark mode | Light mode |
 | --- | --- | --- |

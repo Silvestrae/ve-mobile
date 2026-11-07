@@ -25,7 +25,7 @@ export function nativeSceneTileTapAllowed({ active, state, presentation }) {
 }
 
 // Own one activation transaction, its command boundary, presentation and deterministic shutdown.
-export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, craftingGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, pwaInstall = null, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
+export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, craftingGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, customHeaderGateway = null, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, pwaInstall = null, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
   // Adapt the preference gateway's localizer for shared UI helpers.
   const localize = (key, fallback, data) => localizedText((id, _fallback, values) => preferencesGateway?.localize?.(id, values), key, fallback, data);
   let runtimeScope = null;
@@ -581,6 +581,44 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
         nativeSettings: settingsCompatibilityGateway?.snapshot?.() ?? Object.freeze({})
       });
     },
+    // Read only the chosen actor/user path; the gateway owns assigned-actor fallback.
+    readCustomHeader: () => customHeaderGateway?.snapshot(store.state.selectedActorSourceUuid) ?? null,
+    watchCustomHeader: (owner, onUpdate) => {
+      // Store changes invalidate the narrow actor record, not the broad Settings snapshot.
+      const unsubscribe = store.subscribe(() => onUpdate(customHeaderGateway?.snapshot(store.state.selectedActorSourceUuid) ?? null), { immediate: false });
+      owner.own(unsubscribe);
+      return unsubscribe;
+    },
+    // The scope is an authenticated user's preference, independent of actor ownership.
+    setCustomHeaderScope: (value, owner) => guardConnection(async expected => {
+      const lifecycle = runtimeScope;
+      const current = () => Boolean(activationCommitted && lifecycle && runtimeScope === lifecycle
+        && !lifecycle.disposed && !owner.disposed && readPolicy().active
+        && !store.state.reconnect && !store.state.modeTransition
+        && (!connectionGeneration || connectionGeneration.matches(expected.connectionGeneration)));
+      if (!current() || !customHeaderGateway) throw new Error(localizedText(localize, "VEMOBILE.Settings.UI.CustomHeaderStale", "The target or session changed. Reopen the image picker."));
+      await customHeaderGateway.setScope(value, { selectedSourceUuid: store.state.selectedActorSourceUuid,
+        expectedSession: expected, isCurrent: current });
+      if (!current()) throw new Error(localizedText(localize, "VEMOBILE.Settings.UI.CustomHeaderStale", "The target or session changed. Reopen the image picker."));
+      store.dispatch({ type: "view-invalidated" });
+      return customHeaderGateway.snapshot(store.state.selectedActorSourceUuid);
+    }),
+    // Pin the caller, scope and lifecycle; actor mode also pins the exact selection.
+    openCustomHeaderPicker: owner => guardConnection(expected => {
+      const lifecycle = runtimeScope;
+      const selectedSourceUuid = store.state.selectedActorSourceUuid;
+      const customScope = customHeaderGateway?.snapshot(selectedSourceUuid)?.scope ?? "actor";
+      const current = () => Boolean(activationCommitted && lifecycle && runtimeScope === lifecycle
+        && !lifecycle.disposed && !owner.disposed && readPolicy().active
+        && !store.state.reconnect && !store.state.modeTransition
+        && (customScope === "user" || store.state.selectedActorSourceUuid === selectedSourceUuid)
+        && (!connectionGeneration || connectionGeneration.matches(expected.connectionGeneration)));
+      if (!current() || !customHeaderGateway) return Promise.reject(new Error(localizedText(localize, "VEMOBILE.Settings.UI.CustomHeaderStale", "The target or session changed. Reopen the image picker.")));
+      const pickerOwner = lifecycle.child("custom-header");
+      owner.own(() => pickerOwner.dispose());
+      return customHeaderGateway.pick({ selectedSourceUuid, expectedSession: expected, scope: pickerOwner, isCurrent: current })
+        .finally(() => pickerOwner.dispose());
+    }),
     // Publish narrow layout changes through a subscription owned by the calling surface.
     watchLayoutState: (owner, onUpdate) => {
       // Send a fresh narrow layout record to this subscription's listener.

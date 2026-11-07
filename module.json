@@ -2,10 +2,10 @@
   "id": "ve-mobile",
   "title": "VE Mobile",
   "description": "A purpose-built phone and tablet interface for Foundry VTT, with D&D5e support, Pathfinder Second Edition community test support on Foundry v14+, native gameplay actions, chat, journals, and touch Scene controls.",
-  "version": "1.1.3",
+  "version": "1.2.0",
   "url": "https://github.com/Silvestrae/ve-mobile",
   "manifest": "https://github.com/Silvestrae/ve-mobile/releases/latest/download/module.json",
-  "download": "https://github.com/Silvestrae/ve-mobile/releases/download/v1.1.3/ve-mobile-v1.1.3.zip",
+  "download": "https://github.com/Silvestrae/ve-mobile/releases/download/v1.2.0/ve-mobile-v1.2.0.zip",
   "license": "https://github.com/Silvestrae/ve-mobile/blob/main/LICENSE",
   "socket": true,
   "compatibility": {
@@ -55,26 +55,6 @@
       "lang": "en-AU",
       "name": "English (Australia)",
       "path": "locales/en-AU.json"
-    },
-    {
-      "lang": "es",
-      "name": "Español",
-      "path": "locales/es.json"
-    },
-    {
-      "lang": "de",
-      "name": "Deutsch",
-      "path": "locales/de.json"
-    },
-    {
-      "lang": "fr",
-      "name": "Français",
-      "path": "locales/fr.json"
-    },
-    {
-      "lang": "it",
-      "name": "Italiano",
-      "path": "locales/it.json"
     },
     {
       "lang": "ru",

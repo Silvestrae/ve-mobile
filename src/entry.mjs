@@ -1,4 +1,5 @@
 // Composition root for Foundry startup: select the system, restore prior settings, and wire the page/runtime owners.
+import { createCustomHeaderGateway } from "./foundry/custom-header-gateway.mjs";
 import { createAutoModeConfirmationGateway } from "./foundry/auto-mode-confirmation-gateway.mjs";
 import { showAutoModeConfirmation } from "./ui/auto-mode-confirmation.mjs";
 import { selectSystemIntegration } from "./foundry/system-integration.mjs";
@@ -538,6 +539,7 @@ if (isGamePage) {
   const activeEffectContextGateway = systemIntegration.services.activeEffects({ diagnostics });
   const actionSessionGateway = systemIntegration.services.actionSession();
   const quickbarGateway = systemIntegration.services.quickbar({ isActive: () => kernel?.active === true && readPolicy().active });
+  const customHeaderGateway = createCustomHeaderGateway({ isActive: () => kernel?.active === true && readPolicy().active });
   const hotbarGateway = systemIntegration.services.hotbar({ isActive: () => kernel?.active === true && readPolicy().active });
   const actionBarPreferences = createActionBarPreferences();
   const metrics = createMobileMetrics();
@@ -638,6 +640,7 @@ if (isGamePage) {
     actorTokenPlacementGateway,
     movementGateway,
     quickbarGateway,
+    customHeaderGateway,
     hotbarGateway,
     actionBarPreferences,
     nativeChatGateway,
