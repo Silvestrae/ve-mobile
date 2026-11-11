@@ -54,14 +54,15 @@ iPhone and iPad support is best effort. Foundry lists Safari as unsupported, and
 
 ## Install and start playing
 
-1. In Foundry Setup, open **Add-on Modules > Install Module**. Paste this into **Manifest URL** and select **Install**.
-
-   ```text
-   https://github.com/Silvestrae/ve-mobile/releases/latest/download/module.json
-   ```
-
+1. In Foundry Setup, open **Add-on Modules > Install Module**. Search the package directory for **VE Mobile** and select **Install**. [View the Foundry package page](https://foundryvtt.com/packages/ve-mobile/).
 2. Enable **VE Mobile** in **Manage Modules** and fully reload Foundry.
 3. Open the world on your phone or tablet. Use **Auto-detect** or pick **Phone** or **Tablet** in **Mobile Mode**.
+
+Alternatively, paste this into **Manifest URL** in the same installer and select **Install**, then follow steps 2 and 3 above:
+
+```text
+https://github.com/Silvestrae/ve-mobile/releases/latest/download/module.json
+```
 
 <details>
 <summary>Manual installation</summary>
