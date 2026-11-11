@@ -11,6 +11,7 @@ const COLLECTION_LABELS = Object.freeze({
   JournalEntry: "journals",
   ChatMessage: "chat messages"
 });
+const HEADER_INDEX_FIELDS = Object.freeze(["_id", "_stats.modifiedTime"]);
 
 /** Re-query permission-filtered world sources on Foundry 13/14 without hydrating unchanged documents. */
 export function createFoundryAuthoritativeSessionGateway({
@@ -18,6 +19,7 @@ export function createFoundryAuthoritativeSessionGateway({
   getUi = () => globalThis.ui,
   diagnostics = null,
   performanceObserver = null,
+  requestHeaders = requestWorldHeaders,
   requestSources = requestWorldSources,
   now = () => globalThis.performance?.now?.() ?? Date.now(),
   // rAF can stop entirely while a phone/browser tab is hidden. A reconnect
@@ -49,7 +51,9 @@ export function createFoundryAuthoritativeSessionGateway({
       ensureSession(game);
       if (!game?.data || !baselineSession.userId || !baselineSession.worldId) return false;
       initialSources = new Map(COLLECTIONS.map(name => [name, new Map(
-        (game.data[SOURCE_KEYS[name]] ?? []).map(source => [source._id, sourceSignature(source)]))]));
+        (game.data[SOURCE_KEYS[name]] ?? []).map(source => [source._id, {
+          remote: sourceSignature(source), revision: sourceRevision(source)
+        }]))]));
       return true;
     },
     // Associate initial remote documents with their local source signatures for later provenance checks.
@@ -59,18 +63,22 @@ export function createFoundryAuthoritativeSessionGateway({
       if (!initialSources) return false;
       for (const [name, sources] of initialSources) {
         const collection = game.collections?.get?.(name);
-        for (const [id, remote] of sources) {
+        for (const [id, known] of sources) {
           const document = collection?.get?.(id);
-          if (document) knownSources.set(document, { remote, local: sourceSignature(document.toObject(true)) });
+          if (document) knownSources.set(document, {
+            remote: known.remote,
+            local: sourceSignature(document.toObject(true)),
+            revision: known.revision
+          });
         }
       }
       initialSources = null;
       return true;
     },
     async resync({ isCurrent = () => true, onProgress = () => {} } = {}) {
-      // Fetch all permission-filtered source collections, then reconcile only
-      // changed records. Session identity and caller generation guard each
-      // asynchronous boundary so an old reconnect cannot overwrite a new world.
+      // Fetch compact revision headers first, then retrieve only changed sources.
+      // Session identity and caller generation guard each asynchronous boundary
+      // so an old reconnect cannot overwrite a new world.
       performanceObserver?.increment?.("reconnect.authoritative.run");
       const finishTotal = performanceObserver?.start?.("reconnect.authoritative.total") ?? (() => {});
       const startedAt = now();
@@ -102,13 +110,16 @@ export function createFoundryAuthoritativeSessionGateway({
         const collectionStartedAt = now();
         try {
           performanceObserver?.increment?.("reconnect.collection.fetched");
-          const sources = validateSources(await requestSources({ documentName, documentClass: documentClass, user: game.user }));
-          const values = sources;
+          const delta = await requestCollectionDelta({
+            documentName, documentClass, user: game.user, collection, knownSources,
+            requestHeaders, requestSources, diagnostics
+          });
           collectionTimings[documentName] = Math.max(0, now() - collectionStartedAt);
-          performanceObserver?.increment?.("reconnect.document.fetched", values.length);
-          // A collection count is a completion fact, never incremental progress.
-          if (!fetchFailed) diagnostics?.record?.("debug", `Refreshed ${COLLECTION_LABELS[documentName]} (${values.length})`);
-          return [documentName, collection, values, documentClass];
+          performanceObserver?.increment?.("reconnect.document.headers", delta.headers.length);
+          performanceObserver?.increment?.("reconnect.document.fetched", delta.sources.length);
+          // Collection counts are completion facts, never incremental progress.
+          if (!fetchFailed) diagnostics?.record?.("debug", `Refreshed ${COLLECTION_LABELS[documentName]} (${delta.headers.length} headers, ${delta.sources.length} full records, ${delta.mode})`);
+          return [documentName, collection, delta, documentClass];
         } catch (error) {
           fetchFailed = true;
           error.reconnectCheckpoint = "collections";
@@ -134,9 +145,9 @@ export function createFoundryAuthoritativeSessionGateway({
       const finishReconcile = performanceObserver?.start?.("reconnect.authoritative.reconcile") ?? (() => {});
       const changedCollections = new Set();
       const work = { prepared: 0, updated: 0, added: 0, deleted: 0 };
-      for (const [documentName, collection, documents, documentClass] of fetched) {
-        if (!collection || !documents) continue;
-        const result = await reconcileCollection(collection, documents, { documentClass, knownSources, isCurrent: currentSession, yieldControl, now });
+      for (const [documentName, collection, delta, documentClass] of fetched) {
+        if (!collection || !delta) continue;
+        const result = await reconcileCollection(collection, delta, { documentClass, knownSources, isCurrent: currentSession, yieldControl, now });
         if (result.stale) {
           finishTotal();
           return Object.freeze({ applied: false, reason: "stale-generation" });
@@ -171,7 +182,7 @@ export function createFoundryAuthoritativeSessionGateway({
       finishTotal();
       return Object.freeze({
         applied: true,
-        collections: Object.freeze(fetched.filter(([, , documents]) => documents).map(([name]) => name)),
+        collections: Object.freeze(fetched.filter(([, , delta]) => delta).map(([name]) => name)),
         timings: Object.freeze({ ...timings, total }),
         slowestCollection: slowestCollection ? Object.freeze({ name: slowestCollection[0], durationMs: slowestCollection[1] }) : null
       });
@@ -179,10 +190,23 @@ export function createFoundryAuthoritativeSessionGateway({
   });
 }
 
+// Ask Foundry for the smallest server-managed revision record that can announce
+// additions, changes and deletions without transferring full Document sources.
+async function requestWorldHeaders({ documentName }) {
+  const socket = globalThis.foundry?.helpers?.SocketInterface;
+  if (typeof socket?.dispatch !== "function") throw new Error(localizeFoundry("VEMOBILE.Interface.AuthoritativeSessionGateway.DocumentTransportUnavailable", "Foundry's document connection is unavailable."));
+  const response = await socket.dispatch("modifyDocument", {
+    type: documentName,
+    action: "get",
+    operation: { query: {}, index: true, indexFields: HEADER_INDEX_FIELDS, broadcast: false }
+  });
+  return response?.result;
+}
+
 // Both supported ClientDatabaseBackends use this authenticated request before
-// mapping result through documentClass.fromSource. Keep the full server-filtered
-// sources and construct only new documents; `index:true` would change the query.
-async function requestWorldSources({ documentName }) {
+// mapping result through documentClass.fromSource. Request every source only for
+// compatibility fallback; the normal path narrows the query to changed IDs.
+async function requestWorldSources({ documentName, ids = null }) {
   // Use Foundry's authenticated socket transport and its normal permission
   // filtering instead of reading unrestricted database/world source data.
   const socket = globalThis.foundry?.helpers?.SocketInterface;
@@ -190,9 +214,78 @@ async function requestWorldSources({ documentName }) {
   const response = await socket.dispatch("modifyDocument", {
     type: documentName,
     action: "get",
-    operation: { query: {}, broadcast: false }
+    operation: { query: ids?.length ? { _id__in: ids } : {}, broadcast: false }
   });
   return response?.result;
+}
+
+// Resolve one collection through revision headers and retain the old full-fetch
+// path when indexed queries are unavailable or a concurrent deletion invalidates
+// the two-stage result.
+async function requestCollectionDelta({ documentName, documentClass, user, collection, knownSources,
+  requestHeaders, requestSources, diagnostics }) {
+  let headers;
+  try {
+    headers = validateHeaders(await requestHeaders({ documentName, documentClass, user }));
+  } catch (error) {
+    diagnostics?.record?.("warn", `Revision headers were unavailable for ${COLLECTION_LABELS[documentName]}; using a full collection refresh`, error);
+    return fullCollectionDelta(validateSources(await requestSources({ documentName, documentClass, user })));
+  }
+
+  const ids = changedSourceIds(collection, headers, knownSources);
+  if (!ids.length) return Object.freeze({ headers: Object.freeze(headers), sources: Object.freeze([]), mode: "headers-only" });
+  const sources = validateSources(await requestSources({ documentName, documentClass, user, ids }));
+  const byId = new Map(sources.map(source => [source._id, source]));
+  if (ids.some(id => !byId.has(id))) {
+    diagnostics?.record?.("warn", `Revision headers changed while refreshing ${COLLECTION_LABELS[documentName]}; using a full collection refresh`);
+    return fullCollectionDelta(validateSources(await requestSources({ documentName, documentClass, user })));
+  }
+
+  // A source may change again between the header and source requests. Use its
+  // newer revision while live socket events cover additions after the header.
+  const currentHeaders = new Map(headers.map(header => [header._id, header]));
+  for (const source of sources) currentHeaders.set(source._id, sourceHeader(source));
+  return Object.freeze({
+    headers: Object.freeze(Array.from(currentHeaders.values())),
+    sources: Object.freeze(sources),
+    mode: "delta"
+  });
+}
+
+function fullCollectionDelta(sources) {
+  return Object.freeze({
+    headers: Object.freeze(sources.map(sourceHeader)),
+    sources: Object.freeze(sources),
+    mode: "full-fallback"
+  });
+}
+
+function validateHeaders(headers) {
+  if (!Array.isArray(headers)) throw new Error(localizeFoundry("VEMOBILE.Interface.AuthoritativeSessionGateway.InvalidDocumentCollection", "Foundry returned invalid world data."));
+  const ids = new Set();
+  for (const header of headers) {
+    if (!header || typeof header !== "object" || Array.isArray(header) || typeof header._id !== "string" || !header._id || ids.has(header._id)) {
+      throw new Error(localizeFoundry("VEMOBILE.Interface.AuthoritativeSessionGateway.InvalidDocumentSource", "Foundry returned an invalid document record."));
+    }
+    ids.add(header._id);
+  }
+  return headers;
+}
+
+function changedSourceIds(collection, headers, knownSources) {
+  const changed = [];
+  for (const header of headers) {
+    const local = collection?.get?.(header._id);
+    if (!local) {
+      changed.push(header._id);
+      continue;
+    }
+    const known = knownSources.get(local);
+    const localSignature = sourceSignature(local.toObject?.(true) ?? local._source);
+    const revision = sourceRevision(header);
+    if (revision === null || known?.revision !== revision || known.local !== localSignature) changed.push(header._id);
+  }
+  return changed;
 }
 
 // Validate each returned document source for type, stable identity, uniqueness, and expected provenance.
@@ -208,7 +301,7 @@ function validateSources(sources) {
   return sources;
 }
 
-async function reconcileCollection(collection, authoritative, { documentClass, knownSources, isCurrent, yieldControl, now }) {
+async function reconcileCollection(collection, delta, { documentClass, knownSources, isCurrent, yieldControl, now }) {
   // Reuse unchanged document objects and prepare only changed/new sources;
   // yield between bounded slices so a large world does not monopolize the UI.
   let changed = false;
@@ -216,7 +309,8 @@ async function reconcileCollection(collection, authoritative, { documentClass, k
   let updated = 0;
   let added = 0;
   let deleted = 0;
-  const remote = new Map(authoritative.map(source => [source._id, source]));
+  const remote = new Map(delta.headers.map(header => [header._id, header]));
+  const sources = new Map(delta.sources.map(source => [source._id, source]));
   let sliceStartedAt = now();
   // Yield between large source batches while cancelling if the session becomes stale.
   const yieldIfNeeded = async () => {
@@ -228,51 +322,97 @@ async function reconcileCollection(collection, authoritative, { documentClass, k
   };
   for (const local of Array.from(collection.values?.() ?? collection)) {
     if (!isCurrent()) return { stale: true };
-    const source = remote.get(String(local.id ?? ""));
-    if (!source) {
+    const id = String(local.id ?? "");
+    const header = remote.get(id);
+    if (!header) {
       collection.delete?.(local.id);
       changed = true;
       deleted += 1;
     } else {
       const saved = local.toObject?.(true) ?? local._source;
-      const remoteSignature = sourceSignature(source), localSignature = sourceSignature(saved);
+      const source = sources.get(id);
+      const localSignature = sourceSignature(saved);
+      const localRevision = sourceRevision(saved);
       const known = knownSources.get(local);
       let applied = false;
-      // Skip only when BOTH the authoritative wire record and this exact native
-      // document's post-prepare source are unchanged. A missed server edit or a
-      // local-only mutation invalidates this fast path, including permissions.
-      if (known?.remote !== remoteSignature || known.local !== localSignature) {
-        const cleaned = documentClass.cleanData(source, { partial: false, persisted: true });
-        retainUnpersistedIds(cleaned, source, saved);
-        if (!sourceEqual(saved, cleaned)) {
-          const changes = local.updateSource(cleaned, { recursive: false });
-          applied = true;
-          if (changes && Object.keys(changes).length) {
-            // updateSource reinitializes and prepares native Documents already.
-            // A second prepareData call accumulates D&D5e class levels/bonuses.
-            changed = true;
-            prepared += 1;
-            updated += 1;
+      if (source) {
+        const remoteSignature = sourceSignature(source);
+        const remoteRevision = sourceRevision(source);
+        if (localRevision !== null && remoteRevision !== null && localRevision > remoteRevision) {
+          // A live socket event overtook the two-stage query. Preserve that newer
+          // native source instead of rolling it back to the fetched revision.
+          knownSources.set(local, { remote: localSignature, local: localSignature, revision: localRevision });
+        } else {
+          const cleaned = documentClass.cleanData(source, { partial: false, persisted: true });
+          retainUnpersistedIds(cleaned, source, saved);
+          // A changed remote revision or local-only mutation reaches this full
+          // source path. Prepare only when native cleaning finds a real change.
+          if ((known?.remote !== remoteSignature || known.local !== localSignature) && !sourceEqual(saved, cleaned)) {
+            const changes = local.updateSource(cleaned, { recursive: false });
+            applied = true;
+            if (changes && Object.keys(changes).length) {
+              // updateSource reinitializes and prepares native Documents already.
+              // A second prepareData call accumulates D&D5e class levels/bonuses.
+              changed = true;
+              prepared += 1;
+              updated += 1;
+            }
           }
+          knownSources.set(local, {
+            remote: remoteSignature,
+            local: applied ? sourceSignature(local.toObject?.(true) ?? local._source) : localSignature,
+            revision: remoteRevision
+          });
+        }
+      } else {
+        const revision = sourceRevision(header);
+        // A headers-only record is trustworthy only when both its server revision
+        // and this exact native Document's prepared source still match the bound baseline.
+        if (localRevision !== null && revision !== null && localRevision > revision) {
+          knownSources.set(local, { remote: localSignature, local: localSignature, revision: localRevision });
+        } else if (revision === null || known?.revision !== revision || known.local !== localSignature) {
+          throw new Error(localizeFoundry("VEMOBILE.Interface.AuthoritativeSessionGateway.InvalidDocumentSource", "Foundry returned an invalid document record."));
         }
       }
-      knownSources.set(local, { remote: remoteSignature, local: applied ? sourceSignature(local.toObject?.(true) ?? local._source) : localSignature });
-      remote.delete(String(local.id ?? ""));
+      remote.delete(id);
     }
     if (!await yieldIfNeeded()) return { stale: true };
   }
-  for (const source of remote.values()) {
+  for (const header of remote.values()) {
     if (!isCurrent()) return { stale: true };
+    const source = sources.get(header._id);
+    // An unchanged header can outlive a live deletion which already removed the
+    // local Document after changed IDs were selected. Do not recreate stale data.
+    if (!source) continue;
     const signature = sourceSignature(source);
     const document = documentClass.fromSource(source);
     collection.set?.(document.id, document);
-    knownSources.set(document, { remote: signature, local: sourceSignature(document.toObject?.(true) ?? document._source) });
+    knownSources.set(document, {
+      remote: signature,
+      local: sourceSignature(document.toObject?.(true) ?? document._source),
+      revision: sourceRevision(source)
+    });
     changed = true;
     prepared += 1;
     added += 1;
     if (!await yieldIfNeeded()) return { stale: true };
   }
   return Object.freeze({ changed, prepared, updated, added, deleted });
+}
+
+function sourceHeader(source) {
+  const revision = sourceRevision(source);
+  return Object.freeze({
+    _id: String(source?._id ?? ""),
+    _stats: Object.freeze({ modifiedTime: revision })
+  });
+}
+
+function sourceRevision(source) {
+  const value = source?._stats?.modifiedTime;
+  if (value === null || value === undefined || value === "") return null;
+  const revision = Number(value);
+  return Number.isFinite(revision) && revision >= 0 ? revision : null;
 }
 
 // Build a stable signature for source data used to detect unchanged records.
