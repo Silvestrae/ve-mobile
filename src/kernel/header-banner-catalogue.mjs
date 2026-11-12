@@ -1,5 +1,5 @@
 // Generated from docs/header-banner-catalogue.json and header-banner-artwork.json.
-// Each artwork URL is declared once so runtime packaging can find all 17 files.
+// Each artwork URL is declared once so runtime packaging can find all 18 files.
 const artworkUrls = Object.freeze({
   "astral-city": new URL("../../assets/header-banners/artwork/astral-city.webp", import.meta.url).href,
   "torchlit-forest-chasm-spring": new URL("../../assets/header-banners/artwork/torchlit-forest-chasm-spring.webp", import.meta.url).href,
@@ -15,14 +15,16 @@ const artworkUrls = Object.freeze({
   "ancient-mountain-gates": new URL("../../assets/header-banners/artwork/ancient-mountain-gates.webp", import.meta.url).href,
   "frozen-sanctuary": new URL("../../assets/header-banners/artwork/frozen-sanctuary.webp", import.meta.url).href,
   "dwarven-forge": new URL("../../assets/header-banners/artwork/dwarven-forge.webp", import.meta.url).href,
+  "dwarfwest-design": new URL("../../assets/header-banners/artwork/dwarfwest-design.webp", import.meta.url).href,
   "kintargo-luminous-coastal-citadel": new URL("../../assets/header-banners/artwork/kintargo-luminous-coastal-citadel.webp", import.meta.url).href,
   "modern-alchemist-lab": new URL("../../assets/header-banners/artwork/modern-alchemist-lab.webp", import.meta.url).href,
   "the-grand-canyon-of-the-yellowstone": new URL("../../assets/header-banners/artwork/the-grand-canyon-of-the-yellowstone.webp", import.meta.url).href,
 });
 
-// Keep the saved framing with the use case, even when two headers share artwork.
-function banner({ artworkId, crop, ...entry }) {
-  return Object.freeze({ ...entry, artworkId, crop: Object.freeze(crop), url: artworkUrls[artworkId] });
+// Keep each use case's saved framing immutable, including a separate phone crop.
+function banner({ artworkId, crop, phoneCrop, ...entry }) {
+  return Object.freeze({ ...entry, artworkId, crop: Object.freeze(crop),
+    ...(phoneCrop ? { phoneCrop: Object.freeze(phoneCrop) } : {}), url: artworkUrls[artworkId] });
 }
 
 export const HEADER_BANNERS = Object.freeze([
@@ -61,7 +63,7 @@ export const HEADER_BANNERS = Object.freeze([
   banner({"id": "tag-humanoid-shapechanger", "kind": "creature-tag", "label": "Humanoid (shapechanger)", "parentType": "Humanoid", "tag": "shapechanger", "path": "artwork/astral-city.webp", "artworkId": "astral-city", "crop": {"x": 90.8, "y": 100, "zoom": 2}}),
   banner({"id": "tag-monstrosity-shapechanger", "kind": "creature-tag", "label": "Monstrosity (shapechanger)", "parentType": "Monstrosity", "tag": "shapechanger", "path": "artwork/frozen-sanctuary.webp", "artworkId": "frozen-sanctuary", "crop": {"x": 16.2, "y": 73.4, "zoom": 1.7}}),
   banner({"id": "tag-undead-shapechanger", "kind": "creature-tag", "label": "Undead (shapechanger)", "parentType": "Undead", "tag": "shapechanger", "path": "artwork/gothic-academy.webp", "artworkId": "gothic-academy", "crop": {"x": 0, "y": 0, "zoom": 1.12}}),
-  banner({"id": "class-artificer", "kind": "class", "label": "Artificer", "parentType": "", "tag": "", "path": "artwork/astral-city.webp", "artworkId": "astral-city", "crop": {"x": 54.4, "y": 80.2, "zoom": 1.15}}),
+  banner({"id": "class-artificer", "kind": "class", "label": "Artificer", "parentType": "", "tag": "", "path": "artwork/dwarfwest-design.webp", "artworkId": "dwarfwest-design", "crop": {"x": 58.70282174542221, "y": 100, "zoom": 2}, "phoneCrop": {"x": 69.62568918385473, "y": 95.73455269034429, "zoom": 2.5821239292751734}}),
   banner({"id": "class-barbarian", "kind": "class", "label": "Barbarian", "parentType": "", "tag": "", "path": "artwork/torchlit-forest-chasm-spring.webp", "artworkId": "torchlit-forest-chasm-spring", "crop": {"x": 12.8, "y": 100, "zoom": 1.9}}),
   banner({"id": "class-bard", "kind": "class", "label": "Bard", "parentType": "", "tag": "", "path": "artwork/golden-academy.webp", "artworkId": "golden-academy", "crop": {"x": 93.5, "y": 15.6, "zoom": 1.3}}),
   banner({"id": "class-cleric", "kind": "class", "label": "Cleric", "parentType": "", "tag": "", "path": "artwork/merab-golden-temple.webp", "artworkId": "merab-golden-temple", "crop": {"x": 0, "y": 89.1, "zoom": 1.3}}),

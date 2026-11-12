@@ -2,6 +2,7 @@
 export function createAuthoritativeResynchronizer({ generation, fetchSnapshot, applySnapshot, onError = () => {} }) {
   let request = 0;
   let disposed = false;
+  let activeController = null;
   return Object.freeze({
     // Fetch for this generation and apply only if no newer request or disposal superseded it.
     async run(remoteGeneration) {
@@ -10,9 +11,13 @@ export function createAuthoritativeResynchronizer({ generation, fetchSnapshot, a
         ? requestedGeneration
         : generation.advance(requestedGeneration);
       const activeRequest = ++request;
+      // A replacement generation also releases in-flight Foundry listeners while its old transport request settles.
+      activeController?.abort();
+      const controller = activeController = new AbortController();
       try {
         const context = {
           generation: activeGeneration,
+          signal: controller.signal,
           isCurrent: () => !disposed && request === activeRequest && generation.matches(activeGeneration)
         };
         const snapshot = await fetchSnapshot(context);
@@ -23,8 +28,12 @@ export function createAuthoritativeResynchronizer({ generation, fetchSnapshot, a
       } catch (error) {
         if (!disposed && request === activeRequest && generation.matches(activeGeneration)) onError(error, activeGeneration);
         return Object.freeze({ applied: false, generation: activeGeneration, error });
+      } finally {
+        if (activeController === controller) activeController = null;
       }
     },
-    dispose() { disposed = true; request += 1; }
+    // A disconnect cancels pending I/O without disposing the runtime needed by the next connection generation.
+    cancel() { request += 1; activeController?.abort(); activeController = null; },
+    dispose() { disposed = true; request += 1; activeController?.abort(); activeController = null; }
   });
 }

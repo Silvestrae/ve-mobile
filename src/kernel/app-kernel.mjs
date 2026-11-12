@@ -1164,6 +1164,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       if (!activationCommitted) return false;
       const activeGeneration = Math.max(0, Number(generation) || 0);
       if (connectionGeneration && !connectionGeneration.matches(activeGeneration)) connectionGeneration.advance(activeGeneration);
+      resynchronizer?.cancel();
       recoveryCaptures.clear();
       if (canvasRecoveryGateway) recoveryCaptures.set(activeGeneration, canvasRecoveryGateway.capture());
       templatePlacement?.stop();

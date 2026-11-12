@@ -194,6 +194,7 @@ Thanks to everyone whose work gives these sheets and screenshots their look.
 
 - The Paizo illustrations are by Mary Jane Pajaron, Mirco Paganessi, Sandra Posada, Sam White, Biagio d’Alessandro, Federico Musetti and Roman Roland Kuteynikov.
 - The other header illustrations are by David Revoy and the Blender Foundation, Blender Animation Studio and the team behind *Spring* (directed by Andy Goralczyk), Mingho Tong, Aleksey Pollack and Thomas Moran (Smithsonian American Art Museum).
+- The Artificer header uses *Dwarfwest Design* by [Marius Villard](https://mariusvillard.artstation.com/), with the artist's permission. It is cropped and compressed for the header, with no generative-AI edits; the artwork may not be used for AI training. [Original artwork](https://mariusvillard.artstation.com/projects/lG1gee)
 - Orna's portrait uses *Kinytia* by David Revoy, shown cropped to fit the portrait frame. [Original artwork](https://www.peppercarrot.com/en/viewer/misc-src__2010-10-06_Kinytia_by-David-Revoy.html) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 - The battlemap in Orna's screenshots is by Cropox Battlemaps. [The Deepwood Hunting Lodge](https://www.patreon.com/CropoxBattlemaps/posts/deepwood-hunting-150490629)
 

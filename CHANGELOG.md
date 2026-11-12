@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 (2026-11-13)
+
+- **Improved reconnect efficiency.** Reconnects now use document revision headers to identify changed content and refresh it efficiently, with additional checks for embedded documents. Thanks to [@Ksenichiro](https://github.com/Ksenichiro) for proposing the approach.
+- **Artificer character artwork.** Added **Dwarfwest Design** by [Marius Villard](https://mariusvillard.artstation.com/projects/lG1gee), with framing for phone and tablet headers.
+
 ## 1.2.0 (2026-11-08)
 
 - **Foundry VTT AI Content Policy compliance.** Replaced the AI-generated character header art with credited illustrations. Paused German, Spanish, French and Italian until a native speaker reviews each localisation file.
