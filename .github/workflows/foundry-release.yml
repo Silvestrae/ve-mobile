@@ -1,0 +1,45 @@
+name: Register Foundry release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable release tag (for example v1.2.1)
+        required: true
+        type: string
+      mode:
+        description: Verify downloads, validate with Foundry, or register the release
+        required: true
+        default: dry-run
+        type: choice
+        options: [verify, dry-run, publish]
+
+permissions:
+  contents: read
+
+# Foundry rate-limits each package. Serialize registration and manual recovery.
+concurrency:
+  group: foundry-package-release
+  cancel-in-progress: false
+
+jobs:
+  register:
+    if: >-
+      github.repository == 'Silvestrae/ve-mobile' &&
+      ((github.event_name == 'release' && !github.event.release.draft && !github.event.release.prerelease) ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verify assets and register with Foundry
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          RELEASE_MODE: ${{ github.event_name == 'release' && 'publish' || inputs.mode }}
+          FOUNDRY_RELEASE_TOKEN: ${{ secrets.FOUNDRY_RELEASE_TOKEN }}
+        run: python3 .github/scripts/foundry-release.py --tag "$RELEASE_TAG" --mode "$RELEASE_MODE"
