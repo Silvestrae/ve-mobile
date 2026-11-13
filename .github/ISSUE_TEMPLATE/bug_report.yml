@@ -1,6 +1,7 @@
 name: Bug report
 description: Report a reproducible problem with VE Mobile.
 title: "[Bug]: "
+labels: [bug]
 body:
   - type: textarea
     id: environment
