@@ -5,56 +5,75 @@ body:
   - type: textarea
     id: environment
     attributes:
-      label: Versions and device
-      description: Include VE Mobile, Foundry, system, browser, device, and OS versions.
-      value: |
+      label: VE Mobile version and device
+      description: These details are not reliably included in the diagnostic report. Include your OS version, and mention if you use an installed web app or VE Foundry Client. Write "unknown" for anything you cannot find.
+      placeholder: |
         VE Mobile version:
-        Foundry version:
-        Game system and version:
-        Browser and version:
         Device/model:
-        Operating system:
+        Operating system and version:
     validations:
       required: true
   - type: dropdown
     id: presentation
     attributes:
       label: Presentation
+      description: Select the mode where the problem happens. You can select more than one if already checked.
+      multiple: true
       options:
         - Phone
         - Tablet Split
         - Tablet Full
         - Desktop
+        - Unable to enter VE Mobile / not sure
     validations:
       required: true
   - type: dropdown
     id: role
     attributes:
       label: Role
+      description: Your Foundry user role when the problem happens.
       options:
         - Player
+        - Trusted Player
+        - Assistant GM
         - GM
+        - Observer / other
+        - Not sure
     validations:
       required: true
   - type: textarea
     id: problem
     attributes:
       label: What happened?
-      description: Describe the problem, expected result, and actual result.
+      description: Explain what you expected and what actually happened. If this worked before, include the last working version or any recent change you know about.
+      placeholder: |
+        Expected result:
+        Actual result:
+        Last worked / recent changes (if known):
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
-      description: Give the shortest sequence that reproduces the problem.
+      description: Give the shortest sequence and say whether it happens every time, sometimes, or only once. Include relevant actor/item types, settings, or Scene conditions without private campaign details. If you cannot reproduce it, describe what you were doing when it happened.
+      placeholder: |
+        How often it happens:
+        1.
+        2.
+        3.
     validations:
       required: true
   - type: textarea
     id: modules
     attributes:
       label: Relevant enabled modules
-      description: Include versions when known and whether the problem occurs with those modules disabled.
+      description: The report does not contain a complete enabled-module list. Name modules involved and their versions, or paste your enabled-module list if unsure. If already tested with other modules disabled, include the result; "not tested" is fine.
+  - type: textarea
+    id: checks
+    attributes:
+      label: Other checks or workarounds (optional)
+      description: If already tried, does a full reload help? Does the same action work in Foundry's Desktop interface or on another device/browser? Include any workaround. You do not need to perform extra tests to submit this report.
   - type: textarea
     id: logs
     attributes:
@@ -67,7 +86,7 @@ body:
         4. Review the text before posting. We recommend removing your game/server address (URL, hostname, or IP address), especially the report's "Page" line. Remove passwords, tokens, credentials, and private campaign or player information too.
         5. Restore your previous Diagnostic logging level after collecting the report.
 
-        Include any relevant browser console errors and their stack traces if available. If you cannot open Settings or collect a report, explain what prevents it below; you can still submit the issue.
+        Include any relevant browser console errors and their stack traces if available. If you cannot open Settings or collect a report, explain what prevents it below; you can still submit the issue. In that case, also include your Foundry version, game system and version, and browser and version here if known.
       placeholder: Paste your reviewed diagnostic report and relevant errors here, or explain why logs could not be collected.
       render: text
     validations:
