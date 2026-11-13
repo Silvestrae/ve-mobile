@@ -2,10 +2,6 @@ name: Bug report
 description: Report a reproducible problem with VE Mobile.
 title: "[Bug]: "
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Please remove passwords, authentication tokens, private server credentials, and unnecessary sensitive campaign or player material from reports, screenshots, and logs. We also recommend removing your game/server address (URL, hostname, or IP address), including the diagnostic report's "Page" line and any address visible in screenshots. Do not post security-sensitive details publicly. Ask the maintainer for a private reporting channel first, without including exploit details or sensitive data.
   - type: textarea
     id: environment
     attributes:
