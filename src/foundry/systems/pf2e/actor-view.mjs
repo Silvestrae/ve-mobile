@@ -214,19 +214,22 @@ function supplementaryRecords(actor, system, user, items) {
   };
 }
 
-// Convert PF2e ability entries into stable presentation records, accepting the
-// active system's prepared Actor shape and its system-data fallback.
+// Project the native full and short labels while keeping the slug for mechanics.
 function abilityRecords(actor) {
   const abilities = actor?.abilities ?? actor?.system?.abilities;
   if (!abilities || typeof abilities !== "object") return [];
   const labels = globalThis.CONFIG?.PF2E?.abilities ?? {};
-  return Object.entries(abilities).map(([slug, ability]) => ({
-    slug,
-    label: localizeFoundry(string(labels[slug], `PF2E.Ability${humanize(slug).replace(/\s/gu, "")}`), humanize(slug)),
-    modifier: firstFinite(ability?.mod, ability?.modifier, ability?.value),
-    ...(actor.system?.details?.keyability?.value === slug ? { key: true } : {}),
-    ...(actor.system?.build?.attributes?.apex === slug ? { apex: true } : {})
-  })).filter((ability) => ability.modifier !== null);
+  return Object.entries(abilities).map(([slug, ability]) => {
+    const shortLabel = string(ability?.shortLabel) || `PF2E.AbilityId.${slug}`;
+    return {
+      slug,
+      label: localizeFoundry(string(labels[slug], `PF2E.Ability${humanize(slug).replace(/\s/gu, "")}`), humanize(slug)),
+      shortLabel: localizeFoundry(shortLabel, shortLabel.startsWith("PF2E.") ? slug.toUpperCase() : shortLabel),
+      modifier: firstFinite(ability?.mod, ability?.modifier, ability?.value),
+      ...(actor.system?.details?.keyability?.value === slug ? { key: true } : {}),
+      ...(actor.system?.build?.attributes?.apex === slug ? { apex: true } : {})
+    };
+  }).filter((ability) => ability.modifier !== null);
 }
 
 // Read the prepared class DC and label when PF2e exposes the statistic.

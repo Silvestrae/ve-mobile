@@ -3,13 +3,8 @@ import { readLocalSetting, restoreLocalSetting } from "./client-setting-restorat
 
 const CORE_THEME_SETTING = "core.uiConfig";
 
-/**
- * Synchronize VE Mobile with Foundry v13's Interface Theme.
- *
- * A direct VE choice intentionally sets both native themes. A native change
- * only flows from Interface Theme back into VE, leaving Application Theme as
- * an independent Foundry control.
- */
+/** Keep the VE frame and hosted Chat aligned with Foundry's Interface Theme.
+ * Foundry retains Application Theme authority over its sheets and dialogs. */
 export function createFoundryThemeGateway({
   getGame = () => globalThis.game,
   getDocument = () => globalThis.document
@@ -22,44 +17,47 @@ export function createFoundryThemeGateway({
   // Persist the requested theme after validating it against the supported theme list.
   let setMobileTheme = async () => {};
   let queue = Promise.resolve();
-  let started = false;
+  let owner = null;
 
   // Serialize theme changes so native settings updates cannot race each other.
   const enqueue = (action) => {
     queue = queue.then(action).catch((error) => {
-      console.warn("VE Mobile | Unified theme could not be saved", error);
+      console.warn("VE Mobile | Interface theme could not be saved", error);
     });
     return queue;
   };
 
-  const applyMobileTheme = (theme, config = readCoreConfig(getGame())) => {
-    // Update Foundry's native UI config only when its two theme choices differ;
-    // hosted VE chat/dialog surfaces still need their class synchronized.
+  // Record the interface value VE is about to own, then merge into current
+  // raw client settings so a simultaneous native application edit survives.
+  const persistInterface = async (theme, scope) => {
     const game = getGame();
-    if (!game?.settings?.get || typeof game.configureUI !== "function") return false;
-    const next = unifiedConfig(config, theme);
-    if (!themesMatch(config, theme)) game.configureUI(next);
-    updateHostedSurfaces(getDocument(), theme);
-    return true;
-  };
-
-  const persistCore = async (theme) => {
-    // Mark our expected echo before writing, so the native-setting hook does not
-    // turn this VE-originated update into a second preference change.
-    const game = getGame();
-    if (!game?.settings?.get || !game.settings.set) return false;
-    const current = readCoreConfig(game);
-    const next = unifiedConfig(current, theme);
+    if (owner !== scope || !scope || scope.disposed || !game?.settings?.set) return false;
+    const current = copyUiConfig(readLocalSetting(game, CORE_THEME_SETTING));
+    const previousInterface = current.colorScheme.interface;
+    if (previousInterface === theme) return true;
+    const saved = game.settings.get(MODULE_ID, KEYS.THEME_SETTINGS_SNAPSHOT);
+    if (saved?.captured) {
+      // Legacy captures record only the old config. Start tracking ownership
+      // from the current Interface Theme before the first write after upgrade.
+      const original = ownsInterfaceTheme(saved, previousInterface)
+        ? saved.original : current;
+      await game.settings.set(MODULE_ID, KEYS.THEME_SETTINGS_SNAPSHOT, {
+        ...saved, interfaceOnly: true, original, appliedInterface: theme
+      });
+    }
+    if (owner !== scope || scope.disposed || getGame() !== game) return false;
+    const latest = copyUiConfig(readLocalSetting(game, CORE_THEME_SETTING));
+    if (latest.colorScheme.interface !== previousInterface) return false;
+    const next = withInterfaceTheme(latest, theme);
     knownConfig = next;
-    applyMobileTheme(theme, current);
-    if (themesMatch(current, theme)) return true;
     ignoredCoreFingerprint = configFingerprint(next);
     await restoreLocalSetting(game, CORE_THEME_SETTING, next);
     return true;
   };
 
   // Accept external Foundry theme changes only when the current policy allows them.
-  const acceptFoundryChange = (value) => enqueue(async () => {
+  const acceptFoundryChange = (value, scope) => enqueue(async () => {
+    if (owner !== scope || scope.disposed) return;
     const next = copyUiConfig(value);
     const fingerprint = configFingerprint(next);
     const previousInterfaceChoice = knownConfig?.colorScheme?.interface;
@@ -75,36 +73,38 @@ export function createFoundryThemeGateway({
     // independent; only a native Interface Theme change transfers back to VE.
     if (interfaceChoice === previousInterfaceChoice || readMobileTheme() === interfaceTheme) return;
     ignoredMobileTheme = interfaceTheme;
-    updateHostedSurfaces(getDocument(), interfaceTheme);
+    updateHostedChat(getDocument(), interfaceTheme);
     await setMobileTheme(interfaceTheme);
   });
 
   return Object.freeze({
     async beginMobileSession({ fresh = true, entryToken = "" } = {}) {
-      // Capture once, before mode changes, so Desktop restoration can put the
-      // user's original core theme back rather than the VE-synchronized value.
+      // Capture before the first VE write. An existing capture remains in
+      // place until Desktop exit or the next VE-owned Interface Theme write.
       const game = getGame();
       const saved = game?.settings?.get?.(MODULE_ID, KEYS.THEME_SETTINGS_SNAPSHOT);
       if (saved?.captured === true) return false;
       await game?.settings?.set?.(MODULE_ID, KEYS.THEME_SETTINGS_SNAPSHOT, {
         captured: true,
+        interfaceOnly: true,
         original: copyUiConfig(readLocalSetting(game, CORE_THEME_SETTING)),
         entryToken: String(entryToken).slice(0, 120)
       });
       return true;
     },
     async restoreForDesktop({ notify = true } = {}) {
-      // Drain pending VE writes first and retain the snapshot until the native
-      // setting has been returned to its captured value.
+      // Drain pending VE writes and restore only a recorded VE-owned value.
+      // Legacy records contain no proof of ownership, so keep the current
+      // native preferences and retire the older snapshot without a core write.
       await queue;
       const game = getGame();
       const saved = game?.settings?.get?.(MODULE_ID, KEYS.THEME_SETTINGS_SNAPSHOT);
       if (saved?.captured !== true) return false;
-      const original = copyUiConfig(saved.original);
       const current = copyUiConfig(readLocalSetting(game, CORE_THEME_SETTING));
-      if (configFingerprint(current) !== configFingerprint(original)) {
+      const originalInterface = saved.original?.colorScheme?.interface;
+      if (ownsInterfaceTheme(saved, current.colorScheme.interface) && current.colorScheme.interface !== originalInterface) {
         try {
-          await restoreLocalSetting(game, CORE_THEME_SETTING, original, { notify });
+          await restoreLocalSetting(game, CORE_THEME_SETTING, withInterfaceTheme(current, originalInterface), { notify });
         } catch (error) {
           // Appearance preferences are expendable: an incompatible old capture
           // must not prevent Phone/Tablet startup. Retain the current native
@@ -120,38 +120,38 @@ export function createFoundryThemeGateway({
     },
     /** Foundry's Interface Theme resolves any pre-existing mismatch once. */
     start(scope, { readTheme, setTheme } = {}) {
-      if (started || !scope?.hook || typeof readTheme !== "function" || typeof setTheme !== "function") return false;
-      started = true;
+      if (owner || !scope?.hook || typeof readTheme !== "function" || typeof setTheme !== "function") return false;
+      owner = scope;
       readMobileTheme = readTheme;
       setMobileTheme = setTheme;
       knownConfig = readCoreConfig(getGame());
       scope.hook("clientSettingChanged", (key, value) => {
-        if (key === CORE_THEME_SETTING) void acceptFoundryChange(value);
+        if (key === CORE_THEME_SETTING) void acceptFoundryChange(value, scope);
       });
       scope.own?.(() => {
-        started = false;
+        owner = null;
         readMobileTheme = () => "";
         setMobileTheme = async () => {};
       });
       const theme = readInterfaceTheme(knownConfig) ?? readInterfaceDocumentTheme(getDocument());
-      updateHostedSurfaces(getDocument(), theme);
+      updateHostedChat(getDocument(), theme);
       if (readMobileTheme() !== theme) {
         ignoredMobileTheme = theme;
-        void enqueue(() => setMobileTheme(theme));
+        void enqueue(() => { if (owner === scope && !scope.disposed) return setMobileTheme(theme); });
       }
       return true;
     },
 
-    /** A direct VE change makes both Foundry theme controls match it. */
+    /** A direct VE choice changes only Foundry's Interface Theme. */
     sync(requested) {
       const theme = normalizedTheme(requested) ?? "dark";
+      const scope = owner;
+      updateHostedChat(getDocument(), theme);
       if (ignoredMobileTheme === theme) {
         ignoredMobileTheme = "";
-        updateHostedSurfaces(getDocument(), theme);
         return true;
       }
-      applyMobileTheme(theme);
-      void enqueue(() => persistCore(theme));
+      void enqueue(() => persistInterface(theme, scope));
       return true;
     },
 
@@ -180,18 +180,18 @@ function readApplicationTheme(config) {
   return normalizedTheme(config?.colorScheme?.applications);
 }
 
-// Combine current theme configuration into the values used by VE theme matching.
-function unifiedConfig(config, theme) {
-  const current = copyUiConfig(config);
-  return {
-    ...current,
-    colorScheme: { ...current.colorScheme, applications: theme, interface: theme }
-  };
+// Only snapshots that recorded a matching VE write establish ownership.
+function ownsInterfaceTheme(snapshot, currentTheme) {
+  return snapshot.interfaceOnly === true && snapshot.appliedInterface !== undefined
+    && snapshot.appliedInterface === currentTheme;
 }
 
-// Check whether current Foundry and VE theme preferences resolve to the same theme.
-function themesMatch(config, theme) {
-  return readApplicationTheme(config) === theme && readInterfaceTheme(config) === theme;
+// Replace the one field VE owns in the current client config.
+function withInterfaceTheme(config, theme) {
+  const colorScheme = { ...config.colorScheme };
+  if (theme === undefined) delete colorScheme.interface;
+  else colorScheme.interface = theme;
+  return { ...config, colorScheme };
 }
 
 // Normalize a theme value to the supported canonical identifier.
@@ -201,10 +201,10 @@ function normalizedTheme(value) {
 
 // Read the theme currently applied to Foundry’s interface document.
 function readInterfaceDocumentTheme(document) {
-  return document?.getElementById?.("interface")?.classList?.contains?.("theme-light")
-    || document?.body?.classList?.contains?.("theme-light")
-    ? "light"
-    : "dark";
+  const classes = document?.getElementById?.("interface")?.classList;
+  if (classes?.contains?.("theme-light")) return "light";
+  if (classes?.contains?.("theme-dark")) return "dark";
+  return readApplicationDocumentTheme(document);
 }
 
 // Read the theme currently applied to native application surfaces.
@@ -217,9 +217,9 @@ function configFingerprint(config) {
   return JSON.stringify(config);
 }
 
-// Apply the current allowed theme classes to Foundry and VE-owned surfaces.
-function updateHostedSurfaces(document, theme) {
-  for (const element of document?.querySelectorAll?.(".ve-native-chat-screen, .ve-mobile-dialog.themed") ?? []) {
+// The hosted transcript moved outside Foundry's interface theme ancestor.
+function updateHostedChat(document, theme) {
+  for (const element of document?.querySelectorAll?.(".ve-native-chat-screen") ?? []) {
     element.classList?.add?.("themed");
     element.classList?.remove?.("theme-light", "theme-dark");
     element.classList?.add?.(`theme-${theme}`);

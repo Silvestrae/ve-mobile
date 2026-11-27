@@ -388,10 +388,10 @@ export function restorePlacement(element, placement) {
 
 /** Resolve the native light/dark class used by Foundry's Chat surface. */
 export function readFoundryTheme(documentRef) {
-  const interfaceElement = documentRef?.getElementById?.("interface");
-  const body = documentRef?.body;
-  if (interfaceElement?.classList?.contains("theme-light") || body?.classList?.contains("theme-light")) return "theme-light";
-  return "theme-dark";
+  const classes = documentRef?.getElementById?.("interface")?.classList;
+  if (classes?.contains("theme-light")) return "theme-light";
+  if (classes?.contains("theme-dark")) return "theme-dark";
+  return documentRef?.body?.classList?.contains("theme-light") ? "theme-light" : "theme-dark";
 }
 
 const EDITOR_PROMPT_ACTIONS = new Set(["font-color", "font-size-custom", "image", "link", "insert-table"]);

@@ -514,6 +514,10 @@ body.ve-mobile-booting {
   font: 700 0.88rem/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.ve-mobile-bootstrap__wake-prompt-choice[hidden] {
+  display: none;
+}
+
 .ve-mobile-bootstrap__wake-prompt-choice:focus-visible .ve-mobile-bootstrap__wake-box {
   outline: 2px solid var(--ve-gold);
   outline-offset: 3px;
@@ -1096,6 +1100,41 @@ body.ve-mobile-running:not([data-ve-mobile-form-factor="tablet"]) .ve-mobile-adm
 body.ve-mobile-running .ve-mobile-admitted-app:not(:has(.window-content, .application-content, .dialog-content)) {
   overflow: hidden auto !important;
   overscroll-behavior: contain;
+}
+
+/* Keep the advancement step scrollable inside the fitted window and its native navigation in view. */
+body.ve-mobile-running .ve-mobile-admitted-app.advancement.manager {
+  --ve-native-bottom-space: 0px;
+}
+
+body.ve-mobile-running .ve-mobile-admitted-app.advancement.manager > .window-content {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.ve-mobile-running .ve-mobile-admitted-app.advancement.manager [data-application-part="manager"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+body.ve-mobile-running .ve-mobile-admitted-app.advancement.manager [data-application-part="manager"] > .step {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+}
+
+body.ve-mobile-running .ve-mobile-admitted-app.advancement.manager [data-application-part="manager"] > nav {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+body.ve-mobile-running .ve-mobile-admitted-app.advancement.manager [data-application-part="manager"] > nav > button {
+  flex: 1 1 auto;
+  min-height: 44px;
 }
 
 /* Foundry editor prompts use a full-screen dialog containing a separately
@@ -6440,6 +6479,128 @@ details.ve-action-session-compact-result {
   white-space: nowrap;
 }
 
+.ve-dnd5e-class-list {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 2px 12px;
+  list-style: none;
+}
+
+.ve-dnd5e-class-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 7px;
+  border-bottom: 1px solid var(--ve-border);
+  font-size: 0.85rem;
+}
+
+.ve-dnd5e-class-list strong {
+  overflow-wrap: anywhere;
+}
+
+.ve-dnd5e-class-list span {
+  color: var(--ve-character-accent);
+}
+
+.ve-dnd5e-advancement-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 5px 12px;
+}
+
+.ve-dnd5e-advancement-actions > button {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 4px 8px;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.ve-dnd5e-advancement-layer {
+  box-sizing: border-box;
+  align-items: center;
+}
+
+.ve-dnd5e-advancement-dialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ve-dnd5e-advancement-dialog > header {
+  flex: 0 0 auto;
+}
+
+.ve-dnd5e-advancement-content {
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.ve-dnd5e-class-picker {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+
+.ve-dnd5e-class-picker > input {
+  min-height: 44px;
+  width: 100%;
+}
+
+.ve-dnd5e-class-results {
+  min-height: 0;
+  max-height: 45dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.ve-dnd5e-class-picker > p {
+  margin: 0;
+}
+
+.ve-dnd5e-compendium-class {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px;
+  border-bottom: 1px solid var(--ve-border);
+  cursor: pointer;
+}
+
+.ve-dnd5e-compendium-class:has(input:checked) {
+  background: var(--ve-surface-up);
+}
+
+.ve-dnd5e-compendium-class :is(strong, small) {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.ve-dnd5e-class-level-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.ve-dnd5e-class-level-row strong {
+  overflow-wrap: anywhere;
+}
+
+.ve-dnd5e-class-level-row :is(select, button) {
+  min-height: 44px;
+  padding-inline: 6px;
+}
+
 .ve-sheet-collection-section {
   border-top: 1px solid var(--ve-border);
 }
@@ -8516,6 +8677,20 @@ details.ve-action-session-compact-result {
   color: var(--ve-chat-message-subtle) !important;
 }
 
+/* Monk's XP award embeds sheet headings and character names on the hosted
+ * message surface. Pair that text with the palette used by the transcript. */
+.ve-native-chat-screen > #chat.ve-native-chat :is(#chat-log, .chat-log) > :is(.chat-message, .message) .monks-tokenbar.assignxp :is(
+  .card-header h3, .items-header h3, .item-row .item-name, .item-row .item-name > span, .xp-result, .card-footer
+) {
+  color: var(--ve-chat-message-text) !important;
+}
+
+.ve-native-chat-screen > #chat.ve-native-chat :is(#chat-log, .chat-log) > :is(.chat-message, .message) .monks-tokenbar.assignxp .item-row .xp-result {
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+}
+
 /* D&D5e card chrome inherits pale desktop textures and dark ink in some
  * hosted themes. Repaint only the D&D5e message and card headers owned by
  * VE's live transcript; keep system-specific result colors untouched. */
@@ -8558,6 +8733,12 @@ details.ve-action-session-compact-result {
 .ve-native-chat-screen > #chat.ve-native-chat :is(#chat-log, .chat-log) > :is(.chat-message, .message) :is(.dnd5e.chat-card, .dice-roll, .table-draw, .roll-table) :is(h1, h2, h3, h4, h5, h6, .title, .card-header, .message-content, .dice-formula, .dice-total, p, li, label) {
   color: inherit !important;
   text-shadow: none !important;
+}
+
+/* Item Piles uses the same light row highlight in both themes.
+ * Follow the Chat palette inside the card to keep item names and quantities readable. */
+.ve-native-chat-screen > #chat.ve-native-chat :is(#chat-log, .chat-log) > :is(.chat-message, .message) .item-piles-chat-card {
+  --item-piles-text-light-highlight: var(--ve-chat-message-content);
 }
 
 .ve-native-chat-screen > #chat.ve-native-chat :is(#chat-log, .chat-log) > :is(.chat-message, .message) :is(a, .content-link) {
@@ -12651,6 +12832,7 @@ SOFTWARE.
 }
 
 .ve-setting[hidden] { display: none !important; }
+.ve-setting-fullscreen [hidden] { display: none !important; }
 .ve-setting-input-color { min-height: 44px; min-width: 64px; padding: 4px; }
 .ve-mobile-app[data-character-theme="custom"] .ve-bottom-nav .ve-main-nav-item:is(.is-active, [aria-current="page"]),
 .ve-mobile-app[data-character-theme="custom"] .ve-sheet-tabs button:is(.is-active, [aria-selected="true"]),

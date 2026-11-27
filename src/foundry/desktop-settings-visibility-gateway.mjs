@@ -23,7 +23,7 @@ const DESKTOP_HIDDEN_SETTING_KEYS = Object.freeze([
 const GROUPS = Object.freeze([
   { id: "preferences", keys: ["quickbarSource", "showActionSummaries", "compactActionSummaries"] },
   { id: "compatibility", keys: ["fcsAutoSoftOverride"] },
-  { id: "support", keys: ["saveDiagnosticsToJournal", "controlsGuide"] }
+  { id: "support", keys: ["updateNotices", "saveDiagnosticsToJournal", "controlsGuide"] }
 ]);
 
 /** Remove only unedited/omitted VE controls; other modules retain native submission. */

@@ -56,6 +56,47 @@ export function renderPwaInstallSettings(commands, scope, namePrompt = null) {
   ] });
 }
 
+// A saved fullscreen preference survives a browser Escape or a new login.
+function renderFullscreenSetting(commands, scope) {
+  const name = uiText(commands, "Fullscreen", "Fullscreen");
+  const id = "ve-setting-fullscreen";
+  const hint = node("p", { attrs: { id: `${id}-hint` } });
+  const status = node("p", { attrs: { role: "status" } });
+  const control = settingControl({ name, type: "boolean" }, id, commands);
+  control.setAttribute("aria-describedby", hint.id);
+  const resume = node("button", { className: "ve-settings-diagnostics-button",
+    attrs: { type: "button", hidden: true }, text: uiText(commands, "EnterFullscreen", "Enter fullscreen") });
+  // Keep the saved value and the current browser session distinct in the UI.
+  const update = state => {
+    control.checked = state.enabled;
+    control.disabled = state.pending || (!state.supported && !state.enabled);
+    resume.hidden = !state.supported || !state.enabled || state.active;
+    resume.disabled = state.pending;
+    hint.textContent = state.supported
+      ? uiText(commands, "FullscreenDeviceHint", "Saved in this browser. Tap Continue after signing in to restore fullscreen.")
+      : uiText(commands, "FullscreenUnavailable", "This browser does not allow fullscreen here. You can try Add to Home Screen.");
+  };
+  // Start the native request synchronously from the control's trusted event.
+  const apply = async (action) => {
+    status.textContent = "";
+    let applied = false;
+    try { applied = await action(); }
+    catch { /* Storage may be blocked or the browser may refuse fullscreen. */ }
+    if (scope.disposed) return;
+    update(commands.readFullscreen());
+    if (!applied) status.textContent = uiText(commands, "FullscreenFailed", "Could not change fullscreen in this browser.");
+  };
+  scope.listen(control, "change", () => apply(() => commands.setFullscreen(control.checked)));
+  scope.listen(resume, "click", () => apply(() => commands.resumeFullscreen()));
+  commands.watchFullscreen(scope, update);
+  return node("div", { className: "ve-setting ve-setting-boolean ve-setting-fullscreen", children: [
+    node("div", { className: "ve-setting-copy", children: [
+      node("label", { className: "ve-setting-name", attrs: { for: id }, text: name }), hint, resume, status
+    ] }),
+    node("div", { className: "ve-setting-control", children: [control] })
+  ] });
+}
+
 // Own the accessible name dialog, browser prompt generation, and focus restoration.
 export function createPwaNamePrompt(commands, scope) {
   const label = uiText(commands, "AppName", "Installed app name");
@@ -329,7 +370,10 @@ function settingsContent({ commands, scope, refresh, requiresReload, overlayHost
               }
             })
           ] }));
-          if (group.id === "device" && pwaNamePrompt) children.push(renderPwaInstallSettings(commands, scope, pwaNamePrompt));
+          if (group.id === "device") {
+            if (commands.readFullscreen?.()) children.push(renderFullscreenSetting(commands, scope));
+            if (pwaNamePrompt) children.push(renderPwaInstallSettings(commands, scope, pwaNamePrompt));
+          }
           if (group.id === "performance") {
             // Select this category's fields for the requested settings subsection.
             const fieldsFor = (...keys) => group.fields.filter((field) => keys.includes(field.key));

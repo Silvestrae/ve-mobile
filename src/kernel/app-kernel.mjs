@@ -25,7 +25,7 @@ export function nativeSceneTileTapAllowed({ active, state, presentation }) {
 }
 
 // Own one activation transaction, its command boundary, presentation and deterministic shutdown.
-export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, craftingGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, customHeaderGateway = null, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, pwaInstall = null, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
+export function createAppKernel({ store, session, commandGateway, biographyGateway, itemDetailsGateway = null, craftingGateway = null, actorEditorGateway = null, combatGateway, cameraIntents, authoritativeGateway, canvasRecoveryGateway = null, loadTimingGateway = null, reloadApplication = () => globalThis.window?.location?.reload?.(), connectionGeneration, sceneGateway, templatePlacementGateway, nativeTokenPlacementGateway = null, actorTokenPlacementGateway = null, movementGateway, quickbarGateway, customHeaderGateway = null, hotbarGateway = null, actionBarPreferences = null, nativeChatGateway, armorClassGateway = null, diagnosticsJournalGateway = null, activeEffectContextGateway, actionSessionGateway, preferencesGateway, settingsCompatibilityGateway, moduleOverlayGateway, sessionStatusGateway, deviceIdentityGateway, controlsGuideGateway = null, isControlsUiReady = () => false, themeGateway, mobileBackGateway = null, mobileAssetGateway = null, lowMemoryGateway = null, graphicsProfileGateway = lowMemoryGateway, graphicsRecoveryGateway = null, metrics, diagnostics, performanceObserver = null, wakeLockController, pwaInstall = null, fullscreen = null, readPolicy, readGraphicsPolicy = () => null, watchGraphicsPolicy = () => () => {}, disable, preparePresentation = () => {}, createFrame = createAppFrame }) {
   // Adapt the preference gateway's localizer for shared UI helpers.
   const localize = (key, fallback, data) => localizedText((id, _fallback, values) => preferencesGateway?.localize?.(id, values), key, fallback, data);
   let runtimeScope = null;
@@ -103,6 +103,15 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active
       || store.state.route !== "characters" || store.state.reconnect || store.state.modeTransition
       || sourceUuid !== store.state.selectedActorSourceUuid) throw new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.ThisActorViewIsNoLongerActive", "This Actor view is no longer active."));
+  };
+  // Keep class browsing and native advancement bound to the exact live Features view.
+  const classAdvancement = (request, operation) => {
+    const requireView = () => {
+      requireCharacterView(request.actorSourceUuid);
+      if (store.state.characterTab !== "features") throw new Error(localizedText(localize, "VEMOBILE.Interface.AppKernel.ThisActorViewIsNoLongerActive", "This Actor view is no longer active."));
+    };
+    requireView();
+    return guardConnection(expected => operation(request, expected, runtimeScope, requireView));
   };
   // Combine current Scene readiness and source visibility with the gateway's authoritative placement eligibility.
   const actorTokenEligible = (sourceUuid) => {
@@ -223,6 +232,9 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       requireCharacterView(request.actorSourceUuid);
       return guardConnection(expected => actorEditorGateway.open(request, expected, runtimeScope));
     },
+    advanceCharacterClass: request => classAdvancement(request, actorEditorGateway.advanceClass),
+    listCharacterClasses: request => classAdvancement(request, actorEditorGateway.listClasses),
+    addCharacterClass: request => classAdvancement(request, actorEditorGateway.addClass),
     selectCharacterTab: (tab) => dispatchNavigation({ type: "select-character-tab", tab }),
     // Copy bounded display fields into VE state; the native action owns the actual roll.
     showRollResult: (payload) => {
@@ -561,6 +573,11 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
       if (!activationCommitted || !runtimeScope || runtimeScope.disposed || !readPolicy().active) return Promise.resolve(false);
       return pwaInstall?.install() ?? Promise.resolve(false);
     },
+    readFullscreen: () => fullscreen?.snapshot(),
+    watchFullscreen: (owner, listener) => fullscreen?.watch(owner, listener),
+    // Keep the request on the Settings click's activation stack.
+    setFullscreen: enabled => fullscreen?.setEnabled(enabled) ?? Promise.resolve(false),
+    resumeFullscreen: () => fullscreen?.resume() ?? Promise.resolve(false),
     readActionSummaryPreferences: () => preferencesGateway.actionSummaries?.() ?? { showActionSummaries: true },
     // Perform the intentionally broad diagnostic read only for the actual Settings consumer.
     readSettings: () => {
@@ -662,6 +679,7 @@ export function createAppKernel({ store, session, commandGateway, biographyGatew
     restoreSettingsDefaults: () => restoreVeSettingsDefaults({
       lowMemoryGateway,
       preferencesGateway,
+      fullscreen,
       guardConnection,
       invalidate: () => store.dispatch({ type: "view-invalidated" })
     }),
@@ -1256,9 +1274,10 @@ function nextRenderedFrame() {
 }
 
 // Restore an active memory policy before preference defaults so its recovery baseline is not lost.
-export async function restoreVeSettingsDefaults({ lowMemoryGateway, preferencesGateway, guardConnection = (action) => action(), invalidate = () => {} }) {
+export async function restoreVeSettingsDefaults({ lowMemoryGateway, preferencesGateway, fullscreen, guardConnection = (action) => action(), invalidate = () => {} }) {
   let memoryResult = null;
   if (lowMemoryGateway?.snapshot?.().active) memoryResult = await guardConnection(() => lowMemoryGateway.disable());
+  if (fullscreen?.snapshot().enabled) await fullscreen.setEnabled(false);
   const result = await guardConnection(() => preferencesGateway.restoreDefaults());
   invalidate();
   return Object.freeze({ ...result, requiresReload: Boolean(result.requiresReload || memoryResult?.requiresReload) });

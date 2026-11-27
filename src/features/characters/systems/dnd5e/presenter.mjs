@@ -18,6 +18,7 @@ import { resolveHeaderBanner } from "../../../../kernel/header-banner.mjs";
 import { applyBannerArtwork } from "../../../../ui/header-banner-artwork.mjs";
 import { bindActorPlacementHold } from "../../portrait-token-gesture.mjs";
 import { actorSheetTabs, actorOriginBack, collectiveHeaderContent, renderCollectivePanel } from "./collective-sheet.mjs";
+import { classAdvancementActions } from "./class-advancement.mjs";
 
 const SHEET_TABS = Object.freeze([
   ["favourites", "favourites", "Favourites"],
@@ -30,6 +31,7 @@ const SHEET_TABS = Object.freeze([
 // Include secondary views that are rendered inside the overview tab group.
 const SHEET_PAGES = new Set([...SHEET_TABS.map(([key]) => key), "abilities", "effects"]);
 const CURRENCY_DENOMINATIONS = Object.freeze(["pp", "gp", "ep", "sp", "cp"]);
+const CLASS_MANAGEMENT_SECTION = "class-management";
 const DEATH_SAVE_PRESENTATION_BY_ACTOR = new Map();
 const SPEED_SELECTION_BY_ACTOR = new Map();
 
@@ -1419,18 +1421,38 @@ function featuresPanel(actor, commands, openItem, expandedItemId, openSectionIds
   let renderScope = null;
   const openSections = new Set(openSectionIds ?? []);
   const body = node("div", { className: "ve-sheet-collection-body" });
+  // Store Class Management alongside the other Features disclosures so an actor refresh keeps it open.
+  const setSectionExpanded = (sectionId, open) => {
+    if (open) openSections.add(sectionId);
+    else openSections.delete(sectionId);
+    commands.setCharacterSectionExpanded(sectionId, open);
+  };
   const controls = collectionControls(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Features", "Features"), sortMode, () => {
     sortMode = sortMode === "alphabetical" ? "manual" : "alphabetical";
     persistCollectionPreference(commands, "featureSort", sortMode, actor, scope);
     draw();
-  }, () => body.querySelectorAll("details.ve-sheet-collection-section"), (sectionIds, expanded) => {
+  }, () => card.querySelectorAll("details.ve-sheet-collection-section"), (sectionIds, expanded) => {
     openSections.clear();
     for (const sectionId of sectionIds) openSections.add(sectionId);
     if (!expanded) commands.setExpandedCharacterItem("");
     commands.setCharacterSectionsExpanded(sectionIds);
   }, scope, { localize: commands.localize });
   const resourceStrip = actor.type === "npc" ? npcResourceStrip(actor, commands) : null;
-  const card = collectionCard(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Features", "Features"), sheetTabIcon("features"), [resourceStrip, body].filter(Boolean), controls.element);
+  const classes = actor.type === "character" ? actor.classes ?? [] : [];
+  const classActions = actor.type === "character" ? classAdvancementActions(actor, commands, scope) : null;
+  const classList = classes.length ? node("ul", { className: "ve-dnd5e-class-list", children: classes.map(item =>
+    node("li", { children: [
+      node("strong", { text: item.name }),
+      node("span", { text: localizedText(commands.localize, "DND5E.LevelNumber", "Level {level}", { level: item.levels }) })
+    ] })
+  ) }) : null;
+  const classManagement = classList || classActions ? collectionSection(
+    CLASS_MANAGEMENT_SECTION,
+    localizedText(commands.localize, "VEMOBILE.Character.ClassAdvancement.Management", "Class Management"),
+    null, [classList, classActions], openSections.has(CLASS_MANAGEMENT_SECTION),
+    open => setSectionExpanded(CLASS_MANAGEMENT_SECTION, open), scope
+  ) : null;
+  const card = collectionCard(localizedText(commands.localize, "VEMOBILE.Character.Tabs.Features", "Features"), sheetTabIcon("features"), [resourceStrip, classManagement, body].filter(Boolean), controls.element);
 
   // Rebuild feature sections after sorting or disclosure preferences change.
   const draw = () => {
@@ -1439,16 +1461,12 @@ function featuresPanel(actor, commands, openItem, expandedItemId, openSectionIds
     const sections = actor.type === "npc" ? groupNpcFeatures(actor.features, sortMode, commands.localize) : groupFeatures(actor.features, sortMode, commands.localize);
     if (commands.claimDefaultCharacterSection?.(sections[0]?.key)) openSections.add(sections[0].key);
     body.replaceChildren(...(sections.length
-      ? sections.map((section) => collectionSection(section.key, section.label, section.features.length, section.features.map((feature) => itemRow(feature, actor, commands, openItem, expandedItemId, renderScope)), openSections.has(section.key) || section.features.some((feature) => feature.id === expandedItemId), (open) => {
-        if (open) openSections.add(section.key);
-        else openSections.delete(section.key);
-        commands.setCharacterSectionExpanded(section.key, open);
-      }, renderScope))
+      ? sections.map((section) => collectionSection(section.key, section.label, section.features.length, section.features.map((feature) => itemRow(feature, actor, commands, openItem, expandedItemId, renderScope)), openSections.has(section.key) || section.features.some((feature) => feature.id === expandedItemId), open => setSectionExpanded(section.key, open), renderScope))
       : [emptyCollection(localizedText(commands.localize, "VEMOBILE.Character.Presenter.NoFeaturesAreVisible", "No features are visible."))]));
     controls.updateSort(sortMode);
     controls.updateExpansion();
   };
-  scope.listen(body, "click", () => queueMicrotask(controls.updateExpansion));
+  scope.listen(card, "click", () => queueMicrotask(controls.updateExpansion));
   draw();
   return card;
 }
@@ -1825,7 +1843,10 @@ function collectionCard(title, iconName, children, action = null) {
 
 // Create a collapsible section and notify its owner when open state changes.
 function collectionSection(key, label, count, children, expanded = false, onChange = null, scope = null) {
-  const summary = node("summary", { attrs: { "aria-expanded": String(expanded) }, children: [icon("fa-chevron-right"), label instanceof Node ? label : node("span", { text: label }), node("b", { text: count })] });
+  const summary = node("summary", { attrs: { "aria-expanded": String(expanded) }, children: [
+    icon("fa-chevron-right"), label instanceof Node ? label : node("span", { text: label }),
+    count == null ? null : node("b", { text: count })
+  ] });
   const details = node("details", {
     className: "ve-sheet-collection-section",
     attrs: { open: expanded },

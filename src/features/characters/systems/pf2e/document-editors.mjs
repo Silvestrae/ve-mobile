@@ -104,13 +104,15 @@ export function openCurrencyEditor(shell, ownerScope, overlayHost) {
   const inputs = new Map();
   context.body.classList.add("ve-pf2e-currency-fields");
   for (const key of ["pp", "gp", "sp", "cp"]) {
-    const input = node("input", { attrs: { type: "number", min: "0", max: "999999", step: "1", inputmode: "numeric", value: originalValues[key], "aria-label": key.toUpperCase() } });
+    const abbreviation = context.t(`PF2E.CurrencyAbbreviations.${key}`, key.toUpperCase());
+    const denomination = context.t(`PF2E.Currency.${key}`, abbreviation);
+    const input = node("input", { attrs: { type: "number", min: "0", max: "999999", step: "1", inputmode: "numeric", value: originalValues[key], "aria-label": denomination } });
     inputs.set(key, input);
     // Apply a bounded signed currency step to the draft amount.
     const step = delta => { input.value = String(Math.min(999999, Math.max(0, Math.trunc(Number(input.value) || 0) + delta))); };
     // Create an accessible plus/minus control for one currency denomination.
-    const stepButton = delta => node("button", { attrs: { type: "button", "aria-label": context.t(delta < 0 ? "VEMOBILE.Character.Presenter.Decrease" : "VEMOBILE.Character.Presenter.Increase", delta < 0 ? "Decrease {denomination}" : "Increase {denomination}", { denomination: key.toUpperCase() }) }, children: [icon(delta < 0 ? "fa-minus" : "fa-plus")], on: { click: () => step(delta) } }, context.scope);
-    context.body.append(node("label", { className: `ve-currency-editor-row is-${key}`, children: [node("span", { children: [icon("fa-coins"), node("strong", { text: key.toUpperCase() })] }), stepButton(-1), input, stepButton(1)] }));
+    const stepButton = delta => node("button", { attrs: { type: "button", "aria-label": context.t(delta < 0 ? "VEMOBILE.Character.Presenter.Decrease" : "VEMOBILE.Character.Presenter.Increase", delta < 0 ? "Decrease {denomination}" : "Increase {denomination}", { denomination }) }, children: [icon(delta < 0 ? "fa-minus" : "fa-plus")], on: { click: () => step(delta) } }, context.scope);
+    context.body.append(node("label", { className: `ve-currency-editor-row is-${key}`, children: [node("span", { attrs: { title: denomination }, children: [icon("fa-coins"), node("strong", { text: abbreviation })] }), stepButton(-1), input, stepButton(1)] }));
   }
   submitButton(context, () => context.run(ACTOR_COMMANDS.UPDATE_CURRENCY, { values: Object.fromEntries([...inputs].map(([key, input]) => [key, Number(input.value)])), originalValues }));
 }

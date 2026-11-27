@@ -1,5 +1,12 @@
 {
   "VEMOBILE": {
+    "UpdateNotice": {
+      "Setting": "Check for VE Mobile updates",
+      "Hint": "Checks GitHub for a newer version and sends one private chat message to the GMs when an update is available.",
+      "Title": "VE Mobile update available",
+      "Detail": "Version {available} is available. This world is using {installed}. Update VE Mobile from Foundry Setup under Add-on Modules.",
+      "Link": "View update"
+    },
     "System": {
       "Unsupported": "VE Mobile does not support this world's game system.",
       "Changed": "The world's game system changed. Reload VE Mobile before continuing."
@@ -106,7 +113,7 @@
       },
       "Theme": {
         "Name": "Theme",
-        "Hint": "Choose VE Mobile's colour mode. This also changes Foundry's Interface and Application themes. Changing Foundry's Interface Theme updates this setting.",
+        "Hint": "Choose VE Mobile's colour mode. This stays in sync with Foundry's Interface Theme. Native windows use Foundry's Application Theme.",
         "System": "Use device setting",
         "Light": "Light",
         "Dark": "Dark"
@@ -519,6 +526,11 @@
         "LoggingOut": "Logging out…",
         "LogoutFailed": "Foundry could not log out.",
         "Saving": "Saving…",
+        "Fullscreen": "Fullscreen",
+        "EnterFullscreen": "Enter fullscreen",
+        "FullscreenDeviceHint": "Saved in this browser. Tap Continue after signing in to restore fullscreen.",
+        "FullscreenUnavailable": "This browser does not allow fullscreen here. You can try Add to Home Screen.",
+        "FullscreenFailed": "Could not change fullscreen in this browser.",
         "WakeLockFailed": "This browser did not grant the screen wake lock.",
         "Saved": "Saved",
         "SaveSettingFailed": "That setting could not be saved.",
@@ -1101,11 +1113,21 @@
         "DDEArmourClassConfigurationIsUnavailable": "D&D5e Armour Class configuration is unavailable.",
         "TheCharacterSessionChangedWhileArmourClassOpened": "The Character session changed while Armour Class opened."
       },
+      "ClassAdvancement": {
+        "Management": "Class Management",
+        "SearchClasses": "Search classes",
+        "LoadingClasses": "Loading compendium classes…",
+        "NoClasses": "No matching compendium classes.",
+        "LoadFailed": "Could not load compendium classes.",
+        "ClassUnavailable": "This compendium class is no longer available."
+      },
       "ActorEditorGateway": {
         "ThisNativeEditorSessionIsNoLongerActive": "This native editor session is no longer active.",
         "ThisActorIsNoLongerEditable": "This actor is no longer editable.",
         "ThisNativeEditorIsAlreadyOpen": "This native editor is already open.",
         "TheNativeActorEditorIsUnavailable": "The native Actor editor is unavailable.",
+        "AdvancementCharacterChanged": "The character changed. Reopen class advancement to use the latest sheet.",
+        "AdvancementUnavailable": "Native class advancement is unavailable.",
         "ThisNativeEditorWasClosedWhileOpening": "This native editor was closed while opening."
       },
       "Collections": {
@@ -2118,6 +2140,7 @@
       "ResyncCheckpoints": "Resynchronisation checkpoints",
       "KeepScreenAwake": "KEEP SCREEN AWAKE",
       "KeepAwakeHint": "Prevents your device from sleeping while VE Mobile is open.",
+      "FullscreenPrompt": "Tap Continue to restore the selected device settings.",
       "WakePrompt": "Keep Awake needs a browser-confirmed tap. Continue to enter VE and activate it.",
       "Continue": "Continue",
       "LoadingInterrupted": "Loading interrupted",

@@ -4,6 +4,7 @@ import { localizeFoundry } from "../../localization.mjs";
 import { characterHeaderRecord } from "./character-header.mjs";
 import { normalizeBannerClassification } from "../../../kernel/header-banner.mjs";
 import { collectiveActorData } from "./collective-actor-view.mjs";
+import { readToolChecks } from "./tool-checks.mjs";
 
 const ABILITY_LABELS = Object.freeze({
   str: "Strength",
@@ -1204,10 +1205,11 @@ function effectDurationLabel(effect) {
 
 // Convert configured ability entries into stable keys and numeric display data.
 function abilityRecords(source = {}) {
+  const configured = globalThis.CONFIG?.DND5E?.abilities;
   return Object.entries(source).filter(([key]) => validKey(key)).map(([key, ability]) => ({
     key,
-    short: key.toUpperCase(),
-    label: ABILITY_LABELS[key] ?? key.toUpperCase(),
+    short: abilityAbbreviation(key, configured),
+    label: systemLabel(configured?.[key]?.label ?? configured?.[key]) || (ABILITY_LABELS[key] ?? key.toUpperCase()),
     score: number(ability?.value),
     modifier: number(ability?.mod),
     checkModifier: abilityCheckModifier(ability),
@@ -1215,6 +1217,11 @@ function abilityRecords(source = {}) {
     saveModifier: number(ability?.save?.value ?? ability?.save, number(ability?.mod)),
     proficiency: number(ability?.proficient ?? ability?.proficiency?.multiplier ?? ability?.prof?.multiplier)
   }));
+}
+
+// Keep the roll key stable and use the system's abbreviation for display.
+function abilityAbbreviation(key, configured = globalThis.CONFIG?.DND5E?.abilities) {
+  return (systemLabel(configured?.[key]?.abbreviation) || key).toUpperCase();
 }
 
 function abilityCheckModifier(ability) {
@@ -1228,10 +1235,11 @@ function abilityCheckModifier(ability) {
 
 // Project skill totals, passive values, and ability associations for the sheet.
 function skillRecords(source = {}) {
+  const configured = globalThis.CONFIG?.DND5E?.skills;
   return Object.entries(source).filter(([key]) => validKey(key)).map(([key, skill]) => ({
     key,
-    label: SKILL_LABELS[key] ?? key.toUpperCase(),
-    ability: String(skill?.ability ?? "").toUpperCase(),
+    label: systemLabel(configured?.[key]?.label ?? configured?.[key]) || (SKILL_LABELS[key] ?? key.toUpperCase()),
+    ability: abilityAbbreviation(String(skill?.ability ?? "")),
     modifier: number(skill?.total, number(skill?.mod)),
     proficiency: number(skill?.proficient ?? skill?.prof?.multiplier ?? skill?.value),
     passive: numericOrNull(skill?.passive)
@@ -1242,24 +1250,19 @@ function skillRecords(source = {}) {
 // useful labels and their current proficiency totals.
 function toolProficiencyRecords(system, items) {
   const records = [];
-  const tools = system.tools ?? {};
-  for (const [key, tool] of Object.entries(tools)) {
+  for (const [key, tool] of Object.entries(readToolChecks(system))) {
     const proficiency = number(tool?.effectValue ?? tool?.value);
-    if (proficiency <= 0) continue;
+    if (!validKey(key) || proficiency <= 0) continue;
     records.push({
       key,
       label: toolLabel(key, items),
       proficiency,
-      ability: String(tool?.ability ?? "").toUpperCase(),
+      ability: abilityAbbreviation(String(tool?.ability ?? "")),
       modifier: number(tool?.total, number(tool?.mod))
     });
   }
 
   const legacy = system.traits?.toolProf;
-  for (const key of collectionValues(legacy?.value)) {
-    if (records.some((record) => record.key === key)) continue;
-    records.push({ key, label: toolLabel(key, items), proficiency: 1, ability: "", modifier: 0 });
-  }
   appendCustomRecords(records, legacy?.custom, (label, index) => ({ key: `custom:${index}:${label}`, label, proficiency: 1, ability: "", modifier: 0 }));
   return records.sort((first, second) => first.label.localeCompare(second.label));
 }
@@ -1364,11 +1367,24 @@ function toolLabel(key, items) {
   const config = globalThis.CONFIG?.DND5E ?? {};
   const definition = config.tools?.[key] ?? config.vehicleTypes?.[key];
   const item = items.find((candidate) => [candidate.identifier, candidate.system?.identifier, candidate.system?.type?.baseItem, candidate.system?.type?.value].some((value) => String(value ?? "") === String(key)));
-  return item?.name
-    || configLabel(config.toolProficiencies, key)
-    || localized(definition?.label)
+  if (item?.name) return item.name;
+  // The native tool definitions usually hold a compendium UUID. Use D&D5e's
+  // synchronous index lookup, the same source its tool labels use.
+  const indexedName = definition?.id
+    ? (globalThis.game?.dnd5e ?? globalThis.dnd5e)?.utils?.getBaseItem?.(definition.id, { indexOnly: true })?.name
+    : "";
+  return indexedName
+    || systemLabel(definition?.label)
+    || systemLabel(configLabel(config.toolProficiencies, key))
     || PROFICIENCY_LABELS[key]
     || titleCase(key);
+}
+
+// Native definitions can already hold display text or a localization key.
+// Missing keys fall through so the sheet never displays a raw DND5E key.
+function systemLabel(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text.startsWith("DND5E.") ? localizeFoundry(text, "") : text;
 }
 
 // Resolve a configured label by direct key or identifier while respecting

@@ -152,6 +152,17 @@ export function createMobileBootstrap({
   const wakePromptChoiceText = document.createElement("span");
   wakePromptChoiceText.textContent = text("VEMOBILE.Boot.KeepScreenAwake", "KEEP SCREEN AWAKE");
   wakePromptChoice.append(wakePromptChoiceBox, wakePromptChoiceText);
+  const fullscreenPromptChoice = document.createElement("button");
+  fullscreenPromptChoice.type = "button";
+  fullscreenPromptChoice.className = "ve-mobile-bootstrap__wake-prompt-choice";
+  fullscreenPromptChoice.setAttribute("role", "checkbox");
+  fullscreenPromptChoice.setAttribute("aria-checked", "true");
+  fullscreenPromptChoice.hidden = true;
+  const fullscreenPromptBox = document.createElement("span");
+  fullscreenPromptBox.className = "ve-mobile-bootstrap__wake-box";
+  fullscreenPromptBox.setAttribute("aria-hidden", "true");
+  const fullscreenPromptText = document.createElement("span");
+  fullscreenPromptChoice.append(fullscreenPromptBox, fullscreenPromptText);
   const wakePromptActions = document.createElement("div");
   wakePromptActions.className = "ve-mobile-bootstrap__wake-prompt-actions";
   const wakePromptYes = document.createElement("button");
@@ -159,7 +170,7 @@ export function createMobileBootstrap({
   wakePromptYes.className = "ve-mobile-bootstrap__wake-prompt-yes";
   wakePromptYes.textContent = text("VEMOBILE.Boot.Continue", "Continue");
   wakePromptActions.append(wakePromptYes);
-  wakePrompt.append(wakePromptMessage, wakePromptChoice, wakePromptActions);
+  wakePrompt.append(wakePromptMessage, wakePromptChoice, fullscreenPromptChoice, wakePromptActions);
   activity.append(wakePrompt);
 
   let mounted = false;
@@ -272,8 +283,16 @@ export function createMobileBootstrap({
     root.classList.add("is-failed");
   };
 
-  // Reuse one pending screen-awake choice rather than mounting duplicate prompts.
-  const promptForWakeChoice = () => {
+  // Update the shared gesture prompt without changing the user's choices.
+  const refreshGesturePrompt = () => {
+    wakePromptMessage.textContent = fullscreenPromptChoice.hidden
+      ? text("VEMOBILE.Boot.WakePrompt", "Keep Awake needs a browser-confirmed tap. Continue to enter VE and activate it.")
+      : text("VEMOBILE.Boot.FullscreenPrompt", "Tap Continue to restore the selected device settings.");
+    fullscreenPromptText.textContent = text("VEMOBILE.Settings.UI.Fullscreen", "Fullscreen");
+  };
+
+  // Wake Lock and fullscreen can use one deliberate Continue gesture.
+  const promptForWakeChoice = ({ wake: needsWake = true, fullscreen = false } = {}) => {
     if (!mounted) return Promise.resolve(null);
     if (wakePromptWaiter) return wakePromptWaiter.promise;
     activity.classList.add("is-wake-prompt");
@@ -281,6 +300,10 @@ export function createMobileBootstrap({
     ellipsis.hidden = true;
     wakePromptVisible = true;
     wake.hidden = true;
+    wakePromptChoice.hidden = !needsWake;
+    fullscreenPromptChoice.hidden = !fullscreen;
+    fullscreenPromptChoice.setAttribute("aria-checked", String(fullscreen));
+    refreshGesturePrompt();
     wakePrompt.hidden = false;
     wakePromptYes.focus?.();
     const promise = new Promise((resolve) => {
@@ -322,6 +345,9 @@ export function createMobileBootstrap({
     get wakePromptChoiceControl() {
       return wakePromptChoice;
     },
+    get fullscreenPromptChoiceControl() {
+      return fullscreenPromptChoice;
+    },
     // Attach the loading surface and start timing only while startup still needs this owner.
     mount(policy = {}) {
       if (!root.isConnected) (document.body ?? document.documentElement).append(root);
@@ -353,7 +379,7 @@ export function createMobileBootstrap({
       activity.setAttribute("aria-label", text("VEMOBILE.Boot.ProgressLabel", "Loading progress"));
       wakeText.textContent = text("VEMOBILE.Boot.KeepScreenAwake", "KEEP SCREEN AWAKE");
       wakeWarning.textContent = text("VEMOBILE.Boot.KeepAwakeHint", "Prevents your device from sleeping while VE Mobile is open.");
-      wakePromptMessage.textContent = text("VEMOBILE.Boot.WakePrompt", "Keep Awake needs a browser-confirmed tap. Continue to enter VE and activate it.");
+      refreshGesturePrompt();
       wakePromptChoiceText.textContent = text("VEMOBILE.Boot.KeepScreenAwake", "KEEP SCREEN AWAKE");
       wakePromptYes.textContent = text("VEMOBILE.Boot.Continue", "Continue");
       checkpoints.refreshLabels();

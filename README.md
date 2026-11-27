@@ -77,6 +77,8 @@ On Android Chrome or Edge, sign into your world over HTTPS and open **Settings >
 
 On iPhone or iPad, use **Share > Add to Home Screen** in Safari. Your Foundry server still needs to be reachable when you play.
 
+In a supported browser, open **Settings > Device & Power > Fullscreen** to hide the browser controls. VE Mobile remembers the choice in that browser. Tap **Continue** on the loading screen after signing in to enter fullscreen again.
+
 ## Phone and tablet layouts
 
 | Layout | How it works |

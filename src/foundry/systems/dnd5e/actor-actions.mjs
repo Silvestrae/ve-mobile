@@ -1,6 +1,8 @@
 import { localizeFoundry } from "../../localization.mjs";
 import { ACTOR_COMMANDS } from "../../../kernel/command-names.mjs";
 import { biographyPlainText, createItemMenuRecord, resolveItemSourceItem } from "./actor-view.mjs";
+import { readToolChecks } from "./tool-checks.mjs";
+import { classLevelUpCapacity } from "./class-advancement-gateway.mjs";
 import { CommandError, canOwn, identifier } from "../../command-support.mjs";
 
 const CURRENCY_DENOMINATIONS = Object.freeze(["pp", "gp", "ep", "sp", "cp"]);
@@ -48,6 +50,7 @@ function capabilitiesForActor(actor, user) {
   const group = actor.type === "group";
   return Object.freeze({
     ...(collective ? { nativeActorEditor: typeof actor.update === "function" } : {}),
+    ...(actor.type === "character" ? { classLevelUpCapacity: classLevelUpCapacity(actor) } : {}),
     rollAbility: !group && supportsAbilityCheck(actor) ? abilities : Object.freeze([]),
     rollSave: !group && supportsAbilitySave(actor) ? abilities : Object.freeze([]),
     rollSkill: !collective && typeof actor.rollSkill === "function" ? skills : Object.freeze([]),
@@ -291,15 +294,6 @@ function keysOf(record) {
   return Object.freeze(Object.keys(record).filter(validKey).sort());
 }
 
-// Combine configured D&D5e tools with tool entries already present on the Actor.
-function availableTools(actor) {
-  const tools = { ...(actor.system?.tools ?? {}) };
-  for (const key of collectionValues(actor.system?.traits?.toolProf?.value)) {
-    if (validKey(key)) tools[key] ??= { value: 1 };
-  }
-  return tools;
-}
-
 // List only spell-slot keys that exist on an Actor with an update API.
 function editableSpellSlotKeys(actor) {
   if (typeof actor?.update !== "function") return Object.freeze([]);
@@ -311,7 +305,7 @@ function editableSpellSlotKeys(actor) {
 
 // Return valid keys for the tools this Actor can currently roll.
 function toolKeys(actor) {
-  const tools = availableTools(actor);
+  const tools = readToolChecks(actor.system);
   return Object.freeze(Object.keys(tools)
     .filter(validKey)
     .filter((key) => Number(tools[key]?.effectValue ?? tools[key]?.value) > 0)
@@ -421,7 +415,7 @@ async function rollTool(actor, requestedTool) {
   if (typeof actor.rollToolCheck !== "function") {
     throw new CommandError("CAPABILITY_UNAVAILABLE", localizeFoundry("VEMOBILE.Character.CommandGateway.ThisActorCannotRollTools", "This actor cannot roll tools."));
   }
-  const tool = commandKey(requestedTool, availableTools(actor), "tool");
+  const tool = commandKey(requestedTool, readToolChecks(actor.system), "tool");
   return actor.rollToolCheck({ tool });
 }
 

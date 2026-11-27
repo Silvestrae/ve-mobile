@@ -532,7 +532,7 @@ function updateHeaderVitals(shell, actor, commands) {
   updateSpeedDetails(shell, actor, commands);
   updateHeaderDetailPanels(shell, actor, commands);
   const cells = shell.headerRefs.vitalCells;
-  const values = { armorClass: actor.armorClass ?? "—", speed: actor.speed ? `${number(commands, actor.speed.value)} ${actor.speed.unit || "ft"}` : "—", classDC: primaryClassDc?.value ?? "—" };
+  const values = { armorClass: actor.armorClass ?? "—", speed: actor.speed ? speedValue(actor.speed, commands) : "—", classDC: primaryClassDc?.value ?? "—" };
   for (const [key, value] of Object.entries(values)) {
     const strong = cells?.[key]?.querySelector?.("strong"); if (strong) strong.textContent = String(value);
   }
@@ -543,6 +543,12 @@ function updateHeaderVitals(shell, actor, commands) {
     const strong = perception.querySelector?.("strong"); if (strong) strong.textContent = modifier(statistic?.modifier);
     perception.setAttribute("aria-label", label);
   }
+}
+
+// Localize the native feet abbreviation while preserving explicitly supplied units.
+function speedValue(speed, commands) {
+  const unit = !speed.unit || speed.unit === "ft" ? text(commands, "ft", "PF2E.TravelSpeed.FeetAcronym") : speed.unit;
+  return `${number(commands, speed.value)} ${unit}`;
 }
 
 // Build an accessible header statistic cell from its label and current value.
@@ -569,7 +575,7 @@ function updateSpeedDetails(shell, actor, commands) {
     const label = entry?.label || text(commands, fallback, key);
     const roll = entry?.action && actor.capabilities?.movementActions?.includes(entry.action);
     return node("div", { className: "ve-pf2e-speed-stat", children: [node("small", { text: label }),
-      entry?.value ? node("strong", { text: `${number(commands, entry.value)} ${entry.unit || "ft"}` })
+      entry?.value ? node("strong", { text: speedValue(entry, commands) })
         : roll ? actionButton(commands, label, "fa-dice-d20", () => issueCommand({ actor: shell.actor, command: ACTOR_COMMANDS.USE_PF2E_MOVEMENT_ACTION,
           payload: { slug: entry.action }, commands: shell.commands, scope, actionSession: true }), scope, false, label)
         : node("strong", { text: "—" })
@@ -883,7 +889,7 @@ function attributesPanel(attributes, commands) {
   return node("section", { className: "ve-sheet-card ve-pf2e-attributes", children: [sectionHeading(commands, "Attributes", "fa-dna"), node("div", {
     className: "ve-pf2e-attribute-grid", children: attributes.map(attribute => node("div", { className: `ve-pf2e-attribute${attribute.key ? " is-key" : ""}`, children: [
       icon(({ str: "fa-hand-fist", dex: "fa-feather", con: "fa-heart", int: "fa-book-open", wis: "fa-tree", cha: "fa-sun" })[attribute.slug] ?? "fa-dice-d20"),
-      node("span", { attrs: { title: attribute.label }, children: [attribute.key ? node("i", { className: "fa-solid fa-key", attrs: { title: text(commands, "Key attribute", "PF2E.Actor.Character.Attribute.Key"), "aria-label": text(commands, "Key attribute", "PF2E.Actor.Character.Attribute.Key") } }) : null, node("span", { text: attribute.slug.toUpperCase() }), attribute.apex ? node("i", { className: "fa-solid fa-circle-a", attrs: { title: text(commands, "Apex attribute", "PF2E.Actor.Character.Attribute.Apex") } }) : null] }), node("strong", { text: modifier(attribute.modifier) })
+      node("span", { attrs: { title: attribute.label }, children: [attribute.key ? node("i", { className: "fa-solid fa-key", attrs: { title: text(commands, "Key attribute", "PF2E.Actor.Character.Attribute.Key"), "aria-label": text(commands, "Key attribute", "PF2E.Actor.Character.Attribute.Key") } }) : null, node("span", { text: attribute.shortLabel || attribute.slug.toUpperCase() }), attribute.apex ? node("i", { className: "fa-solid fa-circle-a", attrs: { title: text(commands, "Apex attribute", "PF2E.Actor.Character.Attribute.Apex") } }) : null] }), node("strong", { text: modifier(attribute.modifier) })
     ] }))
   })] });
 }
@@ -1003,7 +1009,13 @@ function equipmentSummary(actor, commands, scope, shell) {
   const readout = (label, value) => node("span", { children: [node("small", { text: label }), node("strong", { text: value })] });
   return node("div", { className: "ve-pf2e-equipment-summary", children: [
     details.currency ? node("div", { className: "ve-currency-strip ve-pf2e-currency-strip", attrs: { "aria-label": text(commands, "Currency", "VEMOBILE.Character.Presenter.Currency") }, on: { click: () => { if (actor.capabilities?.currency) shell.openCurrencyEditor(); } }, children: [
-      ...["pp", "gp", "sp", "cp"].map(key => node("span", { className: `is-${key}`, attrs: { title: `${key.toUpperCase()} ${number(commands, details.currency[key])}` }, children: [node("small", { text: key.toUpperCase() }), node("strong", { text: number(commands, details.currency[key]) })] })),
+      ...["pp", "gp", "sp", "cp"].map(key => {
+        const abbreviation = text(commands, key.toUpperCase(), `PF2E.CurrencyAbbreviations.${key}`);
+        const denomination = text(commands, abbreviation, `PF2E.Currency.${key}`);
+        const amount = number(commands, details.currency[key]);
+        return node("span", { className: `is-${key}`, attrs: { title: `${denomination} · ${amount}` },
+          children: [node("small", { text: abbreviation }), node("strong", { text: amount })] });
+      }),
       node("button", { className: "ve-currency-edit ve-pf2e-coins", attrs: { type: "button", disabled: !actor.capabilities?.currency, "aria-label": text(commands, "Edit Currency", "VEMOBILE.Character.Presenter.EditCurrency2") }, children: [icon("fa-pen"), node("span", { text: text(commands, "Edit", "VEMOBILE.Character.Presenter.Edit2") })] })
     ] }, scope) : null,
     node("div", { className: "ve-pf2e-wealth", children: [

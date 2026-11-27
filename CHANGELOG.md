@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.2 (2026-11-27)
+
+- **Manage D&D5e classes from Features.** Open Class Management to see each class and its level, choose a higher level for an existing class, or add a class from a compendium. VE Mobile opens D&D5e's native advancement flow.
+- **Fixed D&D5e summoning and tool proficiencies.** Midi-QOL summon previews can be placed or cancelled from mobile. Removed stray tool proficiency rows and used the system's localized labels for abilities, skills, and tools.
+- **Improved chat and window themes.** XP awards are easier to read in narrow chat panes in both themes. Fixed low contrast on Item Piles trade cards. Foundry and third-party windows use their native application theme. Upgrading from an older Mobile session preserves current Foundry preferences when switching back to Desktop.
+- **Added per-device fullscreen.** Turn it on in Device & Power. If your browser needs a tap to enter fullscreen, tap Continue after signing in to restore it.
+- **Fixed PF2e labels.** Attribute abbreviations, coin denominations, and movement units use PF2e's translations.
+- **Added update notices.** When a newer stable version is available, the GMs receive one private message in chat. To turn this off, open VE Mobile's Support & diagnostics settings and clear Check for VE Mobile updates.
+
 ## 1.2.1 (2026-11-13)
 
 - **Improved reconnect efficiency.** Reconnects now use document revision headers to identify changed content and refresh it efficiently, with additional checks for embedded documents. Thanks to [@Ksenichiro](https://github.com/Ksenichiro) for proposing the approach.

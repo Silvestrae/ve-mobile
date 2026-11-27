@@ -667,57 +667,38 @@
     overflow-wrap: anywhere !important;
   }
 }
-/* Admit the native D&D5e AC form into VE's mobile visual language. All native
-   fields and submit-on-change handlers stay intact; these rules expire with VE. */
+/* Keep the native D&D5e AC form compact without overriding its theme. */
 @layer ve-mobile-style-authority {
-  body.system-dnd5e.ve-mobile-running:has(.ve-mobile-app[data-theme]) .armor-class.ve-mobile-admitted-app {
-    --ve-ac-surface: #211d1d;
-    --ve-ac-raised: #292525;
-    --ve-ac-text: #fff7e8;
-    --ve-ac-subtle: #cdbb9f;
-    --ve-ac-line: #77694f;
+  body.system-dnd5e.ve-mobile-running .armor-class.ve-mobile-admitted-app {
     width: min(420px,calc(100vw - 24px)) !important;
     height: auto !important; min-height: 0 !important;
     max-height: calc(var(--ve-mobile-viewport-height,100dvh) - 24px) !important;
     display: flex !important; flex-direction: column !important;
-    border: 1px solid var(--ve-ac-line) !important; border-radius: 10px !important;
-    color: var(--ve-ac-text) !important; background: var(--ve-ac-surface) !important;
-    box-shadow: 0 12px 40px #0008 !important; overflow: hidden !important;
-    & .window-header { flex: 0 0 auto !important; min-height: 48px !important; padding: 4px 10px !important; border: 0 !important; border-bottom: 1px solid var(--ve-ac-line) !important; background: var(--ve-ac-raised) !important; color: var(--ve-ac-text) !important; }
-    & .window-title { margin: 0 !important; color: inherit !important; font: 700 20px/1.2 Georgia,serif !important; }
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    & .window-header { flex: 0 0 auto !important; min-height: 48px !important; padding: 4px 10px !important; }
+    & .window-title { margin: 0 !important; font: 700 20px/1.2 Georgia,serif !important; }
     & .window-header .header-control:not([data-action="close"]):not(.close) { display: none !important; }
-    & .window-header :is([data-action="close"],.close) { display: grid !important; place-items: center !important; width: 40px !important; min-height: 40px !important; border: 1px solid var(--ve-ac-line) !important; border-radius: 6px !important; color: inherit !important; background: var(--ve-ac-surface) !important; }
-    & .window-content { flex: 1 1 auto !important; min-height: 0 !important; padding: 12px !important; color: inherit !important; background: transparent !important; border: 0 !important; overflow: hidden auto !important; }
+    & .window-header :is([data-action="close"],.close) { display: grid !important; place-items: center !important; width: 40px !important; min-height: 40px !important; border-radius: 6px !important; }
+    & .window-content { flex: 1 1 auto !important; min-height: 0 !important; padding: 12px !important; overflow: hidden auto !important; }
     & section.flexcol { display: grid !important; gap: 12px !important; height: auto !important; min-height: 0 !important; }
-    & .final-value { color: var(--ve-ac-text) !important; font: 700 36px/1.1 Signika,sans-serif !important; text-align: center !important; }
-    & fieldset.card { display: grid !important; gap: 10px !important; min-width: 0 !important; margin: 0 !important; padding: 10px !important; border: 1px solid var(--ve-ac-line) !important; border-radius: 7px !important; background: var(--ve-ac-raised) !important; box-shadow: none !important; color: inherit !important; }
-    & legend { padding-inline: 4px !important; color: var(--ve-ac-subtle) !important; font: 600 12px/1.3 Signika,sans-serif !important; }
-    & .form-group { min-width: 0 !important; margin: 0 !important; gap: 5px !important; color: inherit !important; }
+    & .final-value { font: 700 36px/1.1 Signika,sans-serif !important; text-align: center !important; }
+    & fieldset.card { display: grid !important; gap: 10px !important; min-width: 0 !important; margin: 0 !important; padding: 10px !important; border-radius: 7px !important; }
+    & legend { padding-inline: 4px !important; font: 600 12px/1.3 Signika,sans-serif !important; }
+    & .form-group { min-width: 0 !important; margin: 0 !important; gap: 5px !important; }
     & fieldset:not(.table) .form-group { display: grid !important; grid-template-columns: minmax(0,1fr) !important; }
     & .form-fields { display: flex !important; min-width: 0 !important; }
-    & :is(label,input,select,.form-fields) { color: var(--ve-ac-text) !important; font-family: Signika,sans-serif !important; font-size: 14px !important; }
-    & :is(input,select) { box-sizing: border-box !important; width: 100% !important; min-width: 0 !important; min-height: 40px !important; padding: 6px 8px !important; border: 1px solid var(--ve-ac-line) !important; border-radius: 5px !important; background: var(--ve-ac-surface) !important; }
+    & :is(label,input,select,.form-fields) { font-family: Signika,sans-serif !important; font-size: 14px !important; }
+    & :is(input,select) { box-sizing: border-box !important; width: 100% !important; min-width: 0 !important; min-height: 40px !important; padding: 6px 8px !important; border-radius: 5px !important; }
     & input[name="system.attributes.ac.formula"] { font: 10px/1.3 monospace !important; padding-inline: 4px !important; }
-    & input:disabled { opacity: 1 !important; color: var(--ve-ac-subtle) !important; }
-    & fieldset.table :is(.header,.form-group) { display: grid !important; grid-template-columns: minmax(0,1fr) 44px 44px !important; align-items: center !important; gap: 6px !important; background: transparent !important; }
-    & fieldset.table .header { color: var(--ve-ac-subtle) !important; min-height: 24px !important; }
+    & input:disabled { opacity: 1 !important; }
+    & fieldset.table :is(.header,.form-group) { display: grid !important; grid-template-columns: minmax(0,1fr) 44px 44px !important; align-items: center !important; gap: 6px !important; }
+    & fieldset.table .header { min-height: 24px !important; }
     & .header .armor-value { grid-column: 2 !important; }
     & .header .magical-bonus { grid-column: 3 !important; }
     & .name { display: flex !important; align-items: center !important; gap: 7px !important; min-width: 0 !important; }
     & .name img { flex: 0 0 28px !important; width: 28px !important; height: 28px !important; }
-    & .name a { color: inherit !important; overflow-wrap: anywhere !important; }
+    & .name a { overflow-wrap: anywhere !important; }
     & :is(.armor-value,.magical-bonus) { text-align: center !important; }
-  }
-  body.system-dnd5e.ve-mobile-running:has(.ve-mobile-app[data-theme="light"]) .armor-class.ve-mobile-admitted-app {
-    --ve-ac-surface: #faf5e9; --ve-ac-raised: #e5ddcb; --ve-ac-text: #282b23; --ve-ac-subtle: #565b48; --ve-ac-line: #aaa38a;
-  }
-}
-@layer ve-mobile-style-authority {
-  body.system-dnd5e.ve-mobile-running:has(.ve-mobile-app[data-character-theme="custom"]) .armor-class.ve-mobile-admitted-app {
-    --ve-ac-surface: var(--ve-custom-surface);
-    --ve-ac-raised: var(--ve-custom-surface-up);
-    --ve-ac-text: var(--ve-custom-text);
-    --ve-ac-subtle: var(--ve-custom-subtle);
-    --ve-ac-line: var(--ve-custom-border);
   }
 }

@@ -31,6 +31,7 @@ import { createGraphicsSafetyJournal, resolveMobileGraphicsPolicy } from "./foun
 import { createTaskScope } from "./kernel/task-scope.mjs";
 import { createFoundryTokenMovementGateway } from "./foundry/token-movement-gateway.mjs";
 import { createFoundryNativeChatGateway } from "./foundry/native-chat-gateway.mjs";
+import { registerFoundryUpdateNoticeSettings, startFoundryUpdateNotices } from "./foundry/update-notice-gateway.mjs";
 import { createBootstrapWakePreference, createScreenWakeLockController } from "./foundry/screen-wake-lock.mjs";
 import { enableMobileConnectionGrace } from "./foundry/connection-grace.mjs";
 import { createMobileBootstrap, navigationStartAt, suppressBootstrapSoftwareKeyboard } from "./ui/bootstrap-loader.mjs";
@@ -69,11 +70,13 @@ import { createMobileClientCapabilityGateway } from "./foundry/mobile-client-cap
 import { createFoundryMobileBackGateway } from "./foundry/mobile-back-gateway.mjs";
 import { createNativeLightingPrecisionCompatibility } from "./foundry/native-lighting-precision.mjs";
 import { createPwaInstall } from "./ui/pwa-install.mjs";
+import { createBrowserFullscreen } from "./ui/browser-fullscreen.mjs";
 import { readPwaWorldName } from "./foundry/pwa-world-name.mjs";
 
 const isGamePage = /\/game\/?$/.test(window.location.pathname);
 
 if (isGamePage) {
+  const fullscreen = createBrowserFullscreen();
   const pwaScope = createTaskScope("pwa-install-page");
   pwaScope.listen(window, "pagehide", event => { if (!event.persisted) pwaScope.dispose(); });
   let pwaInstall = null;
@@ -320,16 +323,23 @@ if (isGamePage) {
         chooseBootstrapWake(enabled, { fromGesture: enabled });
       });
       bootstrapScope.listen(bootstrap.wakePromptYesControl, "click", () => {
+        const restoreWake = !bootstrap.wakePromptChoiceControl.hidden && bootstrap.wakePromptChoiceControl.getAttribute("aria-checked") === "true";
+        const restoreFullscreen = !bootstrap.fullscreenPromptChoiceControl.hidden && bootstrap.fullscreenPromptChoiceControl.getAttribute("aria-checked") === "true";
         if (!bootstrap.resolveWakePrompt(true)) return;
-        chooseBootstrapWake(true, { fromGesture: true });
+        if (restoreWake) chooseBootstrapWake(true, { fromGesture: true });
+        if (restoreFullscreen) void fullscreen.resume();
       });
       bootstrapScope.listen(bootstrap.wakePromptChoiceControl, "click", () => {
         const checked = bootstrap.wakePromptChoiceControl.getAttribute("aria-checked") !== "true";
         bootstrap.setWakePromptChecked(checked);
         if (!checked) {
           chooseBootstrapWake(false);
-          bootstrap.resolveWakePrompt(false);
+          if (bootstrap.fullscreenPromptChoiceControl.hidden) bootstrap.resolveWakePrompt(false);
         }
+      });
+      bootstrapScope.listen(bootstrap.fullscreenPromptChoiceControl, "click", () => {
+        const control = bootstrap.fullscreenPromptChoiceControl;
+        control.setAttribute("aria-checked", String(control.getAttribute("aria-checked") !== "true"));
       });
       bootstrapScope.listen(bootstrap.recoveryControl, "click", () => window.location.reload());
       bootstrapWatchdog = createBootstrapWatchdog({
@@ -357,9 +367,12 @@ if (isGamePage) {
       beforeDismiss: () => {
         // A native request may succeed during loading. Only stop for a trusted
         // gesture when the enabled preference still lacks an active lock.
-        if (reason === "desktop-recovery" || !readWakeEnabled() || !wakeLock.supported || wakeLock.active) return null;
-        bootstrap.setWakePromptChecked(true);
-        return bootstrap.promptForWakeChoice();
+        if (reason === "desktop-recovery") return null;
+        const needsWake = readWakeEnabled() && wakeLock.supported && !wakeLock.active;
+        const needsFullscreen = readPolicy().active && fullscreen.needsResume();
+        if (!needsWake && !needsFullscreen) return null;
+        bootstrap.setWakePromptChecked(needsWake);
+        return bootstrap.promptForWakeChoice({ wake: needsWake, fullscreen: needsFullscreen });
       }
     }).then((completed) => {
       if (!completed || !bootstrap.mounted || bootstrapScope !== finishingScope) {
@@ -621,6 +634,7 @@ if (isGamePage) {
   };
   kernel = createAppKernel({
     pwaInstall,
+    fullscreen,
     store,
     session,
     commandGateway,
@@ -713,6 +727,7 @@ if (isGamePage) {
         }
       });
       wakeLock.enable(scope);
+      fullscreen.enable(scope);
       return Object.freeze({ ...nativeApplications, settings: settingsCompatibilityGateway });
     }
   });
@@ -827,6 +842,7 @@ if (isGamePage) {
       }
       void clientCapabilityGateway?.publish("settings");
     };
+    registerFoundryUpdateNoticeSettings(game);
     registerPreferences({
       onApplicationChange: reconcileApplicationPreference,
       // Stop old presentation authority before serializing saved mode changes, Desktop restoration and reload handoff.
@@ -929,6 +945,12 @@ if (isGamePage) {
   });
   // Restore interrupted settings first; only then grant mutation authority and start the mobile session.
   Hooks.once("ready", async () => {
+    // Release checks belong to the GM's world session, including Desktop.
+    if (game.user?.isGM) {
+      const updateScope = createTaskScope("update-notices", performanceObserver);
+      updateScope.listen(window, "pagehide", event => { if (!event.persisted) updateScope.dispose(); });
+      startFoundryUpdateNotices(updateScope);
+    }
     void pwaInstall?.setDefaultName(readPwaWorldName()).catch(error => {
       if (!pwaScope.disposed) console.warn("VE Mobile | App name could not be prepared", error);
     });

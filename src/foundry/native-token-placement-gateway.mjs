@@ -1,6 +1,6 @@
 import { localizeFoundry } from "./localization.mjs";
 /**
- * Bridge D&D5e 5.3.3 TokenPlacement's mouse-only request to a mobile Scene.
+ * Bridge D&D5e's legacy and Foundry-owned TokenPlacement to a mobile Scene.
  * D&D5e still owns its previews, placement data, token creation, and hooks.
  * This adapter only invokes the listeners installed by that native request.
  */
@@ -236,6 +236,8 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
   getRequestFrame = () => globalThis.requestAnimationFrame,
   getCancelFrame = () => globalThis.cancelAnimationFrame }) {
   const stage = canvas.stage;
+  const scene = canvas.scene;
+  const tokens = canvas.tokens;
   const hadOwnOn = Object.hasOwn(stage, "on");
   const originalOn = stage.on;
   const count = Math.max(0, Number(placement?.config?.tokens?.length) || 0);
@@ -247,17 +249,28 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
   let disposed = false;
   let positioned = false;
   let frame = null;
+  let registeringCorePlacement = false;
+  let coreContext = null;
+  let coreMove = null;
+  let coreClick = null;
+  let lastCorePosition = null;
   // Forward native token changes to the controller while this placement remains active.
   let onChange = () => {};
   // Finish the native placement observer and resolve its pending operation.
   let onFinish = () => {};
 
-  // Send the final native placement state after the underlying operation settles.
+  // Core v14 keeps the same listeners across the entire batch.
+  const phase = () => cancelled ? "cancelling" : (confirm || (coreClick && step < count)) ? "adjusting" : "preparing";
+  const currentCanvas = () => getCanvas() === canvas && canvas.scene === scene;
+  const ownsCorePlacement = () => coreContext && currentCanvas() && tokens._placementContext === coreContext;
+
+  // Publish progress from the exact native placement owner.
   const publish = () => onChange(Object.freeze({ id, step, count,
-    phase: cancelled ? "cancelling" : confirm ? "adjusting" : "preparing" }));
+    phase: phase() }));
   // Create the native PIXI pointer event expected by the placement tool.
-  const nativeEvent = (world = null) => ({
+  const nativeEvent = (world = null, button = 0) => ({
     data: { getLocalPosition: () => world },
+    button,
     shiftKey: false,
     preventDefault() {},
     stopPropagation() {}
@@ -273,10 +286,40 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
     void Promise.resolve(listener(nativeEvent())).catch(() => {});
     return true;
   };
+
+  // Core's right-click skips one preview and retains prior confirmations.
+  // Before any confirmation, use the same whole-request cancellation as Escape.
+  const cancelCorePlacement = () => {
+    if (!ownsCorePlacement()) return false;
+    if (!step) {
+      tokens._cancelPlacement();
+      return true;
+    }
+    for (let remaining = count - step; remaining > 0 && ownsCorePlacement(); remaining -= 1) {
+      const index = coreContext.index;
+      coreClick(nativeEvent(lastCorePosition, 2));
+      if (ownsCorePlacement() && coreContext.index === index) {
+        // If a native preSkip hook vetoes skipping, Escape remains available
+        // to release the owned preview and settle the original request.
+        tokens._cancelPlacement();
+      }
+    }
+    return true;
+  };
+
   // Attach observers to the native placement tool and track their cleanup in the owner scope.
   const observedOn = function(event, listener, ...rest) {
     const result = originalOn.call(this, event, listener, ...rest);
     if (this !== stage || disposed) return result;
+    if (registeringCorePlacement) {
+      if (event === "pointermove") coreMove = listener;
+      if (event === "pointerdown" && coreMove) {
+        coreClick = listener;
+        coreContext = tokens._placementContext;
+      }
+      return result;
+    }
+    if (coreContext) return result;
     if (event === "mousemove") move = listener;
     if (event === "mousedown") {
       confirm = listener;
@@ -291,6 +334,35 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
     return result;
   };
 
+  // D&D5e 6 delegates to TokenLayer.placeTokens with create:false. Observe
+  // registrations inside that call only, so other pointer listeners and token
+  // creation workflows cannot become the mobile request's input handlers.
+  const observeCorePlacement = () => {
+    if (typeof tokens?.placeTokens !== "function" || typeof tokens._cancelPlacement !== "function") return () => {};
+    const originalPlaceTokens = tokens.placeTokens;
+    const hadOwn = Object.hasOwn(tokens, "placeTokens");
+    const restore = () => {
+      if (tokens.placeTokens !== placeTokens) return;
+      if (hadOwn) tokens.placeTokens = originalPlaceTokens;
+      else delete tokens.placeTokens;
+    };
+    function placeTokens(data, options) {
+      if (this !== tokens || !currentCanvas() || options?.create !== false) {
+        return originalPlaceTokens.apply(this, arguments);
+      }
+      restore();
+      registeringCorePlacement = true;
+      try { return originalPlaceTokens.apply(this, arguments); }
+      finally {
+        registeringCorePlacement = false;
+        if (cancelled) cancelCorePlacement();
+        else if (ownsCorePlacement()) publish();
+      }
+    }
+    tokens.placeTokens = placeTokens;
+    return restore;
+  };
+
   // Remove observers and restore the stage if this placement still owns those resources.
   const dispose = () => {
     if (disposed) return;
@@ -301,26 +373,39 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
       else delete stage.on;
     }
     move = confirm = skip = null;
+    coreMove = coreClick = coreContext = lastCorePosition = null;
   };
 
   return Object.freeze({
     id,
     count,
     get cancelled() { return cancelled; },
-    get phase() { return cancelled ? "cancelling" : confirm ? "adjusting" : "preparing"; },
+    get phase() { return phase(); },
     onChange(callback) { onChange = typeof callback === "function" ? callback : () => {}; publish(); },
     onFinish(callback) { onFinish = typeof callback === "function" ? callback : () => {}; },
     finish() { onFinish(); },
     async run(invoke) {
       stage.on = observedOn;
-      try { return await invoke(); }
-      finally { dispose(); }
+      let restoreCorePlacement;
+      try {
+        restoreCorePlacement = observeCorePlacement();
+        return await invoke();
+      } finally {
+        restoreCorePlacement?.();
+        dispose();
+      }
     },
     // Reposition the active native token preview from the latest client pointer location.
     position(clientPoint) {
-      if (disposed || cancelled || !move || !confirm) return false;
-      const world = getCanvas()?.canvasCoordinatesFromClient?.(clientPoint);
+      if (disposed || cancelled || !currentCanvas() || !(coreContext ? ownsCorePlacement() : move && confirm)) return false;
+      const world = canvas.canvasCoordinatesFromClient?.(clientPoint);
       if (![world?.x, world?.y].every(Number.isFinite)) return false;
+      if (coreContext) {
+        coreMove(nativeEvent(world));
+        lastCorePosition = world;
+        positioned = true;
+        return true;
+      }
       move(nativeEvent(world));
       positioned = true;
       // Native D&D5e throttles mousemove for one animation frame.
@@ -330,7 +415,22 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
     },
     // Confirm this native placement and advance to the next queued token when applicable.
     confirm() {
-      if (disposed || cancelled || !positioned || !confirm) return false;
+      if (disposed || cancelled || !positioned || !currentCanvas()) return false;
+      if (coreContext) {
+        if (!ownsCorePlacement()) return false;
+        const index = coreContext.index;
+        const event = nativeEvent(lastCorePosition);
+        // A native mouse hover may move the preview after the deliberate tap.
+        coreMove(event);
+        if (!ownsCorePlacement() || coreContext.index !== index) return false;
+        coreClick(event);
+        if (ownsCorePlacement() && coreContext.index === index) return false;
+        step += 1;
+        positioned = false;
+        publish();
+        return true;
+      }
+      if (!confirm) return false;
       const listener = confirm;
       move = confirm = skip = null;
       positioned = false;
@@ -344,7 +444,8 @@ export function createPlacementRequest({ id, placement, canvas, getCanvas = () =
       if (disposed || cancelled) return false;
       cancelled = true;
       publish();
-      skipCurrent();
+      if (coreContext) cancelCorePlacement();
+      else skipCurrent();
       return true;
     },
     dispose
